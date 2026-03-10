@@ -42,17 +42,28 @@ pub fn Oscillator::tick(
 /// Fill an output buffer with oscillator samples.
 pub fn Oscillator::process(
   self : Oscillator,
+  context : DspContext,
   output : AudioBuffer,
   freq : Double,
-  sample_rate : Double,
 ) -> Unit {
-  if sample_rate <= 0.0 {
+  let sample_rate = context.sample_rate()
+  let sample_count = if output.length() < context.block_size() {
+    output.length()
+  } else {
+    context.block_size()
+  }
+
+  if sample_rate <= 0.0 || sample_count <= 0 {
     output.fill(0.0)
     return
   }
 
-  for index = 0; index < output.length(); index = index + 1 {
+  for index = 0; index < sample_count; index = index + 1 {
     output.set(index, self.tick(freq, sample_rate))
+  }
+
+  for index = sample_count; index < output.length(); index = index + 1 {
+    output.set(index, 0.0)
   }
 }
 

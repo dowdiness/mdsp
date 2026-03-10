@@ -22,12 +22,22 @@ pub fn AudioBuffer::length(Self) -> Int
 pub fn AudioBuffer::new(FixedArray[Double]) -> Self
 pub fn AudioBuffer::set(Self, Int, Double) -> Unit
 
+pub struct DspContext {
+  sample_rate : Double
+  block_size : Int
+
+  fn new(Double, Int) -> DspContext
+}
+pub fn DspContext::block_size(Self) -> Int
+pub fn DspContext::new(Double, Int) -> Self
+pub fn DspContext::sample_rate(Self) -> Double
+
 pub struct Oscillator {
   mut phase : Double
 }
 pub fn Oscillator::new() -> Self
 pub fn Oscillator::phase(Self) -> Double
-pub fn Oscillator::process(Self, AudioBuffer, Double, Double) -> Unit
+pub fn Oscillator::process(Self, DspContext, AudioBuffer, Double) -> Unit
 pub fn Oscillator::reset(Self) -> Unit
 pub fn Oscillator::tick(Self, Double, Double) -> Double
 

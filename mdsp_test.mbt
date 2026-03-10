@@ -22,9 +22,10 @@ test "tick advances phase continuously" {
 ///|
 test "process fills a block with bounded samples" {
   let osc = Oscillator::new()
+  let context = DspContext::new(48000.0, 128)
   let buffer = AudioBuffer::filled(128)
 
-  osc.process(buffer, 440.0, 48000.0)
+  osc.process(context, buffer, 440.0)
 
   assert_eq(buffer.length(), 128)
   assert_eq(buffer.get(0), 0.0)
@@ -60,4 +61,20 @@ test "audio buffer can wrap an existing fixed array without copying" {
   assert_eq(samples[2], 0.5)
   samples[1] = -0.25
   assert_eq(buffer.get(1), -0.25)
+}
+
+///|
+test "dsp context stores normalized runtime values" {
+  let context = DspContext::new(48000.0, 128)
+
+  assert_eq(context.sample_rate(), 48000.0)
+  assert_eq(context.block_size(), 128)
+}
+
+///|
+test "dsp context normalizes invalid runtime values" {
+  let context = DspContext::new(-1.0, -64)
+
+  assert_eq(context.sample_rate(), 0.0)
+  assert_eq(context.block_size(), 0)
 }

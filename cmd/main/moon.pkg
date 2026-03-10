@@ -1,0 +1,7 @@
+// import {
+//   "dowdiness/mdsp" @lib,
+// }
+
+options(
+  "is-main": true,
+)

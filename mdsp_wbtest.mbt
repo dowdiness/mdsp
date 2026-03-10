@@ -286,3 +286,74 @@ test "adsr non-finite sample rate resets to idle silence" {
   assert_true(env.stage() is EnvStage::Idle)
   assert_eq(env.level(), 0.0)
 }
+
+///|
+test "delay line clamps invalid delay lengths deterministically" {
+  let delay = DelayLine::new(4, delay_samples=99)
+  assert_eq(delay.delay_samples(), 4)
+
+  delay.set_delay_samples(-3)
+  assert_eq(delay.delay_samples(), 0)
+}
+
+///|
+test "delay line process respects context block size" {
+  let delay = DelayLine::new(4, delay_samples=1)
+  let context = DspContext::new(48000.0, 2)
+  let buffer = AudioBuffer::new(make_delay_process_samples())
+
+  delay.process(context, buffer)
+
+  assert_eq(buffer.get(0), 0.0)
+  assert_eq(buffer.get(1), 1.0)
+  assert_eq(buffer.get(2), 0.0)
+  assert_eq(buffer.get(3), 0.0)
+}
+
+///|
+test "delay line zero-sample process writes silence" {
+  let delay = DelayLine::new(4, delay_samples=1)
+  let context = DspContext::new(48000.0, 0)
+  let buffer = AudioBuffer::new(make_delay_process_samples())
+
+  delay.process(context, buffer)
+
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
+}
+
+///|
+test "delay line invalid context writes silence without resetting state" {
+  let delay = DelayLine::new(4, delay_samples=2)
+  let invalid_context = DspContext::new(0.0, 4)
+  let valid_context = DspContext::new(48000.0, 4)
+  let invalid_buffer = AudioBuffer::new(make_delay_process_samples())
+  let valid_buffer = AudioBuffer::new(make_delay_followup_samples())
+
+  ignore(delay.tick(1.0))
+  ignore(delay.tick(2.0))
+  delay.process(invalid_context, invalid_buffer)
+  delay.process(valid_context, valid_buffer)
+
+  assert_true(invalid_buffer.as_fixed_array().every(sample => sample == 0.0))
+  assert_eq(valid_buffer.get(0), 1.0)
+}
+
+///|
+fn make_delay_process_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 1.0
+  samples[1] = 2.0
+  samples[2] = 3.0
+  samples[3] = 4.0
+  samples
+}
+
+///|
+fn make_delay_followup_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 5.0
+  samples[1] = 6.0
+  samples[2] = 7.0
+  samples[3] = 8.0
+  samples
+}

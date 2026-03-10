@@ -67,6 +67,21 @@ pub struct Clip {
 pub fn Clip::new() -> Self
 pub fn Clip::process(Self, DspContext, AudioBuffer, Double) -> Unit
 
+pub struct DelayLine {
+  buffer : FixedArray[Double]
+  mut write_pos : Int
+  mut delay_samples : Int
+
+  fn new(Int, delay_samples? : Int) -> DelayLine
+}
+pub fn DelayLine::delay_samples(Self) -> Int
+pub fn DelayLine::max_delay_samples(Self) -> Int
+pub fn DelayLine::new(Int, delay_samples? : Int) -> Self
+pub fn DelayLine::process(Self, DspContext, AudioBuffer) -> Unit
+pub fn DelayLine::reset(Self) -> Unit
+pub fn DelayLine::set_delay_samples(Self, Int) -> Unit
+pub fn DelayLine::tick(Self, Double) -> Double
+
 pub struct DspContext {
   sample_rate : Double
   block_size : Int

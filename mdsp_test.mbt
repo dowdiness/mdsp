@@ -295,3 +295,41 @@ test "adsr process fills a block of envelope values" {
   assert_eq(buffer.get(2), 0.75)
   assert_eq(buffer.get(3), 0.75)
 }
+
+///|
+test "delay line outputs samples after the configured delay" {
+  let delay = DelayLine::new(4, delay_samples=2)
+
+  assert_eq(delay.tick(1.0), 0.0)
+  assert_eq(delay.tick(2.0), 0.0)
+  assert_eq(delay.tick(3.0), 1.0)
+  assert_eq(delay.tick(4.0), 2.0)
+}
+
+///|
+test "zero-delay line passes input through immediately" {
+  let delay = DelayLine::new(4, delay_samples=0)
+
+  assert_eq(delay.tick(0.25), 0.25)
+  assert_eq(delay.tick(-0.5), -0.5)
+}
+
+///|
+test "zero-capacity constructor defaults to passthrough delay" {
+  let delay = DelayLine::new(0)
+
+  assert_eq(delay.max_delay_samples(), 1)
+  assert_eq(delay.delay_samples(), 0)
+  assert_eq(delay.tick(0.75), 0.75)
+}
+
+///|
+test "delay line wraps around its circular buffer" {
+  let delay = DelayLine::new(3, delay_samples=3)
+
+  assert_eq(delay.tick(1.0), 0.0)
+  assert_eq(delay.tick(2.0), 0.0)
+  assert_eq(delay.tick(3.0), 0.0)
+  assert_eq(delay.tick(4.0), 1.0)
+  assert_eq(delay.tick(5.0), 2.0)
+}

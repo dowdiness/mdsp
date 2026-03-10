@@ -40,6 +40,14 @@ pub struct Gain {
 pub fn Gain::new() -> Self
 pub fn Gain::process(Self, DspContext, AudioBuffer, Double) -> Unit
 
+pub struct Mix {
+  unit : Unit
+
+  fn new() -> Mix
+}
+pub fn Mix::new() -> Self
+pub fn Mix::process(Self, DspContext, AudioBuffer, AudioBuffer) -> Unit
+
 pub struct Oscillator {
   mut phase : Double
 }

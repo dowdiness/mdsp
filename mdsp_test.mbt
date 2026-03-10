@@ -127,3 +127,67 @@ fn make_gain_test_samples() -> FixedArray[Double] {
   samples[3] = -1.0
   samples
 }
+
+///|
+test "mix sums two buffers in place" {
+  let mix = Mix::new()
+  let context = DspContext::new(48000.0, 4)
+  let output = AudioBuffer::new(make_mix_output_samples())
+  let input = AudioBuffer::new(make_mix_input_samples())
+
+  mix.process(context, output, input)
+
+  assert_eq(output.get(0), 0.35)
+  assert_eq(output.get(1), -0.3)
+  assert_eq(output.get(2), 0.75)
+  assert_eq(output.get(3), -0.375)
+}
+
+///|
+test "mix does not implicitly clip summed output" {
+  let mix = Mix::new()
+  let context = DspContext::new(48000.0, 2)
+  let output = AudioBuffer::new(make_mix_hot_output_samples())
+  let input = AudioBuffer::new(make_mix_hot_input_samples())
+
+  mix.process(context, output, input)
+
+  assert_eq(output.get(0), 1.25)
+  assert_eq(output.get(1), -1.3)
+}
+
+///|
+fn make_mix_output_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 0.25
+  samples[1] = -0.5
+  samples[2] = 0.5
+  samples[3] = -0.25
+  samples
+}
+
+///|
+fn make_mix_input_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 0.1
+  samples[1] = 0.2
+  samples[2] = 0.25
+  samples[3] = -0.125
+  samples
+}
+
+///|
+fn make_mix_hot_output_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(2, 0.0)
+  samples[0] = 0.75
+  samples[1] = -0.8
+  samples
+}
+
+///|
+fn make_mix_hot_input_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(2, 0.0)
+  samples[0] = 0.5
+  samples[1] = -0.5
+  samples
+}

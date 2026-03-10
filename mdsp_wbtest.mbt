@@ -93,3 +93,73 @@ fn make_gain_block_samples_wb() -> FixedArray[Double] {
   samples[3] = -1.0
   samples
 }
+
+///|
+test "mix with invalid context writes silence" {
+  let mix = Mix::new()
+  let context = DspContext::new(0.0, 4)
+  let output = AudioBuffer::new(make_mix_output_samples_wb())
+  let input = AudioBuffer::new(make_mix_input_samples_wb())
+
+  mix.process(context, output, input)
+
+  assert_true(output.as_fixed_array().every(sample => sample == 0.0))
+}
+
+///|
+test "mix respects context block size" {
+  let mix = Mix::new()
+  let context = DspContext::new(48000.0, 2)
+  let output = AudioBuffer::new(make_mix_output_samples_wb())
+  let input = AudioBuffer::new(make_mix_input_samples_wb())
+
+  mix.process(context, output, input)
+
+  assert_eq(output.get(0), 0.35)
+  assert_eq(output.get(1), -0.3)
+  assert_eq(output.get(2), 0.0)
+  assert_eq(output.get(3), 0.0)
+}
+
+///|
+test "mix stops at the shorter input length" {
+  let mix = Mix::new()
+  let context = DspContext::new(48000.0, 4)
+  let output = AudioBuffer::new(make_mix_output_samples_wb())
+  let input = AudioBuffer::new(make_short_mix_input_samples_wb())
+
+  mix.process(context, output, input)
+
+  assert_eq(output.get(0), 0.35)
+  assert_eq(output.get(1), -0.3)
+  assert_eq(output.get(2), 0.0)
+  assert_eq(output.get(3), 0.0)
+}
+
+///|
+fn make_mix_output_samples_wb() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 0.25
+  samples[1] = -0.5
+  samples[2] = 0.5
+  samples[3] = -0.25
+  samples
+}
+
+///|
+fn make_mix_input_samples_wb() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 0.1
+  samples[1] = 0.2
+  samples[2] = 0.25
+  samples[3] = -0.125
+  samples
+}
+
+///|
+fn make_short_mix_input_samples_wb() -> FixedArray[Double] {
+  let samples = FixedArray::make(2, 0.0)
+  samples[0] = 0.1
+  samples[1] = 0.2
+  samples
+}

@@ -78,3 +78,52 @@ test "dsp context normalizes invalid runtime values" {
   assert_eq(context.sample_rate(), 0.0)
   assert_eq(context.block_size(), 0)
 }
+
+///|
+test "gain with unity amount preserves samples" {
+  let gain = Gain::new()
+  let context = DspContext::new(48000.0, 4)
+  let buffer = AudioBuffer::new(make_gain_test_samples())
+
+  gain.process(context, buffer, 1.0)
+
+  assert_eq(buffer.get(0), 0.25)
+  assert_eq(buffer.get(1), -0.5)
+  assert_eq(buffer.get(2), 1.0)
+  assert_eq(buffer.get(3), -1.0)
+}
+
+///|
+test "gain with zero amount silences samples" {
+  let gain = Gain::new()
+  let context = DspContext::new(48000.0, 4)
+  let buffer = AudioBuffer::new(make_gain_test_samples())
+
+  gain.process(context, buffer, 0.0)
+
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
+}
+
+///|
+test "gain with negative amount inverts polarity" {
+  let gain = Gain::new()
+  let context = DspContext::new(48000.0, 4)
+  let buffer = AudioBuffer::new(make_gain_test_samples())
+
+  gain.process(context, buffer, -2.0)
+
+  assert_eq(buffer.get(0), -0.5)
+  assert_eq(buffer.get(1), 1.0)
+  assert_eq(buffer.get(2), -2.0)
+  assert_eq(buffer.get(3), 2.0)
+}
+
+///|
+fn make_gain_test_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = 0.25
+  samples[1] = -0.5
+  samples[2] = 1.0
+  samples[3] = -1.0
+  samples
+}

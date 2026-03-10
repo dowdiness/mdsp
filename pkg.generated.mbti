@@ -32,6 +32,14 @@ pub fn DspContext::block_size(Self) -> Int
 pub fn DspContext::new(Double, Int) -> Self
 pub fn DspContext::sample_rate(Self) -> Double
 
+pub struct Gain {
+  unit : Unit
+
+  fn new() -> Gain
+}
+pub fn Gain::new() -> Self
+pub fn Gain::process(Self, DspContext, AudioBuffer, Double) -> Unit
+
 pub struct Oscillator {
   mut phase : Double
 }

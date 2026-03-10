@@ -117,6 +117,10 @@ You can browse and install extra skills here:
   prefer assertion tests. You can use `moon coverage analyze > uncovered.log` to
   see which parts of your code are not covered by tests.
 
+- If a user asks to use a tool, agent, or command name that is not obviously a
+  built-in assistant tool, first verify whether it exists as a local CLI in the
+  terminal before saying it is unavailable.
+
 ## Development Workflow
 
 1. Make edits.

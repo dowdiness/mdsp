@@ -42,7 +42,7 @@ pub fn Oscillator::tick(
 /// Fill an output buffer with oscillator samples.
 pub fn Oscillator::process(
   self : Oscillator,
-  output : FixedArray[Double],
+  output : AudioBuffer,
   freq : Double,
   sample_rate : Double,
 ) -> Unit {
@@ -52,7 +52,7 @@ pub fn Oscillator::process(
   }
 
   for index = 0; index < output.length(); index = index + 1 {
-    output[index] = self.tick(freq, sample_rate)
+    output.set(index, self.tick(freq, sample_rate))
   }
 }
 

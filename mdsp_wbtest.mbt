@@ -15,10 +15,10 @@ test "reset rewinds phase to zero" {
 ///|
 test "process with invalid sample rate writes silence" {
   let osc = Oscillator::new()
-  let buffer = FixedArray::make(8, 1.0)
+  let buffer = AudioBuffer::filled(8, init=1.0)
 
   osc.process(buffer, 440.0, 0.0)
 
-  assert_true(buffer.every(sample => sample == 0.0))
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
   assert_eq(osc.phase(), 0.0)
 }

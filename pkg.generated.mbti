@@ -9,12 +9,25 @@ pub fn tick(Double, Double) -> Double
 // Errors
 
 // Types and methods
+pub struct AudioBuffer {
+  data : FixedArray[Double]
+
+  fn new(FixedArray[Double]) -> AudioBuffer
+}
+pub fn AudioBuffer::as_fixed_array(Self) -> FixedArray[Double]
+pub fn AudioBuffer::fill(Self, Double) -> Unit
+pub fn AudioBuffer::filled(Int, init? : Double) -> Self
+pub fn AudioBuffer::get(Self, Int) -> Double
+pub fn AudioBuffer::length(Self) -> Int
+pub fn AudioBuffer::new(FixedArray[Double]) -> Self
+pub fn AudioBuffer::set(Self, Int, Double) -> Unit
+
 pub struct Oscillator {
   mut phase : Double
 }
 pub fn Oscillator::new() -> Self
 pub fn Oscillator::phase(Self) -> Double
-pub fn Oscillator::process(Self, FixedArray[Double], Double, Double) -> Unit
+pub fn Oscillator::process(Self, AudioBuffer, Double, Double) -> Unit
 pub fn Oscillator::reset(Self) -> Unit
 pub fn Oscillator::tick(Self, Double, Double) -> Double
 

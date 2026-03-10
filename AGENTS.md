@@ -64,6 +64,12 @@ You can browse and install extra skills here:
 - Blackbox tests cannot construct internal structs. Use whitebox tests or
   expose constructors when needed.
 
+- Prefer MoonBit 0.8 constructor style for wrapper and record APIs: declare an
+  internal constructor in the `struct` body (for example
+  `fn new(data : FixedArray[Double]) -> AudioBuffer`) and expose public
+  `Type::new(...)` or named helpers like `Type::filled(...)` explicitly. Use
+  this to keep zero-copy and allocating construction paths distinct.
+
 - For cross-target builds, prefer per-file conditional compilation rather than
   `supported-targets` in package configuration.
 

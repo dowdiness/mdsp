@@ -239,3 +239,59 @@ fn make_clip_in_range_samples() -> FixedArray[Double] {
   samples[3] = 0.4
   samples
 }
+
+///|
+test "adsr attack reaches full scale then enters decay" {
+  let env = Adsr::new(1.0, 10.0, 0.5, 10.0)
+  let context = DspContext::new(1000.0, 8)
+
+  env.gate_on()
+
+  assert_eq(env.tick(context), 1.0)
+  assert_true(env.stage() is EnvStage::Decay)
+}
+
+///|
+test "adsr decay settles at sustain level" {
+  let env = Adsr::new(0.0, 2.0, 0.25, 10.0)
+  let context = DspContext::new(1000.0, 8)
+
+  env.gate_on()
+  ignore(env.tick(context))
+
+  let first_decay = env.tick(context)
+  let second_decay = env.tick(context)
+
+  assert_true(first_decay < 1.0)
+  assert_eq(second_decay, 0.25)
+  assert_true(env.stage() is EnvStage::Sustain)
+}
+
+///|
+test "adsr release falls from the current level to idle" {
+  let env = Adsr::new(0.0, 0.0, 0.5, 2.0)
+  let context = DspContext::new(1000.0, 8)
+
+  env.gate_on()
+  assert_eq(env.tick(context), 0.5)
+  env.gate_off()
+
+  assert_eq(env.tick(context), 0.25)
+  assert_eq(env.tick(context), 0.0)
+  assert_true(env.stage() is EnvStage::Idle)
+}
+
+///|
+test "adsr process fills a block of envelope values" {
+  let env = Adsr::new(0.0, 0.0, 0.75, 10.0)
+  let context = DspContext::new(1000.0, 4)
+  let buffer = AudioBuffer::filled(4)
+
+  env.gate_on()
+  env.process(context, buffer)
+
+  assert_eq(buffer.get(0), 0.75)
+  assert_eq(buffer.get(1), 0.75)
+  assert_eq(buffer.get(2), 0.75)
+  assert_eq(buffer.get(3), 0.75)
+}

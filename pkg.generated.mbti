@@ -9,6 +9,26 @@ pub fn tick(Double, Double) -> Double
 // Errors
 
 // Types and methods
+pub struct Adsr {
+  attack_ms : Double
+  decay_ms : Double
+  sustain : Double
+  release_ms : Double
+  mut stage : EnvStage
+  mut level : Double
+  mut level_at_release : Double
+
+  fn new(Double, Double, Double, Double) -> Adsr
+}
+pub fn Adsr::gate_off(Self) -> Unit
+pub fn Adsr::gate_on(Self) -> Unit
+pub fn Adsr::level(Self) -> Double
+pub fn Adsr::new(Double, Double, Double, Double) -> Self
+pub fn Adsr::process(Self, DspContext, AudioBuffer) -> Unit
+pub fn Adsr::reset(Self) -> Unit
+pub fn Adsr::stage(Self) -> EnvStage
+pub fn Adsr::tick(Self, DspContext) -> Double
+
 pub struct AudioBuffer {
   data : FixedArray[Double]
 
@@ -56,6 +76,14 @@ pub struct DspContext {
 pub fn DspContext::block_size(Self) -> Int
 pub fn DspContext::new(Double, Int) -> Self
 pub fn DspContext::sample_rate(Self) -> Double
+
+pub(all) enum EnvStage {
+  Idle
+  Attack
+  Decay
+  Sustain
+  Release
+}
 
 pub struct Gain {
   unit : Unit

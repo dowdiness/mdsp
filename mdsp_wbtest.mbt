@@ -209,3 +209,80 @@ fn make_clip_test_samples_wb() -> FixedArray[Double] {
   samples[3] = 0.75
   samples
 }
+
+///|
+test "adsr invalid context resets to idle silence" {
+  let env = Adsr::new(10.0, 10.0, 0.5, 10.0)
+  let context = DspContext::new(0.0, 4)
+  let buffer = AudioBuffer::filled(4, init=1.0)
+
+  env.gate_on()
+  env.process(context, buffer)
+
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
+  assert_true(env.stage() is EnvStage::Idle)
+  assert_eq(env.level(), 0.0)
+}
+
+///|
+test "adsr zero times transition immediately" {
+  let env = Adsr::new(0.0, 0.0, 0.25, 0.0)
+  let context = DspContext::new(1000.0, 4)
+
+  env.gate_on()
+  assert_eq(env.tick(context), 0.25)
+  assert_true(env.stage() is EnvStage::Sustain)
+
+  env.gate_off()
+  assert_eq(env.tick(context), 0.0)
+  assert_true(env.stage() is EnvStage::Idle)
+}
+
+///|
+test "adsr process respects context block size" {
+  let env = Adsr::new(0.0, 0.0, 0.5, 10.0)
+  let context = DspContext::new(1000.0, 2)
+  let buffer = AudioBuffer::filled(4, init=1.0)
+
+  env.gate_on()
+  env.process(context, buffer)
+
+  assert_eq(buffer.get(0), 0.5)
+  assert_eq(buffer.get(1), 0.5)
+  assert_eq(buffer.get(2), 0.0)
+  assert_eq(buffer.get(3), 0.0)
+}
+
+///|
+test "adsr zero-sample process preserves state" {
+  let env = Adsr::new(10.0, 10.0, 0.5, 10.0)
+  let context = DspContext::new(1000.0, 0)
+  let buffer = AudioBuffer::filled(4, init=1.0)
+
+  env.gate_on()
+  ignore(env.tick(DspContext::new(1000.0, 4)))
+  let level_before = env.level()
+
+  env.process(context, buffer)
+
+  assert_true(env.stage() is EnvStage::Attack)
+  assert_eq(env.level(), level_before)
+  assert_eq(buffer.get(0), 1.0)
+  assert_eq(buffer.get(1), 1.0)
+  assert_eq(buffer.get(2), 1.0)
+  assert_eq(buffer.get(3), 1.0)
+}
+
+///|
+test "adsr non-finite sample rate resets to idle silence" {
+  let env = Adsr::new(10.0, 10.0, 0.5, 10.0)
+  let context = DspContext::new(1.0 / 0.0, 4)
+  let buffer = AudioBuffer::filled(4, init=1.0)
+
+  env.gate_on()
+  env.process(context, buffer)
+
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
+  assert_true(env.stage() is EnvStage::Idle)
+  assert_eq(env.level(), 0.0)
+}

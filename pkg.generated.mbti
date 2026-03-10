@@ -22,6 +22,23 @@ pub fn AudioBuffer::length(Self) -> Int
 pub fn AudioBuffer::new(FixedArray[Double]) -> Self
 pub fn AudioBuffer::set(Self, Int, Double) -> Unit
 
+pub struct Biquad {
+  // private fields
+
+  fn new() -> Biquad
+}
+pub fn Biquad::new() -> Self
+pub fn Biquad::process(Self, DspContext, AudioBuffer) -> Unit
+pub fn Biquad::reset(Self) -> Unit
+pub fn Biquad::tick(Self, Double) -> Double
+pub fn Biquad::update(Self, DspContext, BiquadMode, Double, Double) -> Bool
+
+pub(all) enum BiquadMode {
+  LowPass
+  HighPass
+  BandPass
+}
+
 pub struct DspContext {
   sample_rate : Double
   block_size : Int

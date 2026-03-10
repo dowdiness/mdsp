@@ -39,6 +39,14 @@ pub(all) enum BiquadMode {
   BandPass
 }
 
+pub struct Clip {
+  unit : Unit
+
+  fn new() -> Clip
+}
+pub fn Clip::new() -> Self
+pub fn Clip::process(Self, DspContext, AudioBuffer, Double) -> Unit
+
 pub struct DspContext {
   sample_rate : Double
   block_size : Int
@@ -92,4 +100,3 @@ pub fn ParamSmoother::tick(Self) -> Double
 // Type aliases
 
 // Traits
-

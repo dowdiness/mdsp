@@ -163,3 +163,49 @@ fn make_short_mix_input_samples_wb() -> FixedArray[Double] {
   samples[1] = 0.2
   samples
 }
+
+///|
+test "clip with invalid context writes silence" {
+  let clip = Clip::new()
+  let context = DspContext::new(0.0, 4)
+  let buffer = AudioBuffer::new(make_clip_test_samples_wb())
+
+  clip.process(context, buffer, 0.5)
+
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
+}
+
+///|
+test "clip with invalid threshold writes silence" {
+  let clip = Clip::new()
+  let context = DspContext::new(48000.0, 4)
+  let buffer = AudioBuffer::new(make_clip_test_samples_wb())
+
+  clip.process(context, buffer, 0.0)
+
+  assert_true(buffer.as_fixed_array().every(sample => sample == 0.0))
+}
+
+///|
+test "clip respects context block size" {
+  let clip = Clip::new()
+  let context = DspContext::new(48000.0, 2)
+  let buffer = AudioBuffer::new(make_clip_test_samples_wb())
+
+  clip.process(context, buffer, 0.5)
+
+  assert_eq(buffer.get(0), -0.5)
+  assert_eq(buffer.get(1), -0.25)
+  assert_eq(buffer.get(2), 0.0)
+  assert_eq(buffer.get(3), 0.0)
+}
+
+///|
+fn make_clip_test_samples_wb() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = -0.75
+  samples[1] = -0.25
+  samples[2] = 0.25
+  samples[3] = 0.75
+  samples
+}

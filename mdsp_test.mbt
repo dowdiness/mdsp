@@ -191,3 +191,51 @@ fn make_mix_hot_input_samples() -> FixedArray[Double] {
   samples[1] = -0.5
   samples
 }
+
+///|
+test "clip limits positive and negative peaks symmetrically" {
+  let clip = Clip::new()
+  let context = DspContext::new(48000.0, 4)
+  let buffer = AudioBuffer::new(make_clip_test_samples())
+
+  clip.process(context, buffer, 0.5)
+
+  assert_eq(buffer.get(0), -0.5)
+  assert_eq(buffer.get(1), -0.25)
+  assert_eq(buffer.get(2), 0.25)
+  assert_eq(buffer.get(3), 0.5)
+}
+
+///|
+test "clip leaves in-range samples unchanged" {
+  let clip = Clip::new()
+  let context = DspContext::new(48000.0, 4)
+  let buffer = AudioBuffer::new(make_clip_in_range_samples())
+
+  clip.process(context, buffer, 0.5)
+
+  assert_eq(buffer.get(0), -0.4)
+  assert_eq(buffer.get(1), -0.1)
+  assert_eq(buffer.get(2), 0.1)
+  assert_eq(buffer.get(3), 0.4)
+}
+
+///|
+fn make_clip_test_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = -0.75
+  samples[1] = -0.25
+  samples[2] = 0.25
+  samples[3] = 0.75
+  samples
+}
+
+///|
+fn make_clip_in_range_samples() -> FixedArray[Double] {
+  let samples = FixedArray::make(4, 0.0)
+  samples[0] = -0.4
+  samples[1] = -0.1
+  samples[2] = 0.1
+  samples[3] = 0.4
+  samples
+}

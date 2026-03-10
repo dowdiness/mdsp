@@ -57,6 +57,21 @@ pub fn Oscillator::process(Self, DspContext, AudioBuffer, Double) -> Unit
 pub fn Oscillator::reset(Self) -> Unit
 pub fn Oscillator::tick(Self, Double, Double) -> Double
 
+pub struct ParamSmoother {
+  mut current : Double
+  mut target : Double
+  mut coeff : Double
+}
+pub fn ParamSmoother::current(Self) -> Double
+pub fn ParamSmoother::from_context(Double, Double, DspContext) -> Self
+pub fn ParamSmoother::new(Double, Double, Double) -> Self
+pub fn ParamSmoother::reset(Self, Double) -> Unit
+pub fn ParamSmoother::set_smoothing_time(Self, Double, Double) -> Unit
+pub fn ParamSmoother::set_smoothing_time_from_context(Self, Double, DspContext) -> Unit
+pub fn ParamSmoother::set_target(Self, Double) -> Unit
+pub fn ParamSmoother::target(Self) -> Double
+pub fn ParamSmoother::tick(Self) -> Double
+
 // Type aliases
 
 // Traits

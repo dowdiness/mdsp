@@ -199,7 +199,8 @@ Current implemented surface:
   `Mono -> Pan -> StereoOutput`
 - Topological sorting, graph validation, and runtime control for the current
   graph paths
-- Integration coverage for compiled mono voice paths and runtime retuning
+- Integration coverage for compiled mono voice paths, runtime retuning, and the
+  first compiled stereo voice path
 - See `docs/salat-engine-technical-reference.md` for the current node set,
   `set_param(...)` slot matrix, and exact runtime-control surface
 

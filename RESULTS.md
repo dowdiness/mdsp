@@ -67,6 +67,8 @@ Confirmed on 2026-03-11:
   graph implementation.
 - Integration coverage exists for compiled graph voice paths and runtime
   retuning.
+- Terminal-stereo coverage now includes a compiled stereo voice-path
+  integration test with runtime `Pan` updates.
 
 Authoritative detailed Phase 2 graph status now lives in
 `docs/salat-engine-technical-reference.md`, including:

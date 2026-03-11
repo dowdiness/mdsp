@@ -674,12 +674,16 @@ Current runtime control support:
   in batch order while targeting nodes by authoring index
 - compatibility helpers remain available:
   - `gate_on(node_index)` / `gate_off(node_index)` for `Adsr`
-  - partial `set_param(node_index, slot, value)` for selected numeric params
-    (`Gain`, `Clip`, `Biquad`, `Delay`, `Constant`, `Oscillator`)
+- partial `set_param(node_index, slot, value)` for selected numeric params
+  (`Gain`, `Clip`, `Biquad`, `Delay`, `Constant`, `Oscillator`)
 - integration coverage now includes successful runtime `Biquad` retunes in
   compiled mono graphs for `LowPass`, `HighPass`, and `BandPass`
 - the current graph tests also include directional runtime-retune assertions for
   `HighPass` and `BandPass`, not just output-difference checks
+- terminal-stereo coverage now includes:
+  - graph-unit checks for `Pan -> StereoOutput` shape enforcement
+  - direct runtime `Pan` updates on `CompiledStereoDsp`
+  - an end-to-end compiled stereo voice-path integration test
 
 Current `set_param(node_index, slot, value)` support matrix:
 

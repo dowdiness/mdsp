@@ -627,6 +627,11 @@ Advantages: buffer-based processing enables SIMD optimization, better cache beha
 
 ### 3.5.1 Current Phase 2 Status
 
+This section is the authoritative description of the current compiled-graph
+runtime-control surface. Update it first when Phase 2 runtime behavior changes;
+keep `RESULTS.md` and `docs/salat-engine-blueprint.md` as summary-level
+pointers back to this section.
+
 The current repository already implements the first compiled mono graph slice:
 
 - `DspNode` authoring graphs compile into an opaque `CompiledDsp`
@@ -694,6 +699,42 @@ Current limits:
 - no graph hot-swap yet
 - no `Pan` or stereo graph semantics in `CompiledDsp`
 - runtime parameter updates are partial, not universal across node kinds
+
+### 3.5.2 Control Frames
+
+The current graph runtime now has an explicit control-frame model for Phase 2.
+
+A control frame is an ordered batch of `GraphControl` messages applied once
+between render blocks:
+
+```moonbit
+compiled.apply_controls([
+  GraphControl::gate_on(env_node),
+  GraphControl::set_param(gain_node, GraphParamSlot::Value0, 0.5),
+  GraphControl::set_param(filter_node, GraphParamSlot::Value0, 1200.0),
+])
+compiled.process(context, output)
+```
+
+Current semantics:
+
+- controls are evaluated in the array's batch order
+- controls target nodes by original authoring index, not topo-sorted index
+- `apply_controls(...)` is transactional:
+  - if any control in the batch is invalid, none of them are applied
+  - if the batch succeeds, all controls are committed before the next
+    `process(...)` call
+- `apply_control(...)` remains the single-message form of the same runtime API
+
+This is enough for the current mono graph to support per-block parameter and
+gate updates from a host, UI, or future pattern engine.
+
+Current limits of the control-frame model:
+
+- controls are still block-boundary updates, not sample-accurate events
+- runtime-updatable slots are still limited to the support matrix above
+- `GraphControl` does not yet cover topology changes, hot-swap, or stereo graph
+  routing changes
 
 ### 3.6 Graph Hot-Swap
 

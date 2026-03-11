@@ -195,17 +195,11 @@ DspNode enum  ──(flatten)──▶  Array[FlatNode]
 
 Current implemented surface:
 - Declarative mono `DspNode` graph compiled into opaque `CompiledDsp`
-- Topological sort from authoring order with rejection of cycles, multiple
-  outputs, missing outputs, unreachable nodes, invalid references, non-finite
-  constants, and runtime block-size growth beyond compiled capacity
-- Graph node coverage for `Constant`, `Oscillator`, `Noise`, `Adsr`, `Biquad`,
-  `Delay`, `Gain`, `Mul`, `Mix`, `Clip`, and `Output`
-- Runtime control for:
-  - `gate_on(node_index)` / `gate_off(node_index)` on `Adsr`
-  - partial `set_param(node_index, slot, value)` for selected numeric params
-- Integration coverage for a compiled mono voice path using gates and runtime
-  parameter updates together, plus mixed-source and successful runtime
-  `Biquad` retune coverage
+- Topological sorting, graph validation, and runtime control for the current
+  mono graph
+- Integration coverage for compiled mono voice paths and runtime retuning
+- See `docs/salat-engine-technical-reference.md` for the current node set,
+  `set_param(...)` slot matrix, and exact runtime-control surface
 
 Still planned in Phase 2:
 - Single-sample feedback handling (cycles → insert z⁻¹ delay)

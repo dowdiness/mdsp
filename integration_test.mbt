@@ -1,4 +1,43 @@
 ///|
+const GRAPH_VOICE_SAMPLE_RATE : Double = 1000.0
+
+///|
+const GRAPH_VOICE_BLOCK_SIZE : Int = 8
+
+///|
+const GRAPH_VOICE_FREQ : Double = 125.0
+
+///|
+const GRAPH_VOICE_CUTOFF : Double = 120.0
+
+///|
+const GRAPH_VOICE_Q : Double = 0.707
+
+///|
+const GRAPH_VOICE_GAIN : Double = 0.8
+
+///|
+const GRAPH_VOICE_CLIP : Double = 0.35
+
+///|
+const GRAPH_VOICE_SUSTAIN : Double = 0.5
+
+///|
+const GRAPH_VOICE_RELEASE_MS : Double = 2.0
+
+///|
+const GRAPH_VOICE_DELAY_CAPACITY : Int = 4
+
+///|
+const GRAPH_VOICE_DELAY_SAMPLES : Int = 2
+
+///|
+const GRAPH_VOICE_DELAY_SAMPLES_DOUBLE : Double = 2.0
+
+///|
+const GRAPH_VOICE_RELEASE_TAIL_LIMIT : Double = 0.001
+
+///|
 test "voice chain stays bounded across note on and release" {
   let context = DspContext::new(48000.0, 16)
   let osc = Oscillator::new()
@@ -131,6 +170,77 @@ test "stereo voice path with pan stays balanced and bounded" {
 }
 
 ///|
+test "compiled graph voice path stays coherent across gates and runtime updates" {
+  let context = DspContext::new(GRAPH_VOICE_SAMPLE_RATE, GRAPH_VOICE_BLOCK_SIZE)
+  let nodes = [
+    DspNode::output(1),
+    DspNode::clip(2, GRAPH_VOICE_CLIP),
+    DspNode::delay(
+      3,
+      GRAPH_VOICE_DELAY_CAPACITY,
+      delay_samples=GRAPH_VOICE_DELAY_SAMPLES,
+    ),
+    DspNode::gain(4, GRAPH_VOICE_GAIN),
+    DspNode::biquad(5, BiquadMode::LowPass, GRAPH_VOICE_CUTOFF, GRAPH_VOICE_Q),
+    DspNode::mul(7, 6),
+    DspNode::adsr(0.0, 0.0, GRAPH_VOICE_SUSTAIN, GRAPH_VOICE_RELEASE_MS),
+    DspNode::oscillator(Waveform::Square, GRAPH_VOICE_FREQ),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(GRAPH_VOICE_BLOCK_SIZE)
+
+  assert_true(compiled.gate_on(6))
+  compiled.process(context, output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(output, GRAPH_VOICE_CLIP),
+  )
+  assert_true(integration_any_non_zero(output))
+
+  assert_true(compiled.set_param(3, GraphParamSlot::Value0, 0.0))
+  compiled.process(context, output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(output, GRAPH_VOICE_CLIP),
+  )
+  assert_true(integration_any_non_zero(output))
+  assert_true(integration_all_zero_from(output, GRAPH_VOICE_DELAY_SAMPLES))
+
+  assert_true(compiled.set_param(3, GraphParamSlot::Value0, GRAPH_VOICE_GAIN))
+  assert_true(
+    compiled.set_param(
+      2,
+      GraphParamSlot::DelaySamples,
+      GRAPH_VOICE_DELAY_SAMPLES_DOUBLE,
+    ),
+  )
+  compiled.process(context, output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(output, GRAPH_VOICE_CLIP),
+  )
+  assert_true(integration_any_non_zero(output))
+
+  assert_true(compiled.gate_off(6))
+  compiled.process(context, output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(output, GRAPH_VOICE_CLIP),
+  )
+
+  for repeat = 0; repeat < 6; repeat = repeat + 1 {
+    compiled.process(context, output)
+  }
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(
+      output,
+      GRAPH_VOICE_RELEASE_TAIL_LIMIT,
+    ),
+  )
+}
+
+///|
 fn integration_apply_modulation(
   signal : AudioBuffer,
   modulation : AudioBuffer,
@@ -209,6 +319,25 @@ fn integration_buffers_close(
   }
 
   left.length() == right.length()
+}
+
+///|
+fn integration_all_zero_from(buffer : AudioBuffer, start : Int) -> Bool {
+  let bounded_start = if start < 0 {
+    0
+  } else if start > buffer.length() {
+    buffer.length()
+  } else {
+    start
+  }
+
+  for index = bounded_start; index < buffer.length(); index = index + 1 {
+    if buffer.get(index) != 0.0 {
+      return false
+    }
+  }
+
+  true
 }
 
 ///|

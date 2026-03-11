@@ -77,6 +77,7 @@ pub fn Clip::process(Self, DspContext, AudioBuffer, Double) -> Unit
 
 type CompiledDsp
 pub fn CompiledDsp::apply_control(Self, GraphControl) -> Bool
+pub fn CompiledDsp::apply_controls(Self, Array[GraphControl]) -> Bool
 pub fn CompiledDsp::compile(Array[DspNode], DspContext) -> Self?
 pub fn CompiledDsp::gate_off(Self, Int) -> Bool
 pub fn CompiledDsp::gate_on(Self, Int) -> Bool

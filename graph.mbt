@@ -559,6 +559,31 @@ pub fn CompiledDsp::apply_control(
 }
 
 ///|
+/// Apply a batch of runtime control messages to a compiled graph.
+///
+/// Controls are validated as a transaction first and then applied in order.
+/// If any control in the batch is invalid, nothing is applied and the function
+/// returns `false`.
+pub fn CompiledDsp::apply_controls(
+  self : CompiledDsp,
+  controls : Array[GraphControl],
+) -> Bool {
+  let simulated_nodes = FixedArray::makei(self.nodes.length(), index => {
+    self.nodes[index]
+  })
+  for index = 0; index < controls.length(); index = index + 1 {
+    if !valid_graph_control(self, simulated_nodes, controls[index]) {
+      return false
+    }
+  }
+
+  for index = 0; index < controls.length(); index = index + 1 {
+    ignore(self.apply_control(controls[index]))
+  }
+  true
+}
+
+///|
 /// Trigger `gate_on()` on an ADSR node using its original authoring index.
 ///
 /// Compatibility helper; prefer `apply_control(GraphControl::gate_on(...))`.
@@ -634,6 +659,60 @@ fn apply_graph_param_control(
   }
   compiled.nodes[compiled_index] = updated
   apply_runtime_param_side_effect(compiled, compiled_index, updated, slot)
+}
+
+///|
+fn valid_graph_control(
+  compiled : CompiledDsp,
+  simulated_nodes : FixedArray[DspNode],
+  control : GraphControl,
+) -> Bool {
+  match control.kind {
+    GateOn => valid_graph_gate_control(compiled, control.node_index)
+    GateOff => valid_graph_gate_control(compiled, control.node_index)
+    SetParam =>
+      valid_graph_param_control(
+        compiled,
+        simulated_nodes,
+        control.node_index,
+        control.slot,
+        control.value,
+      )
+  }
+}
+
+///|
+fn valid_graph_gate_control(compiled : CompiledDsp, node_index : Int) -> Bool {
+  match compiled.compiled_index_for(node_index) {
+    Some(compiled_index) => compiled.env_states[compiled_index] is Some(_)
+    None => false
+  }
+}
+
+///|
+fn valid_graph_param_control(
+  compiled : CompiledDsp,
+  simulated_nodes : FixedArray[DspNode],
+  node_index : Int,
+  slot : GraphParamSlot,
+  value : Double,
+) -> Bool {
+  let compiled_index = match compiled.compiled_index_for(node_index) {
+    Some(compiled_index) => compiled_index
+    None => return false
+  }
+  let updated = match
+    updated_node_param(
+      simulated_nodes[compiled_index],
+      slot,
+      value,
+      compiled.compile_sample_rate,
+    ) {
+    Some(updated) => updated
+    None => return false
+  }
+  simulated_nodes[compiled_index] = updated
+  true
 }
 
 ///|

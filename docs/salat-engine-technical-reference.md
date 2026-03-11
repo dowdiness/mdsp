@@ -660,6 +660,8 @@ Current graph node support:
 Current runtime control support:
 
 - `apply_control(GraphControl)` is the preferred runtime-control entrypoint
+- `apply_controls(Array[GraphControl])` applies control batches transactionally
+  in batch order while targeting nodes by authoring index
 - compatibility helpers remain available:
   - `gate_on(node_index)` / `gate_off(node_index)` for `Adsr`
   - partial `set_param(node_index, slot, value)` for selected numeric params

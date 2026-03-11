@@ -1,14 +1,19 @@
-# Step 0 Results
+# Phase 0 Results / Phase 1 Status
 
 This file records the outcome of the Phase 0 MoonBit `wasm-gc` AudioWorklet
-experiment.
+experiment and the current completion status of the Phase 1 DSP primitive set.
 
 ## Current Status
 
-- MoonBit exports `tick` and `reset_phase` from the root package for the
-  `wasm-gc` and `js` backends.
-- `web/index.html` and `web/processor.js` provide the browser demo scaffold.
-- `serve.sh` copies the built `.wasm` into `web/` and starts a local server.
+- Phase 0 is complete.
+- Phase 1 is complete.
+- The browser demo now serves the dedicated `browser/` wrapper package wasm so
+  the external browser ABI stays stable as `tick`, `tick_source`, and
+  `reset_phase`.
+- `web/index.html` and `web/processor.js` provide the current Phase 1 browser
+  demo with waveform/noise source selection, gain, pan, and the signal meter.
+- `serve.sh` copies the browser wrapper `.wasm` into `web/` and starts a local
+  server.
 - Browser validation is complete for the current prototype.
 
 ## Confirmed Outcome
@@ -30,14 +35,33 @@ This means the core Phase 0 viability question has a positive answer for the
 current setup: MoonBit `wasm-gc` can generate audible audio in a browser
 `AudioWorklet`.
 
+## Phase 1 Completion
+
+Confirmed on 2026-03-11:
+
+- Source primitives are implemented: `Oscillator` with sine/saw/square/triangle
+  and `Noise`.
+- Runtime/data-path primitives are implemented: `AudioBuffer`,
+  `DspContext`, and `ParamSmoother`.
+- Processing primitives are implemented: `Gain`, `Mix`, `Clip`, and `Pan`.
+- Stateful control/effect primitives are implemented: `Adsr`, `Biquad`, and
+  `DelayLine`.
+- Integration coverage exists for mono voice chains, mixed source chains, and
+  stereo pan chains.
+- The browser prototype has been upgraded to exercise the Phase 1 surface,
+  including source selection and stereo pan.
+
+This means the project can treat Phase 1 as complete and move into Phase 2
+graph compilation work.
+
 ## How To Run
 
-1. `moon build --target wasm-gc --release`
+1. `moon build browser --target wasm-gc --release`
 2. `./serve.sh`
 3. Open the URL printed by `serve.sh` (for example `http://127.0.0.1:8080` or
    the next free port if `8080` is occupied)
 4. Click `Start Audio`
-5. Move the frequency slider and listen for smooth pitch change
+5. Choose a source and move the frequency, gain, and pan controls
 6. Watch the signal meter if you need visual confirmation that samples are
    flowing
 
@@ -45,9 +69,10 @@ current setup: MoonBit `wasm-gc` can generate audible audio in a browser
 
 - The page loads without blocking initialization errors
 - The processor reports `ready`
-- `tick` appears in the wasm exports logged in the browser console
-- Audible sine-wave output is confirmed manually
-- The frequency slider changes pitch in real time
+- `tick`, `tick_source`, and `reset_phase` appear in the browser wrapper wasm
+  exports
+- Audible output is confirmed manually
+- The frequency, gain, and pan controls update the running demo
 - The signal meter shows non-zero output while running
 
 ## Remaining Checks

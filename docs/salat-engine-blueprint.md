@@ -137,7 +137,7 @@ MoonBit's ecosystem is young. Avoid large foundation libraries. Each library (`i
 | `loom` | Parser framework | Active (6 defects identified) |
 | `seam` | Language-agnostic CST / green-red tree | Active |
 | `ecs` | Entity-Component-System | Phase 1 ready |
-| **`salat-dsp`** | **DSP engine (this project)** | **Step 0 in progress** |
+| **`salat-dsp`** | **DSP engine (this project)** | **Phase 1 complete, Phase 2 ready** |
 | **`salat-pattern`** | **Pattern engine** | **Design phase** |
 
 ---
@@ -386,6 +386,7 @@ Ranked by impact × uncertainty:
 | Milestone | Metric |
 |-----------|--------|
 | Phase 0 | Sine wave plays in browser from MoonBit code |
+| Phase 1 | Core DSP primitives and integration tests pass on wasm-gc and js |
 | Phase 2 | 50+ node DSP graph runs without dropout at 48kHz |
 | Phase 3 | 16-voice polyphony without GC pauses |
 | Phase 5 | `s("bd sd hh sd").fast(2)` plays a beat |

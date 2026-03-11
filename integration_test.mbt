@@ -68,6 +68,24 @@ const GRAPH_MULTI_SOURCE_OUTPUT_GAIN : Double = 0.6
 const GRAPH_MULTI_SOURCE_CLIP : Double = 0.5
 
 ///|
+const GRAPH_STEREO_SAMPLE_RATE : Double = 48000.0
+
+///|
+const GRAPH_STEREO_BLOCK_SIZE : Int = 16
+
+///|
+const GRAPH_STEREO_FREQ : Double = 330.0
+
+///|
+const GRAPH_STEREO_GAIN : Double = 0.6
+
+///|
+const GRAPH_STEREO_CENTER : Double = 0.0
+
+///|
+const GRAPH_STEREO_HARD_LEFT : Double = -1.0
+
+///|
 const INTEGRATION_BUFFER_EPSILON : Double = 0.000000000001
 
 ///|
@@ -242,6 +260,60 @@ test "stereo voice path with pan stays balanced and bounded" {
 
   assert_true(integration_buffer_is_finite_and_bounded(left, 0.4))
   assert_true(integration_buffer_is_finite_and_bounded(right, 0.4))
+}
+
+///|
+test "compiled stereo graph voice path responds to runtime pan updates" {
+  let context = DspContext::new(
+    GRAPH_STEREO_SAMPLE_RATE,
+    GRAPH_STEREO_BLOCK_SIZE,
+  )
+  let nodes = [
+    DspNode::oscillator(Waveform::Triangle, GRAPH_STEREO_FREQ),
+    DspNode::gain(0, GRAPH_STEREO_GAIN),
+    DspNode::pan(1, GRAPH_STEREO_CENTER),
+    DspNode::stereo_output(2),
+  ]
+  let compiled = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let left_output = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let right_output = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+
+  compiled.process(context, left_output, right_output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(left_output, GRAPH_STEREO_GAIN),
+  )
+  assert_true(
+    integration_buffer_is_finite_and_bounded(right_output, GRAPH_STEREO_GAIN),
+  )
+  assert_true(integration_any_non_zero(left_output))
+  assert_true(integration_any_non_zero(right_output))
+  assert_true(
+    integration_buffers_close(
+      left_output,
+      right_output,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+
+  assert_true(
+    compiled.apply_control(
+      GraphControl::set_param(2, GraphParamSlot::Value0, GRAPH_STEREO_HARD_LEFT),
+    ),
+  )
+  compiled.process(context, left_output, right_output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(left_output, GRAPH_STEREO_GAIN),
+  )
+  assert_true(
+    integration_buffer_is_finite_and_bounded(right_output, GRAPH_STEREO_GAIN),
+  )
+  assert_true(integration_any_non_zero(left_output))
+  assert_true(right_output.as_fixed_array().every(sample => sample == 0.0))
+  assert_true(
+    integration_abs_sum(left_output) > integration_abs_sum(right_output),
+  )
 }
 
 ///|

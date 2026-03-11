@@ -89,6 +89,48 @@ test "mixed oscillator and noise buses remain finite and bounded" {
 }
 
 ///|
+test "stereo voice path with pan stays balanced and bounded" {
+  let context = DspContext::new(48000.0, 16)
+  let osc = Oscillator::new()
+  let env = Adsr::new(0.0, 0.0, 0.6, 10.0)
+  let filter = Biquad::new()
+  let gain = Gain::new()
+  let pan = Pan::new()
+  let left_clip = Clip::new()
+  let right_clip = Clip::new()
+  let mono = AudioBuffer::filled(16)
+  let envelope = AudioBuffer::filled(16)
+  let left = AudioBuffer::filled(16)
+  let right = AudioBuffer::filled(16)
+
+  assert_true(filter.update(context, BiquadMode::BandPass, 900.0, 0.9))
+
+  env.gate_on()
+  osc.process_waveform(context, mono, Waveform::Triangle, 330.0)
+  env.process(context, envelope)
+  integration_apply_modulation(mono, envelope)
+  filter.process(context, mono)
+  gain.process(context, mono, 0.8)
+
+  assert_true(integration_buffer_is_finite_and_bounded(mono, 1.0))
+  assert_true(integration_any_non_zero(mono))
+
+  pan.process(context, mono, left, right, 0.0)
+
+  assert_true(integration_buffer_is_finite_and_bounded(left, 1.0))
+  assert_true(integration_buffer_is_finite_and_bounded(right, 1.0))
+  assert_true(integration_any_non_zero(left))
+  assert_true(integration_any_non_zero(right))
+  assert_true(integration_buffers_close(left, right, 0.000000001))
+
+  left_clip.process(context, left, 0.4)
+  right_clip.process(context, right, 0.4)
+
+  assert_true(integration_buffer_is_finite_and_bounded(left, 0.4))
+  assert_true(integration_buffer_is_finite_and_bounded(right, 0.4))
+}
+
+///|
 fn integration_apply_modulation(
   signal : AudioBuffer,
   modulation : AudioBuffer,
@@ -146,6 +188,27 @@ fn integration_buffer_differs_from_fixed_array(
   }
 
   buffer.length() != baseline.length()
+}
+
+///|
+fn integration_buffers_close(
+  left : AudioBuffer,
+  right : AudioBuffer,
+  epsilon : Double,
+) -> Bool {
+  let sample_count = if left.length() < right.length() {
+    left.length()
+  } else {
+    right.length()
+  }
+
+  for index = 0; index < sample_count; index = index + 1 {
+    if (left.get(index) - right.get(index)).abs() > epsilon {
+      return false
+    }
+  }
+
+  left.length() == right.length()
 }
 
 ///|

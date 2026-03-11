@@ -161,17 +161,25 @@ MoonBit's ecosystem is young. Avoid large foundation libraries. Each library (`i
 
 ```
 salat-dsp/
+├── buffer.mbt       AudioBuffer (FixedArray[Double] wrapper)
+├── context.mbt      DspContext (sample rate + block size)
 ├── osc.mbt          Sine, Saw, Square, Triangle (phase accumulator)
+├── noise.mbt        Seeded white-noise source
 ├── filter.mbt       Biquad (LPF, HPF, BPF) — Bristow-Johnson cookbook
 ├── env.mbt          ADSR envelope
 ├── delay.mbt        Delay line (circular buffer, FixedArray)
-├── mix.mbt          Gain, Pan, Mix
+├── gain.mbt         Scalar gain processor
+├── mix.mbt          In-place mono buffer mixing
+├── clip.mbt         Hard clipping / explicit range limiting
+├── pan.mbt          Equal-power mono-to-stereo pan
 ├── smooth.mbt       One-pole parameter smoother
-└── buffer.mbt       AudioBuffer (FixedArray[Double] wrapper)
+└── integration_test.mbt  End-to-end DSP chain coverage
 ```
 
-Each processor implements a `Processor` trait with `process(input, output, ctx)`.
-All state is `mut` fields on structs — no heap allocation during processing.
+The current implementation uses small, explicit structs and `process(...)`
+methods instead of a shared `Processor` trait. All state lives in `mut` fields
+or preallocated `FixedArray[Double]` buffers — no heap allocation during
+processing.
 
 **Deliverable**: Individual DSP blocks that pass unit tests (input buffer → expected output buffer).
 

@@ -457,6 +457,10 @@ Trivial but important to get right:
 // Mix: output[i] = sum(inputs[j][i]) — may need scaling by 1/sqrt(N) to prevent clipping
 ```
 
+In the current Phase 1 implementation these are split into separate primitives:
+`gain.mbt`, `mix.mbt`, `clip.mbt`, and `pan.mbt`, all built around
+`DspContext` plus `AudioBuffer`.
+
 ---
 
 ## 3. Graph Compilation Strategy

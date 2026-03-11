@@ -93,9 +93,29 @@ test "compiled dsp silences when runtime block exceeds compiled capacity" {
 }
 
 ///|
-test "compiled dsp rejects forward references" {
+test "compiled dsp topologically sorts declarative node order" {
   let context = DspContext::new(48000.0, 4)
-  let nodes = [DspNode::gain(1, 0.5), DspNode::output(0)]
+  let nodes = [
+    DspNode::output(1),
+    DspNode::gain(2, 0.5),
+    DspNode::oscillator(Waveform::Sine, 440.0),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(4)
+
+  compiled.process(context, output)
+
+  assert_eq(output.get(0), 0.0)
+  assert_true(output.as_fixed_array().any(sample => sample != 0.0))
+  assert_true(
+    output.as_fixed_array().every(sample => sample >= -0.5 && sample <= 0.5),
+  )
+}
+
+///|
+test "compiled dsp rejects cycles" {
+  let context = DspContext::new(48000.0, 4)
+  let nodes = [DspNode::output(1), DspNode::gain(0, 0.5)]
 
   assert_true(CompiledDsp::compile(nodes, context) is None)
 }
@@ -104,6 +124,14 @@ test "compiled dsp rejects forward references" {
 test "compiled dsp rejects graphs without a final output node" {
   let context = DspContext::new(48000.0, 4)
   let nodes = [DspNode::constant(0.25)]
+
+  assert_true(CompiledDsp::compile(nodes, context) is None)
+}
+
+///|
+test "compiled dsp rejects multiple output nodes" {
+  let context = DspContext::new(48000.0, 4)
+  let nodes = [DspNode::constant(0.25), DspNode::output(0), DspNode::output(0)]
 
   assert_true(CompiledDsp::compile(nodes, context) is None)
 }

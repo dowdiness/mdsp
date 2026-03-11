@@ -75,11 +75,7 @@ pub struct Clip {
 pub fn Clip::new() -> Self
 pub fn Clip::process(Self, DspContext, AudioBuffer, Double) -> Unit
 
-pub struct CompiledDsp {
-  nodes : FixedArray[DspNode]
-  buffers : FixedArray[AudioBuffer]
-  states : FixedArray[GraphNodeState]
-}
+type CompiledDsp
 pub fn CompiledDsp::compile(Array[DspNode], DspContext) -> Self?
 pub fn CompiledDsp::process(Self, DspContext, AudioBuffer) -> Unit
 
@@ -151,8 +147,6 @@ pub struct Gain {
 }
 pub fn Gain::new() -> Self
 pub fn Gain::process(Self, DspContext, AudioBuffer, Double) -> Unit
-
-type GraphNodeState
 
 pub struct Mix {
   unit : Unit

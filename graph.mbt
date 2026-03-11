@@ -11,7 +11,7 @@ pub(all) enum DspNodeKind {
 }
 
 ///|
-/// Declarative DSP graph node in already-topological order.
+/// Declarative DSP graph node in authoring order.
 pub struct DspNode {
   kind : DspNodeKind
   input0 : Int
@@ -44,10 +44,11 @@ fn DspNode::new(
 
 ///|
 /// Executable buffer-based DSP graph compiled from `DspNode`s.
-pub struct CompiledDsp {
+struct CompiledDsp {
   nodes : FixedArray[DspNode]
   buffers : FixedArray[AudioBuffer]
-  states : FixedArray[GraphNodeState]
+  osc_states : FixedArray[Oscillator?]
+  noise_states : FixedArray[Noise?]
 }
 
 ///|
@@ -93,28 +94,32 @@ pub fn DspNode::output(input : Int) -> DspNode {
 }
 
 ///|
-/// Compile an already-topological mono graph into an executable buffer graph.
+/// Compile a declarative mono graph into an executable buffer graph.
 ///
-/// This first Phase 2 slice intentionally requires the final node to be
-/// `Output` and all references to point backward.
+/// This first Phase 2 slice accepts nodes in authoring order, requires exactly
+/// one reachable `Output` node, rejects cycles, and rejects graphs containing
+/// unreachable nodes.
 pub fn CompiledDsp::compile(
   nodes : Array[DspNode],
   context : DspContext,
 ) -> CompiledDsp? {
-  if !valid_compiled_graph(nodes) {
-    return None
+  let sorted_nodes = match topo_sorted_nodes(nodes) {
+    Some(sorted_nodes) => sorted_nodes
+    None => return None
   }
-
   let node_count = nodes.length()
   let block_size = compiled_block_size(context)
-  let fixed_nodes = FixedArray::makei(node_count, index => nodes[index])
+  let fixed_nodes = FixedArray::makei(node_count, index => sorted_nodes[index])
   let buffers = FixedArray::makei(node_count, _ => {
     AudioBuffer::filled(block_size)
   })
-  let states = FixedArray::makei(node_count, index => {
-    make_graph_node_state(nodes[index])
+  let osc_states = FixedArray::makei(node_count, index => {
+    make_graph_osc_state(sorted_nodes[index])
   })
-  Some({ nodes: fixed_nodes, buffers, states })
+  let noise_states = FixedArray::makei(node_count, index => {
+    make_graph_noise_state(sorted_nodes[index])
+  })
+  Some({ nodes: fixed_nodes, buffers, osc_states, noise_states })
 }
 
 ///|
@@ -141,10 +146,10 @@ pub fn CompiledDsp::process(
     match node.kind {
       Constant => fill_constant_buffer(buffer, sample_count, node.value0)
       Oscillator =>
-        self.states[index].osc
+        self.osc_states[index]
         .unwrap()
         .process_waveform(context, buffer, node.waveform, node.value0)
-      Noise => self.states[index].noise.unwrap().process(context, buffer)
+      Noise => self.noise_states[index].unwrap().process(context, buffer)
       Gain => {
         copy_buffer(self.buffers[node.input0], buffer, sample_count)
         apply_gain_buffer(buffer, sample_count, node.value0)
@@ -169,44 +174,47 @@ pub fn CompiledDsp::process(
 
 ///|
 fn valid_compiled_graph(nodes : Array[DspNode]) -> Bool {
-  if nodes.is_empty() {
-    return false
+  let output_index = match find_single_output_index(nodes) {
+    Some(output_index) => output_index
+    None => return false
   }
-  if !(nodes[nodes.length() - 1].kind is DspNodeKind::Output) {
+  if nodes.is_empty() {
     return false
   }
 
   for index = 0; index < nodes.length(); index = index + 1 {
     let node = nodes[index]
-    if !valid_node_inputs(node, index) {
+    if !valid_node_inputs(node, nodes.length()) {
       return false
     }
   }
 
-  true
+  has_reachable_acyclic_graph(nodes, output_index)
 }
 
 ///|
-fn valid_node_inputs(node : DspNode, index : Int) -> Bool {
+fn valid_node_inputs(node : DspNode, node_count : Int) -> Bool {
   match node.kind {
     Constant => valid_finite_value(node.value0)
     Oscillator => valid_finite_value(node.value0)
     Noise => true
     Gain =>
-      valid_reference(node.input0, index) && valid_finite_value(node.value0)
+      valid_reference(node.input0, node_count) &&
+      valid_finite_value(node.value0)
     Mix =>
-      valid_reference(node.input0, index) && valid_reference(node.input1, index)
+      valid_reference(node.input0, node_count) &&
+      valid_reference(node.input1, node_count)
     Clip =>
-      valid_reference(node.input0, index) &&
+      valid_reference(node.input0, node_count) &&
       valid_finite_value(node.value0) &&
       node.value0 > 0.0
-    Output => valid_reference(node.input0, index)
+    Output => valid_reference(node.input0, node_count)
   }
 }
 
 ///|
-fn valid_reference(input : Int, index : Int) -> Bool {
-  input >= 0 && input < index
+fn valid_reference(input : Int, node_count : Int) -> Bool {
+  input >= 0 && input < node_count
 }
 
 ///|
@@ -221,6 +229,128 @@ fn CompiledDsp::compiled_buffer_capacity(self : CompiledDsp) -> Int {
 ///|
 fn valid_finite_value(value : Double) -> Bool {
   !value.is_nan() && !value.is_inf()
+}
+
+///|
+fn topo_sorted_nodes(nodes : Array[DspNode]) -> Array[DspNode]? {
+  if !valid_compiled_graph(nodes) {
+    return None
+  }
+
+  let output_index = find_single_output_index(nodes).unwrap()
+  let marks = FixedArray::make(nodes.length(), 0)
+  let order = Array::new()
+  if !visit_graph_node(output_index, nodes, marks, order) {
+    return None
+  }
+  if order.length() != nodes.length() {
+    return None
+  }
+
+  let remap = FixedArray::make(nodes.length(), -1)
+  for new_index = 0; new_index < order.length(); new_index = new_index + 1 {
+    remap[order[new_index]] = new_index
+  }
+
+  let sorted = Array::new()
+  for new_index = 0; new_index < order.length(); new_index = new_index + 1 {
+    sorted.push(remap_node_inputs(nodes[order[new_index]], remap))
+  }
+  Some(sorted)
+}
+
+///|
+fn find_single_output_index(nodes : Array[DspNode]) -> Int? {
+  let mut output_index = -1
+  for index = 0; index < nodes.length(); index = index + 1 {
+    if nodes[index].kind is DspNodeKind::Output {
+      if output_index >= 0 {
+        return None
+      }
+      output_index = index
+    }
+  }
+  if output_index >= 0 {
+    Some(output_index)
+  } else {
+    None
+  }
+}
+
+///|
+fn has_reachable_acyclic_graph(
+  nodes : Array[DspNode],
+  output_index : Int,
+) -> Bool {
+  let marks = FixedArray::make(nodes.length(), 0)
+  let order = Array::new()
+  if !visit_graph_node(output_index, nodes, marks, order) {
+    return false
+  }
+  order.length() == nodes.length()
+}
+
+///|
+fn visit_graph_node(
+  index : Int,
+  nodes : Array[DspNode],
+  marks : FixedArray[Int],
+  order : Array[Int],
+) -> Bool {
+  match marks[index] {
+    1 => false
+    2 => true
+    _ => {
+      marks[index] = 1
+      if !visit_graph_dependencies(nodes[index], nodes, marks, order) {
+        return false
+      }
+      marks[index] = 2
+      order.push(index)
+      true
+    }
+  }
+}
+
+///|
+fn visit_graph_dependencies(
+  node : DspNode,
+  nodes : Array[DspNode],
+  marks : FixedArray[Int],
+  order : Array[Int],
+) -> Bool {
+  match node.kind {
+    Constant => true
+    Oscillator => true
+    Noise => true
+    Gain => visit_graph_node(node.input0, nodes, marks, order)
+    Mix =>
+      visit_graph_node(node.input0, nodes, marks, order) &&
+      visit_graph_node(node.input1, nodes, marks, order)
+    Clip => visit_graph_node(node.input0, nodes, marks, order)
+    Output => visit_graph_node(node.input0, nodes, marks, order)
+  }
+}
+
+///|
+fn remap_node_inputs(node : DspNode, remap : FixedArray[Int]) -> DspNode {
+  DspNode(
+    node.kind,
+    remapped_input(node.input0, remap),
+    remapped_input(node.input1, remap),
+    node.value0,
+    node.waveform,
+    node.seed,
+  )
+}
+
+///|
+fn remapped_input(input : Int, remap : FixedArray[Int]) -> Int {
+  if input >= 0 {
+    remap[input]
+  } else {
+    -1
+  }
 }
 
 ///|
@@ -371,17 +501,18 @@ fn min_buffer_length(a : Int, b : Int, c : Int, d : Int) -> Int {
 }
 
 ///|
-struct GraphNodeState {
-  osc : Oscillator?
-  noise : Noise?
+fn make_graph_osc_state(node : DspNode) -> Oscillator? {
+  match node.kind {
+    Oscillator => Some(Oscillator::new())
+    _ => None
+  }
 }
 
 ///|
-fn make_graph_node_state(node : DspNode) -> GraphNodeState {
+fn make_graph_noise_state(node : DspNode) -> Noise? {
   match node.kind {
-    Oscillator => { osc: Some(Oscillator::new()), noise: None }
-    Noise => { osc: None, noise: Some(Noise::new(node.seed)) }
-    _ => { osc: None, noise: None }
+    Noise => Some(Noise::new(node.seed))
+    _ => None
   }
 }
 

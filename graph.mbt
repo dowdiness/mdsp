@@ -25,6 +25,9 @@ pub(all) enum GraphParamSlot {
 }
 
 ///|
+const NYQUIST_RATIO : Double = 0.5
+
+///|
 /// Declarative DSP graph node in authoring order.
 pub struct DspNode {
   kind : DspNodeKind
@@ -716,7 +719,7 @@ fn valid_biquad_graph_params(
   cutoff : Double,
   q : Double,
 ) -> Bool {
-  let nyquist = sample_rate * 0.5
+  let nyquist = sample_rate * NYQUIST_RATIO
   valid_finite_value(sample_rate) &&
   sample_rate > 0.0 &&
   valid_finite_value(cutoff) &&

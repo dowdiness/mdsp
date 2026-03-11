@@ -1,12 +1,14 @@
-# Phase 0 Results / Phase 1 Status
+# Phase 0 Results / Phase 1 Status / Phase 2 Progress
 
 This file records the outcome of the Phase 0 MoonBit `wasm-gc` AudioWorklet
-experiment and the current completion status of the Phase 1 DSP primitive set.
+experiment, the completion status of the Phase 1 DSP primitive set, and the
+current Phase 2 graph-compiler checkpoint.
 
 ## Current Status
 
 - Phase 0 is complete.
 - Phase 1 is complete.
+- Phase 2 is in progress.
 - The browser demo now serves the dedicated `browser/` wrapper package wasm so
   the external browser ABI stays stable as `tick`, `tick_source`, and
   `reset_phase`.
@@ -53,6 +55,29 @@ Confirmed on 2026-03-11:
 
 This means the project can treat Phase 1 as complete and move into Phase 2
 graph compilation work.
+
+## Phase 2 Progress
+
+Confirmed on 2026-03-11:
+
+- A compiled mono graph exists via `DspNode` -> `CompiledDsp`.
+- Topological sorting, graph validation, and runtime control are implemented.
+- Integration coverage exists for compiled graph voice paths that use both gate
+  events and runtime parameter updates.
+
+Authoritative detailed Phase 2 graph status now lives in
+`docs/salat-engine-technical-reference.md`, including:
+- current node coverage
+- current `set_param(node_index, slot, value)` support matrix
+- current graph limits and remaining Phase 2 work
+
+Current Phase 2 limits:
+
+- mono graph only
+- no stereo graph semantics or `Pan` node in the compiled graph
+- no feedback-edge insertion yet
+- no graph hot-swap/crossfade path yet
+- runtime parameter updates are partial, not universal across node kinds
 
 ## How To Run
 

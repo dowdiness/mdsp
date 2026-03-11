@@ -137,7 +137,7 @@ MoonBit's ecosystem is young. Avoid large foundation libraries. Each library (`i
 | `loom` | Parser framework | Active (6 defects identified) |
 | `seam` | Language-agnostic CST / green-red tree | Active |
 | `ecs` | Entity-Component-System | Phase 1 ready |
-| **`salat-dsp`** | **DSP engine (this project)** | **Phase 1 complete, Phase 2 ready** |
+| **`salat-dsp`** | **DSP engine (this project)** | **Phase 1 complete, Phase 2 in progress** |
 | **`salat-pattern`** | **Pattern engine** | **Design phase** |
 
 ---
@@ -193,14 +193,30 @@ DspNode enum  ──(flatten)──▶  Array[FlatNode]
               ──(compile)──▶   CompiledDsp (process() function)
 ```
 
-Key features:
-- Topological sort with cycle detection
-- Single-sample feedback (cycles → insert z⁻¹ delay)
-- Constant folding, dead node elimination
-- Multichannel expansion (SuperCollider-style)
-- Graph hot-swap: compile new graph on main thread → transfer to audio thread → crossfade
+Current implemented surface:
+- Declarative mono `DspNode` graph compiled into opaque `CompiledDsp`
+- Topological sort from authoring order with rejection of cycles, multiple
+  outputs, missing outputs, unreachable nodes, invalid references, non-finite
+  constants, and runtime block-size growth beyond compiled capacity
+- Graph node coverage for `Constant`, `Oscillator`, `Noise`, `Adsr`, `Biquad`,
+  `Delay`, `Gain`, `Mul`, `Mix`, `Clip`, and `Output`
+- Runtime control for:
+  - `gate_on(node_index)` / `gate_off(node_index)` on `Adsr`
+  - partial `set_param(node_index, slot, value)` for selected numeric params
+- Integration coverage for a compiled mono voice path using gates and runtime
+  parameter updates together
 
-**Deliverable**: `sine(2).range(200,400).sine().lpf(800,1).out()` produces sound (kabelsalat parity).
+Still planned in Phase 2:
+- Single-sample feedback handling (cycles → insert z⁻¹ delay)
+- Constant folding and dead node elimination
+- Multichannel/stereo graph semantics
+- Graph hot-swap and crossfade on the audio thread
+
+**Current deliverable**: compiled mono graph execution with runtime control and
+integration coverage.
+
+**Phase 2 exit deliverable**: `sine(2).range(200,400).sine().lpf(800,1).out()`
+produces sound with graph hot-swap and feedback handling.
 
 ### Phase 3 — Voice Management (1-2 weeks)
 

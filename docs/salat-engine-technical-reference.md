@@ -625,6 +625,68 @@ Advantages: buffer-based processing enables SIMD optimization, better cache beha
 
 **Recommendation**: Start with Approach C. It's a good balance of performance and simplicity for MoonBit. If it's not fast enough (unlikely for < 100 nodes), investigate code generation later.
 
+### 3.5.1 Current Phase 2 Status
+
+The current repository already implements the first compiled mono graph slice:
+
+- `DspNode` authoring graphs compile into an opaque `CompiledDsp`
+- input nodes may be declared in authoring order; the compiler topologically
+  sorts reachable nodes from a single `Output`
+- compile rejects:
+  - cycles
+  - multiple outputs
+  - missing outputs
+  - unreachable nodes
+  - invalid references
+  - non-finite constants
+  - invalid fixed `Biquad` parameters
+- runtime processing fails closed to silence if the caller requests a block size
+  larger than the graph was compiled for
+
+Current graph node support:
+
+- `Constant`
+- `Oscillator`
+- `Noise`
+- `Adsr`
+- `Biquad`
+- `Delay`
+- `Gain`
+- `Mul`
+- `Mix`
+- `Clip`
+- `Output`
+
+Current runtime control support:
+
+- `gate_on(node_index)` / `gate_off(node_index)` for `Adsr`
+- partial `set_param(node_index, slot, value)` for selected numeric params
+  (`Gain`, `Clip`, `Biquad`, `Delay`, `Constant`, `Oscillator`)
+
+Current `set_param(node_index, slot, value)` support matrix:
+
+| Node kind | Supported slots | Notes |
+|-----------|-----------------|-------|
+| `Constant` | `Value0` | Finite values only |
+| `Oscillator` | `Value0` | Finite frequency values only |
+| `Noise` | none | No runtime seed update yet |
+| `Adsr` | none | Runtime control is `gate_on` / `gate_off` only |
+| `Biquad` | `Value0`, `Value1` | `Value0 = cutoff`, `Value1 = q`; validated against the compile-time sample rate |
+| `Delay` | `DelaySamples` | Exact integer values only; applied to the live `DelayLine` state |
+| `Gain` | `Value0` | Finite gain only |
+| `Mul` | none | No runtime params |
+| `Mix` | none | No runtime params |
+| `Clip` | `Value0` | Positive finite threshold only |
+| `Output` | none | No runtime params |
+
+Current limits:
+
+- mono only
+- no feedback-edge insertion yet
+- no graph hot-swap yet
+- no `Pan` or stereo graph semantics in `CompiledDsp`
+- runtime parameter updates are partial, not universal across node kinds
+
 ### 3.6 Graph Hot-Swap
 
 When the user changes the DSP graph:
@@ -652,7 +714,8 @@ sine([200, 300, 400]).out()
 
 Implementation: during flatten(), detect array inputs and duplicate the subgraph. This is a pre-processing step before topological sort.
 
-Defer this to Phase 2. Start with mono.
+Defer this to later Phase 2 work. The current implementation starts with mono
+only.
 
 ---
 

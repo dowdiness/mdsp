@@ -1,4 +1,7 @@
 ///|
+/// Shared graph-test constants reduce repetition, but a wrong edit here can
+/// affect multiple test expectations at once. Keep values local when they only
+/// matter to a single case.
 const STANDARD_SAMPLE_RATE : Double = 48000.0
 
 ///|

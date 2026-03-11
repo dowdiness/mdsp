@@ -1,0 +1,11 @@
+import {
+  "dowdiness/mdsp" @lib,
+}
+
+options(
+  "is-main": true,
+  link: {
+    "js": { "exports": [ "tick", "tick_source", "reset_phase" ] },
+    "wasm-gc": { "exports": [ "tick", "tick_source", "reset_phase" ] },
+  },
+)

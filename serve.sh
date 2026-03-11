@@ -9,7 +9,7 @@ port="${1:-8080}"
 
 mkdir -p "$web_dir"
 
-wasm_path="$build_dir/mdsp.wasm"
+wasm_path="$build_dir/browser/browser.wasm"
 
 if [ ! -f "$wasm_path" ]; then
   echo "No wasm-gc build artifact found at $wasm_path" >&2

@@ -2,9 +2,17 @@
 package "dowdiness/mdsp"
 
 // Values
+pub fn demo_reset_phase() -> Unit
+
+pub fn demo_tick(Double, Double) -> Double
+
+pub fn demo_tick_source(Int, Double, Double) -> Double
+
 pub fn reset_phase() -> Unit
 
 pub fn tick(Double, Double) -> Double
+
+pub fn tick_source(Int, Double, Double) -> Double
 
 // Errors
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mdsp Step 0</title>
+  <title>mdsp Phase 1 Demo</title>
   <style>
     :root {
       --bg: #f3efe5;
@@ -201,10 +201,11 @@
 </head>
 <body>
   <main>
-    <h1>MoonBit DSP<br>Step 0</h1>
+    <h1>MoonBit DSP<br>Phase 1</h1>
     <p>
-      This page is the Phase 0 platform check for <code>mdsp</code>:
-      a sine oscillator computed in MoonBit and called from an
+      This page upgrades the original browser prototype to exercise the current
+      Phase 1 source and stereo work in <code>mdsp</code>:
+      waveform or noise generation in MoonBit, plus browser-side panning in an
       <code>AudioWorkletProcessor</code>.
     </p>
 
@@ -235,6 +236,20 @@
 
       <div class="slider-card">
         <div class="slider-row">
+          <strong>Source</strong>
+          <span id="sourceValue">Sine</span>
+        </div>
+        <select id="sourceSelect">
+          <option value="0">Sine</option>
+          <option value="1">Saw</option>
+          <option value="2">Square</option>
+          <option value="3">Triangle</option>
+          <option value="4">Noise</option>
+        </select>
+      </div>
+
+      <div class="slider-card">
+        <div class="slider-row">
           <strong>Frequency</strong>
           <span><span id="freqValue">440</span> Hz</span>
         </div>
@@ -248,6 +263,14 @@
         </div>
         <input id="gainSlider" type="range" min="0" max="100" value="30" step="1">
       </div>
+
+      <div class="slider-card">
+        <div class="slider-row">
+          <strong>Pan</strong>
+          <span><span id="panValue">0</span>%</span>
+        </div>
+        <input id="panSlider" type="range" min="-100" max="100" value="0" step="1">
+      </div>
     </section>
 
     <div id="status" data-state="idle">Ready. Build the wasm file, serve <code>web/</code>, then click Start Audio.</div>
@@ -256,10 +279,14 @@
   <script>
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
+    const sourceSelect = document.getElementById("sourceSelect");
     const freqSlider = document.getElementById("freqSlider");
     const gainSlider = document.getElementById("gainSlider");
+    const panSlider = document.getElementById("panSlider");
+    const sourceValue = document.getElementById("sourceValue");
     const freqValue = document.getElementById("freqValue");
     const gainValue = document.getElementById("gainValue");
+    const panValue = document.getElementById("panValue");
     const meterFill = document.getElementById("meterFill");
     const meterValue = document.getElementById("meterValue");
     const scope = document.getElementById("scope");
@@ -279,8 +306,11 @@
     }
 
     function syncLabels() {
+      sourceValue.textContent = sourceSelect.options[sourceSelect.selectedIndex].text;
       freqValue.textContent = freqSlider.value;
       gainValue.textContent = gainSlider.value;
+      panValue.textContent = panSlider.value;
+      freqSlider.disabled = sourceSelect.value === "4";
     }
 
     function resetMeter() {
@@ -395,6 +425,8 @@
 
         node.port.postMessage({ type: "set-freq", value: Number(freqSlider.value) });
         node.port.postMessage({ type: "set-gain", value: Number(gainSlider.value) / 100 });
+        node.port.postMessage({ type: "set-pan", value: Number(panSlider.value) / 100 });
+        node.port.postMessage({ type: "set-source", value: Number(sourceSelect.value) });
 
         startMeterLoop();
         startBtn.disabled = true;
@@ -451,6 +483,20 @@
       syncLabels();
       if (node) {
         node.port.postMessage({ type: "set-gain", value: Number(gainSlider.value) / 100 });
+      }
+    });
+
+    panSlider.addEventListener("input", () => {
+      syncLabels();
+      if (node) {
+        node.port.postMessage({ type: "set-pan", value: Number(panSlider.value) / 100 });
+      }
+    });
+
+    sourceSelect.addEventListener("input", () => {
+      syncLabels();
+      if (node) {
+        node.port.postMessage({ type: "set-source", value: Number(sourceSelect.value) });
       }
     });
 

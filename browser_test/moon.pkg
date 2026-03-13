@@ -1,0 +1,37 @@
+import {
+  "dowdiness/mdsp/browser" @browser,
+}
+
+options(
+  "is-main": true,
+  link: {
+    "js": {
+      "exports": [
+        "tick",
+        "tick_source",
+        "reset_phase",
+        "init_compiled_graph",
+        "process_compiled_block",
+        "compiled_output_sample",
+        "init_compiled_stereo_graph",
+        "process_compiled_stereo_block",
+        "compiled_stereo_left_sample",
+        "compiled_stereo_right_sample",
+      ],
+    },
+    "wasm-gc": {
+      "exports": [
+        "tick",
+        "tick_source",
+        "reset_phase",
+        "init_compiled_graph",
+        "process_compiled_block",
+        "compiled_output_sample",
+        "init_compiled_stereo_graph",
+        "process_compiled_stereo_block",
+        "compiled_stereo_left_sample",
+        "compiled_stereo_right_sample",
+      ],
+    },
+  },
+)

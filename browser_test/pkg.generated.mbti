@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/mdsp/browser_test"
+
+// Values
+pub fn compiled_output_sample(Int) -> Double
+
+pub fn compiled_stereo_left_sample(Int) -> Double
+
+pub fn compiled_stereo_right_sample(Int) -> Double
+
+pub fn init_compiled_graph(Double, Int) -> Bool
+
+pub fn init_compiled_stereo_graph(Double, Int) -> Bool
+
+pub fn process_compiled_block(Double, Double, Double, Int) -> Bool
+
+pub fn process_compiled_stereo_block(Double, Double, Double, Double, Int) -> Bool
+
+pub fn reset_phase() -> Unit
+
+pub fn tick(Double, Double) -> Double
+
+pub fn tick_source(Int, Double, Double) -> Double
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

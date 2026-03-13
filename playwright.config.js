@@ -9,7 +9,7 @@ const config = {
     headless: true,
   },
   webServer: {
-    command: "bash -lc 'moon build browser --target wasm-gc --release && ./playwright-serve.sh 8090'",
+    command: "bash -lc 'moon build --target wasm-gc --release && ./playwright-serve.sh 8090'",
     url: 'http://127.0.0.1:8090',
     reuseExistingServer: true,
     timeout: 30_000,

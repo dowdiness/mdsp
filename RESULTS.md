@@ -12,8 +12,9 @@ current Phase 2 graph-compiler checkpoint.
 - The browser demo now serves the dedicated `browser/` wrapper package wasm so
   the external browser ABI stays stable as `tick`, `tick_source`, and
   `reset_phase`.
-- `web/index.html` and `web/processor.js` provide the current Phase 1 browser
-  demo with waveform/noise source selection, gain, pan, and the signal meter.
+- `web/index.html` and `web/processor.js` now provide the current Phase 2
+  browser proof: the AudioWorklet runs a fixed MoonBit `CompiledDsp` graph once
+  per render quantum and reads its output block back for playback and metering.
 - `serve.sh` copies the browser wrapper `.wasm` into `web/` and starts a local
   server.
 - Browser validation is complete for the current prototype.
@@ -36,6 +37,19 @@ Confirmed on 2026-03-10:
 This means the core Phase 0 viability question has a positive answer for the
 current setup: MoonBit `wasm-gc` can generate audible audio in a browser
 `AudioWorklet`.
+
+Confirmed on 2026-03-13:
+
+- The browser wrapper exports `init_compiled_graph`,
+  `process_compiled_block`, and `compiled_output_sample` in addition to the
+  legacy Phase 0/1 compatibility exports.
+- The served page reports `CompiledDsp block runtime` after `Start Audio`.
+- `processor.js` now drives the `CompiledDsp` path once per render quantum
+  instead of calling `tick(...)` for each individual sample.
+- Browser automation confirms the live page enters the compiled-graph mode.
+
+This means the browser prototype now exercises the actual Phase 2 compiled mono
+graph runtime, not just the earlier per-sample wrapper ABI.
 
 ## Phase 1 Completion
 
@@ -86,7 +100,7 @@ Authoritative detailed Phase 2 graph status now lives in
 3. Open the URL printed by `serve.sh` (for example `http://127.0.0.1:8080` or
    the next free port if `8080` is occupied)
 4. Click `Start Audio`
-5. Choose a source and move the frequency, gain, and pan controls
+5. Move the frequency and gain controls
 6. Watch the signal meter if you need visual confirmation that samples are
    flowing
 
@@ -96,8 +110,11 @@ Authoritative detailed Phase 2 graph status now lives in
 - The processor reports `ready`
 - `tick`, `tick_source`, and `reset_phase` appear in the browser wrapper wasm
   exports
+- `init_compiled_graph`, `process_compiled_block`, and `compiled_output_sample`
+  appear in the browser wrapper wasm exports
+- The page reports `CompiledDsp block runtime`
 - Audible output is confirmed manually
-- The frequency, gain, and pan controls update the running demo
+- The frequency and gain controls update the running demo
 - The signal meter shows non-zero output while running
 
 ## Remaining Checks

@@ -2,4 +2,7 @@
 _build/
 .mooncakes/
 .moonagent/
+node_modules/
+playwright-report/
+test-results/
 web/moonbit_dsp.wasm

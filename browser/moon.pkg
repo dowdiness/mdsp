@@ -1,11 +1,30 @@
 import {
   "dowdiness/mdsp" @lib,
+  "moonbitlang/core/ref" @ref,
 }
 
 options(
   "is-main": true,
   link: {
-    "js": { "exports": [ "tick", "tick_source", "reset_phase" ] },
-    "wasm-gc": { "exports": [ "tick", "tick_source", "reset_phase" ] },
+    "js": {
+      "exports": [
+        "tick",
+        "tick_source",
+        "reset_phase",
+        "init_compiled_graph",
+        "process_compiled_block",
+        "compiled_output_sample",
+      ],
+    },
+    "wasm-gc": {
+      "exports": [
+        "tick",
+        "tick_source",
+        "reset_phase",
+        "init_compiled_graph",
+        "process_compiled_block",
+        "compiled_output_sample",
+      ],
+    },
   },
 )

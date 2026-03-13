@@ -1,0 +1,12 @@
+{
+  "name": "mdsp-browser-tools",
+  "private": true,
+  "scripts": {
+    "build:browser": "moon build browser --target wasm-gc --release",
+    "test:browser": "playwright test",
+    "test:browser:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

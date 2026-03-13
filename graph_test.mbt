@@ -316,6 +316,79 @@ test "compiled dsp delay node keeps zero-capacity default as passthrough" {
 }
 
 ///|
+test "compiled dsp rejects implicit stereo to mono output" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::output(1),
+  ]
+
+  assert_true(CompiledDsp::compile(nodes, context) is None)
+}
+
+///|
+test "compiled dsp folds stereo graph back to mono output" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_mixdown(1),
+    DspNode::output(2),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  compiled.process(context, output)
+
+  for index = 0; index < SMALL_BLOCK_SIZE; index = index + 1 {
+    assert_true((output.get(index) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  }
+  assert_false(
+    compiled.apply_control(
+      GraphControl::set_param(2, GraphParamSlot::Value0, 1.0),
+    ),
+  )
+}
+
+///|
+test "compiled dsp runtime params update stereo nodes before mixdown" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_gain(1, UNIT_SAMPLE),
+    DspNode::stereo_clip(2, UNIT_SAMPLE),
+    DspNode::stereo_mixdown(3),
+    DspNode::output(4),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  assert_true(
+    compiled.apply_control(
+      GraphControl::set_param(2, GraphParamSlot::Value0, HALF_GAIN),
+    ),
+  )
+  assert_true(
+    compiled.apply_control(
+      GraphControl::set_param(3, GraphParamSlot::Value0, STEREO_CLIP_THRESHOLD),
+    ),
+  )
+  compiled.process(context, output)
+
+  for index = 0; index < SMALL_BLOCK_SIZE; index = index + 1 {
+    assert_eq(output.get(index), STEREO_CLIP_THRESHOLD)
+  }
+  assert_true(
+    compiled.apply_controls([
+      GraphControl::set_param(2, GraphParamSlot::Value0, UNIT_SAMPLE),
+      GraphControl::set_param(3, GraphParamSlot::Value0, UNIT_SAMPLE),
+    ]),
+  )
+}
+
+///|
 test "compiled stereo dsp pans mono input to stereo output" {
   let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
   let nodes = [
@@ -351,6 +424,34 @@ test "compiled stereo dsp rejects stereo post processing after pan" {
     DspNode::pan(0, PAN_HARD_LEFT),
     DspNode::gain(1, HALF_GAIN),
     DspNode::stereo_output(2),
+  ]
+
+  assert_true(CompiledStereoDsp::compile(nodes, context) is None)
+}
+
+///|
+test "compiled stereo dsp rejects stereo mixdown before stereo output" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_mixdown(1),
+    DspNode::stereo_output(2),
+  ]
+
+  assert_true(CompiledStereoDsp::compile(nodes, context) is None)
+}
+
+///|
+test "compiled stereo dsp rejects internal stereo mixdown roundtrip" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_mixdown(1),
+    DspNode::gain(2, HALF_GAIN),
+    DspNode::pan(3, PAN_CENTER),
+    DspNode::stereo_output(4),
   ]
 
   assert_true(CompiledStereoDsp::compile(nodes, context) is None)

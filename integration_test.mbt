@@ -396,6 +396,51 @@ test "compiled stereo graph applies batched control frames" {
 }
 
 ///|
+test "compiled graph stereo mixdown matches equivalent mono gain path" {
+  let context = DspContext::new(
+    GRAPH_STEREO_SAMPLE_RATE,
+    GRAPH_STEREO_BLOCK_SIZE,
+  )
+  let mono_gain = GRAPH_STEREO_GAIN *
+    GRAPH_STEREO_POST_GAIN *
+    0.7071067811865476
+  let stereo_nodes = [
+    DspNode::oscillator(Waveform::Triangle, GRAPH_STEREO_FREQ),
+    DspNode::gain(0, GRAPH_STEREO_GAIN),
+    DspNode::pan(1, GRAPH_STEREO_CENTER),
+    DspNode::stereo_gain(2, GRAPH_STEREO_POST_GAIN),
+    DspNode::stereo_clip(3, 1.0),
+    DspNode::stereo_mixdown(4),
+    DspNode::output(5),
+  ]
+  let mono_nodes = [
+    DspNode::oscillator(Waveform::Triangle, GRAPH_STEREO_FREQ),
+    DspNode::gain(0, mono_gain),
+    DspNode::clip(1, 1.0),
+    DspNode::output(2),
+  ]
+  let stereo_mixdown = CompiledDsp::compile(stereo_nodes, context).unwrap()
+  let mono = CompiledDsp::compile(mono_nodes, context).unwrap()
+  let stereo_mixdown_output = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let mono_output = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+
+  stereo_mixdown.process(context, stereo_mixdown_output)
+  mono.process(context, mono_output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(stereo_mixdown_output, 1.0),
+  )
+  assert_true(integration_any_non_zero(stereo_mixdown_output))
+  assert_true(
+    integration_buffers_close(
+      stereo_mixdown_output,
+      mono_output,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+}
+
+///|
 test "compiled graph voice path stays coherent across gates and runtime updates" {
   let context = DspContext::new(GRAPH_VOICE_SAMPLE_RATE, GRAPH_VOICE_BLOCK_SIZE)
   let nodes = [

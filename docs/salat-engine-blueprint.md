@@ -195,7 +195,9 @@ DspNode enum  ──(flatten)──▶  Array[FlatNode]
 
 Current implemented surface:
 - Declarative mono `DspNode` graph compiled into opaque `CompiledDsp`
-- First narrow stereo graph slice via `CompiledStereoDsp` for
+- Explicit `Mono -> Stereo -> Mono` graph segments via `Pan` and
+  `StereoMixDown` inside `CompiledDsp`
+- First narrow terminal-stereo graph slice via `CompiledStereoDsp` for
   `Mono -> Pan -> StereoGain? -> StereoClip? -> StereoOutput`
 - Topological sorting, graph validation, and runtime control for the current
   graph paths
@@ -207,13 +209,13 @@ Current implemented surface:
 Still planned in Phase 2:
 - Single-sample feedback handling (cycles → insert z⁻¹ delay)
 - Constant folding and dead node elimination
-- Stereo filters, delay, mix-down, and broader stereo node coverage
+- Stereo filters, stereo delay, and broader stereo node coverage
 - Full multichannel graph semantics
 - Graph hot-swap and crossfade on the audio thread
 
-**Current deliverable**: compiled mono graph execution plus the first
-terminal-stereo graph slice, both with runtime control and integration
-coverage.
+**Current deliverable**: compiled mono graph execution including explicit
+stereo fold-down, plus the first terminal-stereo graph slice, both with runtime
+control and integration coverage.
 
 **Phase 2 exit deliverable**: `sine(2).range(200,400).sine().lpf(800,1).out()`
 produces sound with graph hot-swap and feedback handling.

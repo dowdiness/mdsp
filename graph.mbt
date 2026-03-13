@@ -15,6 +15,7 @@ pub(all) enum DspNodeKind {
   Pan
   StereoGain
   StereoClip
+  StereoMixDown
   StereoOutput
 }
 
@@ -141,6 +142,8 @@ struct CompiledDsp {
   nodes : FixedArray[DspNode]
   index_map : FixedArray[Int]
   buffers : FixedArray[AudioBuffer]
+  left_buffers : FixedArray[AudioBuffer]
+  right_buffers : FixedArray[AudioBuffer]
   osc_states : FixedArray[Oscillator?]
   noise_states : FixedArray[Noise?]
   env_states : FixedArray[Adsr?]
@@ -449,6 +452,25 @@ pub fn DspNode::stereo_clip(input : Int, threshold : Double) -> DspNode {
 }
 
 ///|
+/// Create a fixed-policy stereo-to-mono fold-down node.
+pub fn DspNode::stereo_mixdown(input : Int) -> DspNode {
+  DspNode(
+    DspNodeKind::StereoMixDown,
+    input,
+    -1,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    Waveform::Sine,
+    BiquadMode::LowPass,
+    0,
+    0,
+    0U,
+  )
+}
+
+///|
 /// Mark the final stereo output node.
 pub fn DspNode::stereo_output(input : Int) -> DspNode {
   DspNode(
@@ -529,7 +551,16 @@ pub fn CompiledDsp::compile(
   let fixed_nodes = FixedArray::makei(node_count, index => {
     remap_node_inputs(nodes[order[index]], index_map)
   })
+  if !valid_terminal_mono_shapes(fixed_nodes) {
+    return None
+  }
   let buffers = FixedArray::makei(node_count, _ => {
+    AudioBuffer::filled(block_size)
+  })
+  let left_buffers = FixedArray::makei(node_count, _ => {
+    AudioBuffer::filled(block_size)
+  })
+  let right_buffers = FixedArray::makei(node_count, _ => {
     AudioBuffer::filled(block_size)
   })
   let osc_states = FixedArray::makei(node_count, index => {
@@ -552,6 +583,8 @@ pub fn CompiledDsp::compile(
     nodes: fixed_nodes,
     index_map,
     buffers,
+    left_buffers,
+    right_buffers,
     osc_states,
     noise_states,
     env_states,
@@ -572,16 +605,21 @@ pub fn CompiledDsp::process(
   let sample_count = compiled_sample_count(context, output)
   if !valid_compiled_context(sample_rate) {
     clear_compiled_buffers(self.buffers)
+    clear_compiled_buffers(self.left_buffers)
+    clear_compiled_buffers(self.right_buffers)
     reset_graph_env_states(self.env_states)
     output.fill(0.0)
     return
   }
   if sample_count <= 0 || sample_count > self.compiled_buffer_capacity() {
     clear_compiled_buffers(self.buffers)
+    clear_compiled_buffers(self.left_buffers)
+    clear_compiled_buffers(self.right_buffers)
     output.fill(0.0)
     return
   }
 
+  let pan = Pan::new()
   for index = 0; index < self.nodes.length(); index = index + 1 {
     let node = self.nodes[index]
     let buffer = self.buffers[index]
@@ -631,9 +669,43 @@ pub fn CompiledDsp::process(
         clip_buffer(buffer, sample_count, node.value0)
       }
       Output => copy_buffer(self.buffers[node.input0], buffer, sample_count)
-      Pan => buffer.fill(0.0)
-      StereoGain => buffer.fill(0.0)
-      StereoClip => buffer.fill(0.0)
+      Pan =>
+        pan.process(
+          context,
+          self.buffers[node.input0],
+          self.left_buffers[index],
+          self.right_buffers[index],
+          node.value0,
+        )
+      StereoGain => {
+        copy_stereo_buffers(
+          self.left_buffers[node.input0],
+          self.right_buffers[node.input0],
+          self.left_buffers[index],
+          self.right_buffers[index],
+          sample_count,
+        )
+        apply_gain_buffer(self.left_buffers[index], sample_count, node.value0)
+        apply_gain_buffer(self.right_buffers[index], sample_count, node.value0)
+      }
+      StereoClip => {
+        copy_stereo_buffers(
+          self.left_buffers[node.input0],
+          self.right_buffers[node.input0],
+          self.left_buffers[index],
+          self.right_buffers[index],
+          sample_count,
+        )
+        clip_buffer(self.left_buffers[index], sample_count, node.value0)
+        clip_buffer(self.right_buffers[index], sample_count, node.value0)
+      }
+      StereoMixDown =>
+        mixdown_stereo_buffers(
+          self.left_buffers[node.input0],
+          self.right_buffers[node.input0],
+          buffer,
+          sample_count,
+        )
       StereoOutput => buffer.fill(0.0)
     }
   }
@@ -644,9 +716,8 @@ pub fn CompiledDsp::process(
 ///|
 /// Compile a declarative terminal-stereo graph into an executable stereo graph.
 ///
-/// This first stereo slice keeps the existing `DspNode` language but requires a
-/// single reachable `StereoOutput` node and only supports terminal stereo via
-/// `Pan -> StereoOutput`.
+/// This stereo slice keeps the existing `DspNode` language but requires a
+/// single reachable `StereoOutput` node and an overall terminal stereo shape.
 pub fn CompiledStereoDsp::compile(
   nodes : Array[DspNode],
   context : DspContext,
@@ -819,6 +890,13 @@ pub fn CompiledStereoDsp::process(
         clip_buffer(self.left_buffers[index], sample_count, node.value0)
         clip_buffer(self.right_buffers[index], sample_count, node.value0)
       }
+      StereoMixDown =>
+        mixdown_stereo_buffers(
+          self.left_buffers[node.input0],
+          self.right_buffers[node.input0],
+          buffer,
+          sample_count,
+        )
       StereoOutput =>
         copy_stereo_buffers(
           self.left_buffers[node.input0],
@@ -1274,9 +1352,17 @@ fn valid_node_inputs(
       valid_finite_value(node.value0) &&
       node.value0 > 0.0
     Output => valid_reference(node.input0, node_count)
-    Pan => false
-    StereoGain => false
-    StereoClip => false
+    Pan =>
+      valid_reference(node.input0, node_count) &&
+      valid_finite_value(node.value0)
+    StereoGain =>
+      valid_reference(node.input0, node_count) &&
+      valid_finite_value(node.value0)
+    StereoClip =>
+      valid_reference(node.input0, node_count) &&
+      valid_finite_value(node.value0) &&
+      node.value0 > 0.0
+    StereoMixDown => valid_reference(node.input0, node_count)
     StereoOutput => false
   }
 }
@@ -1324,6 +1410,7 @@ fn valid_stereo_node_inputs(
       valid_reference(node.input0, node_count) &&
       valid_finite_value(node.value0) &&
       node.value0 > 0.0
+    StereoMixDown => false
     StereoOutput => valid_reference(node.input0, node_count)
   }
 }
@@ -1453,6 +1540,7 @@ fn updated_node_param(
           Some(node_with_value0(node, value))
         _ => None
       }
+    StereoMixDown => None
     StereoOutput => None
   }
 }
@@ -1483,8 +1571,9 @@ fn apply_runtime_param_side_effect(
     Gain => true
     Clip => true
     Pan => true
-    StereoGain => false
-    StereoClip => false
+    StereoGain => true
+    StereoClip => true
+    StereoMixDown => false
     _ => false
   }
 }
@@ -1517,6 +1606,7 @@ fn apply_runtime_param_side_effect_stereo(
     Pan => true
     StereoGain => true
     StereoClip => true
+    StereoMixDown => false
     _ => false
   }
 }
@@ -1693,6 +1783,7 @@ fn visit_graph_dependencies(
     Pan => visit_graph_node(node.input0, nodes, marks, order)
     StereoGain => visit_graph_node(node.input0, nodes, marks, order)
     StereoClip => visit_graph_node(node.input0, nodes, marks, order)
+    StereoMixDown => visit_graph_node(node.input0, nodes, marks, order)
     StereoOutput => visit_graph_node(node.input0, nodes, marks, order)
   }
 }
@@ -1856,6 +1947,27 @@ fn copy_stereo_buffers(
 ) -> Unit {
   copy_buffer(source_left, target_left, sample_count)
   copy_buffer(source_right, target_right, sample_count)
+}
+
+///|
+fn mixdown_stereo_buffers(
+  left : AudioBuffer,
+  right : AudioBuffer,
+  output : AudioBuffer,
+  sample_count : Int,
+) -> Unit {
+  let bounded = min_buffer_length(
+    sample_count,
+    left.length(),
+    right.length(),
+    output.length(),
+  )
+  for index = 0; index < bounded; index = index + 1 {
+    output.set(index, (left.get(index) + right.get(index)) * 0.5)
+  }
+  for index = bounded; index < output.length(); index = index + 1 {
+    output.set(index, 0.0)
+  }
 }
 
 ///|
@@ -2069,6 +2181,7 @@ fn node_kind_matches(left : DspNodeKind, right : DspNodeKind) -> Bool {
     Pan => right is Pan
     StereoGain => right is StereoGain
     StereoClip => right is StereoClip
+    StereoMixDown => right is StereoMixDown
     StereoOutput => right is StereoOutput
   }
 }
@@ -2079,6 +2192,84 @@ fn is_mono_shape(shape : Int?) -> Bool {
     Some(MONO_SIGNAL_SHAPE) => true
     _ => false
   }
+}
+
+///|
+fn valid_terminal_mono_shapes(nodes : FixedArray[DspNode]) -> Bool {
+  let shapes = FixedArray::make(nodes.length(), MONO_SIGNAL_SHAPE)
+  for index = 0; index < nodes.length(); index = index + 1 {
+    let node = nodes[index]
+    let shape = match node.kind {
+      Constant => MONO_SIGNAL_SHAPE
+      Oscillator => MONO_SIGNAL_SHAPE
+      Noise => MONO_SIGNAL_SHAPE
+      Adsr => MONO_SIGNAL_SHAPE
+      Biquad =>
+        match input_shape(node.input0, shapes) {
+          Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+          _ => return false
+        }
+      Delay =>
+        match input_shape(node.input0, shapes) {
+          Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+          _ => return false
+        }
+      Gain =>
+        match input_shape(node.input0, shapes) {
+          Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+          _ => return false
+        }
+      Mul =>
+        if is_mono_shape(input_shape(node.input0, shapes)) &&
+          is_mono_shape(input_shape(node.input1, shapes)) {
+          MONO_SIGNAL_SHAPE
+        } else {
+          return false
+        }
+      Mix =>
+        if is_mono_shape(input_shape(node.input0, shapes)) &&
+          is_mono_shape(input_shape(node.input1, shapes)) {
+          MONO_SIGNAL_SHAPE
+        } else {
+          return false
+        }
+      Clip =>
+        match input_shape(node.input0, shapes) {
+          Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+          _ => return false
+        }
+      Output =>
+        match input_shape(node.input0, shapes) {
+          Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+          _ => return false
+        }
+      Pan =>
+        match input_shape(node.input0, shapes) {
+          Some(MONO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
+          _ => return false
+        }
+      StereoGain =>
+        match input_shape(node.input0, shapes) {
+          Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
+          _ => return false
+        }
+      StereoClip =>
+        match input_shape(node.input0, shapes) {
+          Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
+          _ => return false
+        }
+      StereoMixDown =>
+        match input_shape(node.input0, shapes) {
+          Some(STEREO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+          _ => return false
+        }
+      StereoOutput => return false
+    }
+    shapes[index] = shape
+  }
+
+  let last = nodes.length() - 1
+  nodes[last].kind is DspNodeKind::Output && shapes[last] == MONO_SIGNAL_SHAPE
 }
 
 ///|
@@ -2141,6 +2332,7 @@ fn valid_terminal_stereo_shapes(nodes : FixedArray[DspNode]) -> Bool {
           Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
           _ => return false
         }
+      StereoMixDown => return false
       StereoOutput =>
         match input_shape(node.input0, shapes) {
           Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE

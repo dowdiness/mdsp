@@ -635,7 +635,8 @@ pointers back to this section.
 The current repository already implements:
 
 - a compiled mono graph path: `DspNode` authoring graphs compile into an opaque
-  `CompiledDsp`
+  `CompiledDsp`, including explicit `Mono -> Stereo -> Mono` subgraphs through
+  `Pan` and `StereoMixDown`
 - a first stereo graph path: the same `DspNode` authoring language can compile
   into `CompiledStereoDsp` for `Mono -> Pan -> StereoGain? -> StereoClip? ->
   StereoOutput`
@@ -667,6 +668,7 @@ Current graph node support:
 - `Pan`
 - `StereoGain`
 - `StereoClip`
+- `StereoMixDown`
 - `Output`
 - `StereoOutput`
 
@@ -689,6 +691,8 @@ Current runtime control support:
   - stereo post-processing through `StereoGain` and `StereoClip`
   - direct runtime updates for `Pan`, `StereoGain`, and `StereoClip`
   - end-to-end compiled stereo voice-path and batched-control integration tests
+- mono graph coverage now includes explicit stereo fold-down through
+  `StereoMixDown`
 
 Current `set_param(node_index, slot, value)` support matrix:
 
@@ -707,13 +711,16 @@ Current `set_param(node_index, slot, value)` support matrix:
 | `Pan` | `Value0` | Finite pan position only |
 | `StereoGain` | `Value0` | Finite gain only |
 | `StereoClip` | `Value0` | Positive finite threshold only |
+| `StereoMixDown` | none | Fixed equal-weight fold-down: `0.5 * (left + right)` |
 | `Output` | none | No runtime params |
 | `StereoOutput` | none | No runtime params |
 
 Current limits:
 
-- stereo graph support is still narrow: `Pan -> StereoGain? -> StereoClip? -> StereoOutput`
-- no stereo filters, stereo delay, or stereo mix-down nodes yet
+- stereo graph support is still narrow: terminal stereo remains
+  `Pan -> StereoGain? -> StereoClip? -> StereoOutput`, while mono graphs may
+  now fold stereo back through `StereoMixDown`
+- no stereo filters or stereo delay nodes yet
 - no feedback-edge insertion yet
 - no graph hot-swap yet
 - runtime parameter updates are partial, not universal across node kinds

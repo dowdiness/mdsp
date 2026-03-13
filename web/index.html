@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mdsp Phase 2 Browser Proof</title>
+  <title>mdsp Phase 2 Stereo Browser Proof</title>
   <style>
     :root {
       --bg: #f3efe5;
@@ -109,6 +109,28 @@
       color: rgba(29, 27, 24, 0.68);
     }
 
+    .channel-grid {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .channel-meter {
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(29, 27, 24, 0.08);
+    }
+
+    .channel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 10px;
+      font-size: 0.94rem;
+    }
+
     .scope {
       display: block;
       width: 100%;
@@ -201,12 +223,13 @@
 </head>
 <body>
   <main>
-    <h1>MoonBit DSP<br>Phase 2</h1>
+    <h1>MoonBit DSP<br>Phase 2 Stereo</h1>
     <p>
       This page proves the browser pipeline now runs the compiled graph runtime
       itself. The AudioWorklet calls a fixed MoonBit
-      <code>CompiledDsp</code> graph once per render quantum and reads the
-      generated block back sample by sample for output and metering.
+      <code>CompiledStereoDsp</code> graph once per render quantum and reads the
+      generated left and right blocks back sample by sample for output,
+      metering, and pan verification.
     </p>
 
     <div class="buttons">
@@ -231,6 +254,26 @@
           <span>healthy</span>
           <span>hot</span>
         </div>
+        <div class="channel-grid">
+          <div class="channel-meter">
+            <div class="channel-head">
+              <strong>Left</strong>
+              <span id="leftMeterValue">-∞ dB</span>
+            </div>
+            <div class="meter-rail" aria-hidden="true">
+              <div id="leftMeterFill" class="meter-fill"></div>
+            </div>
+          </div>
+          <div class="channel-meter">
+            <div class="channel-head">
+              <strong>Right</strong>
+              <span id="rightMeterValue">-∞ dB</span>
+            </div>
+            <div class="meter-rail" aria-hidden="true">
+              <div id="rightMeterFill" class="meter-fill"></div>
+            </div>
+          </div>
+        </div>
         <canvas id="scope" class="scope" width="640" height="88"></canvas>
       </div>
 
@@ -249,6 +292,14 @@
         </div>
         <input id="gainSlider" type="range" min="0" max="100" value="30" step="1">
       </div>
+
+      <div class="slider-card">
+        <div class="slider-row">
+          <strong>Pan</strong>
+          <span><span id="panValue">0</span></span>
+        </div>
+        <input id="panSlider" type="range" min="-100" max="100" value="0" step="1">
+      </div>
     </section>
 
     <div id="status" data-state="idle">Ready. Build the wasm file, serve <code>web/</code>, then click Start Audio.</div>
@@ -259,10 +310,16 @@
     const stopBtn = document.getElementById("stopBtn");
     const freqSlider = document.getElementById("freqSlider");
     const gainSlider = document.getElementById("gainSlider");
+    const panSlider = document.getElementById("panSlider");
     const freqValue = document.getElementById("freqValue");
     const gainValue = document.getElementById("gainValue");
+    const panValue = document.getElementById("panValue");
     const meterFill = document.getElementById("meterFill");
     const meterValue = document.getElementById("meterValue");
+    const leftMeterFill = document.getElementById("leftMeterFill");
+    const leftMeterValue = document.getElementById("leftMeterValue");
+    const rightMeterFill = document.getElementById("rightMeterFill");
+    const rightMeterValue = document.getElementById("rightMeterValue");
     const scope = document.getElementById("scope");
     const statusBox = document.getElementById("status");
     const scopeCtx = scope.getContext("2d");
@@ -272,6 +329,11 @@
     let gainNode = null;
     let analyserNode = null;
     let analyserData = null;
+    let splitterNode = null;
+    let leftAnalyserNode = null;
+    let rightAnalyserNode = null;
+    let leftAnalyserData = null;
+    let rightAnalyserData = null;
     let meterFrame = 0;
 
     function setStatus(message, state = "idle") {
@@ -282,11 +344,39 @@
     function syncLabels() {
       freqValue.textContent = freqSlider.value;
       gainValue.textContent = gainSlider.value;
+      panValue.textContent = panSlider.value;
+    }
+
+    function meterState(analyserNode, analyserData) {
+      if (!analyserNode || !analyserData) {
+        return { peak: 0, db: -Infinity };
+      }
+
+      analyserNode.getFloatTimeDomainData(analyserData);
+      let peak = 0;
+      for (let index = 0; index < analyserData.length; index += 1) {
+        peak = Math.max(peak, Math.abs(analyserData[index]));
+      }
+
+      return {
+        peak,
+        db: peak > 0 ? (20 * Math.log10(peak)) : -Infinity,
+      };
+    }
+
+    function updateMeter(fill, value, peak, db) {
+      const normalized = peak >= 1 ? 1 : peak;
+      fill.style.width = `${(normalized * 100).toFixed(1)}%`;
+      value.textContent = Number.isFinite(db) ? `${db.toFixed(1)} dB` : "-\u221e dB";
     }
 
     function resetMeter() {
       meterFill.style.width = "0%";
       meterValue.textContent = "-\u221e dB";
+      leftMeterFill.style.width = "0%";
+      leftMeterValue.textContent = "-\u221e dB";
+      rightMeterFill.style.width = "0%";
+      rightMeterValue.textContent = "-\u221e dB";
       scopeCtx.clearRect(0, 0, scope.width, scope.height);
       scopeCtx.fillStyle = "rgba(18, 17, 15, 0.96)";
       scopeCtx.fillRect(0, 0, scope.width, scope.height);
@@ -315,16 +405,12 @@
           return;
         }
 
-        analyserNode.getFloatTimeDomainData(analyserData);
-        let peak = 0;
-        for (let index = 0; index < analyserData.length; index += 1) {
-          peak = Math.max(peak, Math.abs(analyserData[index]));
-        }
-
-        const db = peak > 0 ? (20 * Math.log10(peak)) : -Infinity;
-        const normalized = peak >= 1 ? 1 : peak;
-        meterFill.style.width = `${(normalized * 100).toFixed(1)}%`;
-        meterValue.textContent = Number.isFinite(db) ? `${db.toFixed(1)} dB` : "-\u221e dB";
+        const overall = meterState(analyserNode, analyserData);
+        const leftState = meterState(leftAnalyserNode, leftAnalyserData);
+        const rightState = meterState(rightAnalyserNode, rightAnalyserData);
+        updateMeter(meterFill, meterValue, overall.peak, overall.db);
+        updateMeter(leftMeterFill, leftMeterValue, leftState.peak, leftState.db);
+        updateMeter(rightMeterFill, rightMeterValue, rightState.peak, rightState.db);
 
         scopeCtx.fillStyle = "rgba(18, 17, 15, 0.28)";
         scopeCtx.fillRect(0, 0, scope.width, scope.height);
@@ -378,9 +464,11 @@
 
         node.port.onmessage = (event) => {
           if (event.data?.type === "ready") {
-            const modeLabel = event.data.mode === "compiled-dsp"
-              ? "CompiledDsp block runtime"
-              : "legacy tick fallback";
+            const modeLabel = event.data.mode === "compiled-stereo-dsp"
+              ? "CompiledStereoDsp block runtime"
+              : event.data.mode === "compiled-dsp"
+                ? "CompiledDsp block runtime"
+                : "legacy tick fallback";
             setStatus(`Audio running via ${modeLabel}. Exports: ${event.data.exports.join(", ")}`, "ok");
           } else if (event.data?.type === "error") {
             setStatus(`Processor init failed: ${event.data.message}`, "error");
@@ -393,12 +481,25 @@
         analyserNode.fftSize = 2048;
         analyserNode.smoothingTimeConstant = 0.85;
         analyserData = new Float32Array(analyserNode.fftSize);
+        splitterNode = audioContext.createChannelSplitter(2);
+        leftAnalyserNode = audioContext.createAnalyser();
+        leftAnalyserNode.fftSize = 2048;
+        leftAnalyserNode.smoothingTimeConstant = 0.85;
+        leftAnalyserData = new Float32Array(leftAnalyserNode.fftSize);
+        rightAnalyserNode = audioContext.createAnalyser();
+        rightAnalyserNode.fftSize = 2048;
+        rightAnalyserNode.smoothingTimeConstant = 0.85;
+        rightAnalyserData = new Float32Array(rightAnalyserNode.fftSize);
         node.connect(gainNode);
         gainNode.connect(analyserNode);
+        gainNode.connect(splitterNode);
+        splitterNode.connect(leftAnalyserNode, 0);
+        splitterNode.connect(rightAnalyserNode, 1);
         gainNode.connect(audioContext.destination);
 
         node.port.postMessage({ type: "set-freq", value: Number(freqSlider.value) });
         node.port.postMessage({ type: "set-gain", value: Number(gainSlider.value) / 100 });
+        node.port.postMessage({ type: "set-pan", value: Number(panSlider.value) / 100 });
 
         startMeterLoop();
         startBtn.disabled = true;
@@ -415,6 +516,11 @@
         gainNode = null;
         analyserNode = null;
         analyserData = null;
+        splitterNode = null;
+        leftAnalyserNode = null;
+        rightAnalyserNode = null;
+        leftAnalyserData = null;
+        rightAnalyserData = null;
       }
     }
 
@@ -428,6 +534,11 @@
       gainNode = null;
       analyserNode = null;
       analyserData = null;
+      splitterNode = null;
+      leftAnalyserNode = null;
+      rightAnalyserNode = null;
+      leftAnalyserData = null;
+      rightAnalyserData = null;
       startBtn.disabled = false;
       stopBtn.disabled = true;
       resetMeter();
@@ -455,6 +566,13 @@
       syncLabels();
       if (node) {
         node.port.postMessage({ type: "set-gain", value: Number(gainSlider.value) / 100 });
+      }
+    });
+
+    panSlider.addEventListener("input", () => {
+      syncLabels();
+      if (node) {
+        node.port.postMessage({ type: "set-pan", value: Number(panSlider.value) / 100 });
       }
     });
 

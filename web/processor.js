@@ -3,9 +3,11 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     super();
     this.freq = 440.0;
     this.gain = 0.3;
+    this.pan = 0.0;
     this.ready = false;
     this.initError = null;
     this.wasm = null;
+    this.usesCompiledStereoGraph = false;
     this.usesCompiledGraph = false;
     this.reportedRuntimeError = false;
 
@@ -18,6 +20,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         this.freq = Number(data.value);
       } else if (data.type === "set-gain") {
         this.gain = Number(data.value);
+      } else if (data.type === "set-pan") {
+        this.pan = Number(data.value);
       }
     };
 
@@ -50,17 +54,45 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         this.wasm.reset_phase();
       }
 
-      this.usesCompiledGraph =
+      const supportsCompiledStereoGraph =
+        typeof this.wasm.init_compiled_stereo_graph === "function" &&
+        typeof this.wasm.process_compiled_stereo_block === "function" &&
+        typeof this.wasm.compiled_stereo_left_sample === "function" &&
+        typeof this.wasm.compiled_stereo_right_sample === "function";
+
+      const supportsCompiledGraph =
         typeof this.wasm.init_compiled_graph === "function" &&
         typeof this.wasm.process_compiled_block === "function" &&
         typeof this.wasm.compiled_output_sample === "function";
 
-      if (this.usesCompiledGraph) {
-        const initialized = this.wasm.init_compiled_graph(sampleRate, 128);
-        if (!initialized) {
-          throw new Error("CompiledDsp browser graph failed to initialize");
+      this.usesCompiledStereoGraph = false;
+      this.usesCompiledGraph = false;
+
+      if (supportsCompiledStereoGraph) {
+        const initialized = this.wasm.init_compiled_stereo_graph(sampleRate, 128);
+        if (initialized) {
+          this.usesCompiledStereoGraph = true;
         }
-      } else if (
+      }
+
+      if (!this.usesCompiledStereoGraph && supportsCompiledGraph) {
+        const initialized = this.wasm.init_compiled_graph(sampleRate, 128);
+        if (initialized) {
+          this.usesCompiledGraph = true;
+        }
+      }
+
+      if (
+        !this.usesCompiledStereoGraph &&
+        !this.usesCompiledGraph &&
+        (supportsCompiledStereoGraph || supportsCompiledGraph)
+      ) {
+        throw new Error("Compiled browser graph failed to initialize");
+      }
+
+      if (
+        !this.usesCompiledStereoGraph &&
+        !this.usesCompiledGraph &&
         typeof this.wasm.tick !== "function" &&
         typeof this.wasm.tick_source !== "function" &&
         typeof this.wasm.demo_tick !== "function" &&
@@ -73,7 +105,11 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       this.port.postMessage({
         type: "ready",
         exports: Object.keys(this.wasm),
-        mode: this.usesCompiledGraph ? "compiled-dsp" : "legacy-tick",
+        mode: this.usesCompiledStereoGraph
+          ? "compiled-stereo-dsp"
+          : this.usesCompiledGraph
+            ? "compiled-dsp"
+            : "legacy-tick",
       });
     } catch (error) {
       this.initError = error instanceof Error ? error.message : String(error);
@@ -95,6 +131,36 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       if (right) {
         right.fill(0);
       }
+      return true;
+    }
+
+    if (this.usesCompiledStereoGraph) {
+      const processed = this.wasm.process_compiled_stereo_block(
+        this.freq,
+        this.gain,
+        this.pan,
+        sampleRate,
+        left.length,
+      );
+      if (!processed) {
+        this.fillSilence(left, right);
+        if (!this.reportedRuntimeError) {
+          this.reportedRuntimeError = true;
+          this.port.postMessage({
+            type: "error",
+            message: "CompiledStereoDsp browser block processing failed",
+          });
+        }
+        return true;
+      }
+
+      for (let index = 0; index < left.length; index += 1) {
+        left[index] = this.wasm.compiled_stereo_left_sample(index);
+        if (right) {
+          right[index] = this.wasm.compiled_stereo_right_sample(index);
+        }
+      }
+
       return true;
     }
 

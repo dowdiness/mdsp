@@ -198,7 +198,10 @@ Current implemented surface:
 - Explicit `Mono -> Stereo -> Mono` graph segments via `Pan` and
   `StereoMixDown` inside `CompiledDsp`
 - First narrow terminal-stereo graph slice via `CompiledStereoDsp` for
-  `Mono -> Pan -> StereoGain? -> StereoClip? -> StereoOutput`
+  `Mono -> Pan -> Stereo post-processing -> StereoOutput`, currently including
+  `StereoGain`, `StereoClip`, `StereoBiquad`, and `StereoDelay`
+- `Delay` and `StereoDelay` now support internal recirculating feedback
+  coefficients
 - Topological sorting, graph validation, and runtime control for the current
   graph paths
 - Integration coverage for compiled mono voice paths, runtime retuning, and the
@@ -207,9 +210,9 @@ Current implemented surface:
   `set_param(...)` slot matrix, and exact runtime-control surface
 
 Still planned in Phase 2:
-- Single-sample feedback handling (cycles → insert z⁻¹ delay)
+- General graph-cycle feedback handling (cycles → insert z⁻¹ delay)
 - Constant folding and dead node elimination
-- Stereo filters, stereo delay, and broader stereo node coverage
+- Broader stereo node coverage beyond the current filter/delay slice
 - Full multichannel graph semantics
 - Graph hot-swap and crossfade on the audio thread
 

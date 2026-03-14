@@ -16,6 +16,7 @@ pub(all) enum DspNodeKind {
   StereoGain
   StereoClip
   StereoBiquad
+  StereoDelay
   StereoMixDown
   StereoOutput
 }
@@ -152,6 +153,8 @@ struct CompiledDsp {
   stereo_biquad_left_states : FixedArray[Biquad?]
   stereo_biquad_right_states : FixedArray[Biquad?]
   delay_states : FixedArray[DelayLine?]
+  stereo_delay_left_states : FixedArray[DelayLine?]
+  stereo_delay_right_states : FixedArray[DelayLine?]
 }
 
 ///|
@@ -170,6 +173,8 @@ struct CompiledStereoDsp {
   stereo_biquad_left_states : FixedArray[Biquad?]
   stereo_biquad_right_states : FixedArray[Biquad?]
   delay_states : FixedArray[DelayLine?]
+  stereo_delay_left_states : FixedArray[DelayLine?]
+  stereo_delay_right_states : FixedArray[DelayLine?]
 }
 
 ///|
@@ -287,12 +292,13 @@ pub fn DspNode::delay(
   input : Int,
   max_delay_samples : Int,
   delay_samples? : Int = graph_default_delay_samples(max_delay_samples),
+  feedback? : Double = 0.0,
 ) -> DspNode {
   DspNode(
     DspNodeKind::Delay,
     input,
     -1,
-    0.0,
+    feedback,
     0.0,
     0.0,
     0.0,
@@ -481,6 +487,30 @@ pub fn DspNode::stereo_biquad(
 }
 
 ///|
+/// Create a stereo delay node from one stereo upstream node.
+pub fn DspNode::stereo_delay(
+  input : Int,
+  max_delay_samples : Int,
+  delay_samples? : Int = graph_default_delay_samples(max_delay_samples),
+  feedback? : Double = 0.0,
+) -> DspNode {
+  DspNode(
+    DspNodeKind::StereoDelay,
+    input,
+    -1,
+    feedback,
+    0.0,
+    0.0,
+    0.0,
+    Waveform::Sine,
+    BiquadMode::LowPass,
+    max_delay_samples,
+    delay_samples,
+    0U,
+  )
+}
+
+///|
 /// Create a fixed-policy stereo-to-mono fold-down node.
 pub fn DspNode::stereo_mixdown(input : Int) -> DspNode {
   DspNode(
@@ -613,6 +643,12 @@ pub fn CompiledDsp::compile(
   let delay_states = FixedArray::makei(node_count, index => {
     make_graph_delay_state(fixed_nodes[index])
   })
+  let stereo_delay_left_states = FixedArray::makei(node_count, index => {
+    make_graph_stereo_delay_state(fixed_nodes[index])
+  })
+  let stereo_delay_right_states = FixedArray::makei(node_count, index => {
+    make_graph_stereo_delay_state(fixed_nodes[index])
+  })
   Some({
     compile_sample_rate,
     nodes: fixed_nodes,
@@ -627,6 +663,8 @@ pub fn CompiledDsp::compile(
     stereo_biquad_left_states,
     stereo_biquad_right_states,
     delay_states,
+    stereo_delay_left_states,
+    stereo_delay_right_states,
   })
 }
 
@@ -761,6 +799,21 @@ pub fn CompiledDsp::process(
           node.value1,
         )
       }
+      StereoDelay => {
+        copy_stereo_buffers(
+          self.left_buffers[node.input0],
+          self.right_buffers[node.input0],
+          self.left_buffers[index],
+          self.right_buffers[index],
+          sample_count,
+        )
+        self.stereo_delay_left_states[index]
+        .unwrap()
+        .process(context, self.left_buffers[index])
+        self.stereo_delay_right_states[index]
+        .unwrap()
+        .process(context, self.right_buffers[index])
+      }
       StereoMixDown =>
         mixdown_stereo_buffers(
           self.left_buffers[node.input0],
@@ -833,6 +886,12 @@ pub fn CompiledStereoDsp::compile(
   let delay_states = FixedArray::makei(node_count, index => {
     make_graph_delay_state(fixed_nodes[index])
   })
+  let stereo_delay_left_states = FixedArray::makei(node_count, index => {
+    make_graph_stereo_delay_state(fixed_nodes[index])
+  })
+  let stereo_delay_right_states = FixedArray::makei(node_count, index => {
+    make_graph_stereo_delay_state(fixed_nodes[index])
+  })
   Some({
     compile_sample_rate,
     nodes: fixed_nodes,
@@ -847,6 +906,8 @@ pub fn CompiledStereoDsp::compile(
     stereo_biquad_left_states,
     stereo_biquad_right_states,
     delay_states,
+    stereo_delay_left_states,
+    stereo_delay_right_states,
   })
 }
 
@@ -984,6 +1045,21 @@ pub fn CompiledStereoDsp::process(
           node.value0,
           node.value1,
         )
+      }
+      StereoDelay => {
+        copy_stereo_buffers(
+          self.left_buffers[node.input0],
+          self.right_buffers[node.input0],
+          self.left_buffers[index],
+          self.right_buffers[index],
+          sample_count,
+        )
+        self.stereo_delay_left_states[index]
+        .unwrap()
+        .process(context, self.left_buffers[index])
+        self.stereo_delay_right_states[index]
+        .unwrap()
+        .process(context, self.right_buffers[index])
       }
       StereoMixDown =>
         mixdown_stereo_buffers(
@@ -1432,7 +1508,9 @@ fn valid_node_inputs(
     Biquad =>
       valid_reference(node.input0, node_count) &&
       valid_biquad_graph_params(sample_rate, node.value0, node.value1)
-    Delay => valid_reference(node.input0, node_count)
+    Delay =>
+      valid_reference(node.input0, node_count) &&
+      valid_delay_feedback(node.value0)
     Gain =>
       valid_reference(node.input0, node_count) &&
       valid_finite_value(node.value0)
@@ -1460,6 +1538,9 @@ fn valid_node_inputs(
     StereoBiquad =>
       valid_reference(node.input0, node_count) &&
       valid_biquad_graph_params(sample_rate, node.value0, node.value1)
+    StereoDelay =>
+      valid_reference(node.input0, node_count) &&
+      valid_delay_feedback(node.value0)
     StereoMixDown => valid_reference(node.input0, node_count)
     StereoOutput => false
   }
@@ -1483,7 +1564,9 @@ fn valid_stereo_node_inputs(
     Biquad =>
       valid_reference(node.input0, node_count) &&
       valid_biquad_graph_params(sample_rate, node.value0, node.value1)
-    Delay => valid_reference(node.input0, node_count)
+    Delay =>
+      valid_reference(node.input0, node_count) &&
+      valid_delay_feedback(node.value0)
     Gain =>
       valid_reference(node.input0, node_count) &&
       valid_finite_value(node.value0)
@@ -1511,6 +1594,9 @@ fn valid_stereo_node_inputs(
     StereoBiquad =>
       valid_reference(node.input0, node_count) &&
       valid_biquad_graph_params(sample_rate, node.value0, node.value1)
+    StereoDelay =>
+      valid_reference(node.input0, node_count) &&
+      valid_delay_feedback(node.value0)
     StereoMixDown => false
     StereoOutput => valid_reference(node.input0, node_count)
   }
@@ -1600,6 +1686,8 @@ fn updated_node_param(
       }
     Delay =>
       match slot {
+        Value0 if valid_delay_feedback(value) =>
+          Some(node_with_value0(node, value))
         DelaySamples =>
           match exact_int_value(value) {
             Some(delay_samples) =>
@@ -1649,6 +1737,18 @@ fn updated_node_param(
           Some(node_with_value1(node, value))
         _ => None
       }
+    StereoDelay =>
+      match slot {
+        Value0 if valid_delay_feedback(value) =>
+          Some(node_with_value0(node, value))
+        DelaySamples =>
+          match exact_int_value(value) {
+            Some(delay_samples) =>
+              Some(node_with_delay_samples(node, delay_samples))
+            None => None
+          }
+        _ => None
+      }
     StereoMixDown => None
     StereoOutput => None
   }
@@ -1664,9 +1764,19 @@ fn apply_runtime_param_side_effect(
   match node.kind {
     Delay =>
       match slot {
+        Value0 =>
+          match compiled.delay_states[compiled_index] {
+            Some(delay) => {
+              delay.set_feedback(node.value0)
+              delay.set_delay_samples(node.delay_samples)
+              true
+            }
+            None => false
+          }
         DelaySamples =>
           match compiled.delay_states[compiled_index] {
             Some(delay) => {
+              delay.set_feedback(node.value0)
               delay.set_delay_samples(node.delay_samples)
               true
             }
@@ -1683,6 +1793,26 @@ fn apply_runtime_param_side_effect(
     StereoGain => true
     StereoClip => true
     StereoBiquad => true
+    StereoDelay =>
+      match slot {
+        Value0 =>
+          apply_stereo_delay_param_side_effect(
+            compiled.stereo_delay_left_states,
+            compiled.stereo_delay_right_states,
+            compiled_index,
+            node.delay_samples,
+            node.value0,
+          )
+        DelaySamples =>
+          apply_stereo_delay_param_side_effect(
+            compiled.stereo_delay_left_states,
+            compiled.stereo_delay_right_states,
+            compiled_index,
+            node.delay_samples,
+            node.value0,
+          )
+        _ => false
+      }
     StereoMixDown => false
     _ => false
   }
@@ -1698,9 +1828,19 @@ fn apply_runtime_param_side_effect_stereo(
   match node.kind {
     Delay =>
       match slot {
+        Value0 =>
+          match compiled.delay_states[compiled_index] {
+            Some(delay) => {
+              delay.set_feedback(node.value0)
+              delay.set_delay_samples(node.delay_samples)
+              true
+            }
+            None => false
+          }
         DelaySamples =>
           match compiled.delay_states[compiled_index] {
             Some(delay) => {
+              delay.set_feedback(node.value0)
               delay.set_delay_samples(node.delay_samples)
               true
             }
@@ -1717,6 +1857,26 @@ fn apply_runtime_param_side_effect_stereo(
     StereoGain => true
     StereoClip => true
     StereoBiquad => true
+    StereoDelay =>
+      match slot {
+        Value0 =>
+          apply_stereo_delay_param_side_effect(
+            compiled.stereo_delay_left_states,
+            compiled.stereo_delay_right_states,
+            compiled_index,
+            node.delay_samples,
+            node.value0,
+          )
+        DelaySamples =>
+          apply_stereo_delay_param_side_effect(
+            compiled.stereo_delay_left_states,
+            compiled.stereo_delay_right_states,
+            compiled_index,
+            node.delay_samples,
+            node.value0,
+          )
+        _ => false
+      }
     StereoMixDown => false
     _ => false
   }
@@ -1758,6 +1918,13 @@ fn graph_default_delay_samples(value : Int) -> Int {
   } else {
     0
   }
+}
+
+///|
+fn valid_delay_feedback(value : Double) -> Bool {
+  valid_finite_value(value) &&
+  value >= -max_feedback_amount() &&
+  value <= max_feedback_amount()
 }
 
 ///|
@@ -1895,6 +2062,7 @@ fn visit_graph_dependencies(
     StereoGain => visit_graph_node(node.input0, nodes, marks, order)
     StereoClip => visit_graph_node(node.input0, nodes, marks, order)
     StereoBiquad => visit_graph_node(node.input0, nodes, marks, order)
+    StereoDelay => visit_graph_node(node.input0, nodes, marks, order)
     StereoMixDown => visit_graph_node(node.input0, nodes, marks, order)
     StereoOutput => visit_graph_node(node.input0, nodes, marks, order)
   }
@@ -2241,11 +2409,54 @@ fn make_graph_stereo_biquad_state(node : DspNode) -> Biquad? {
 }
 
 ///|
+fn make_graph_stereo_delay_state(node : DspNode) -> DelayLine? {
+  match node.kind {
+    StereoDelay =>
+      Some(
+        DelayLine::new(
+          node.delay_max_samples,
+          delay_samples=node.delay_samples,
+          feedback=node.value0,
+        ),
+      )
+    _ => None
+  }
+}
+
+///|
+fn apply_stereo_delay_param_side_effect(
+  left_states : FixedArray[DelayLine?],
+  right_states : FixedArray[DelayLine?],
+  compiled_index : Int,
+  delay_samples : Int,
+  feedback : Double,
+) -> Bool {
+  match left_states[compiled_index] {
+    Some(left_delay) =>
+      match right_states[compiled_index] {
+        Some(right_delay) => {
+          left_delay.set_feedback(feedback)
+          left_delay.set_delay_samples(delay_samples)
+          right_delay.set_feedback(feedback)
+          right_delay.set_delay_samples(delay_samples)
+          true
+        }
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
 fn make_graph_delay_state(node : DspNode) -> DelayLine? {
   match node.kind {
     Delay =>
       Some(
-        DelayLine::new(node.delay_max_samples, delay_samples=node.delay_samples),
+        DelayLine::new(
+          node.delay_max_samples,
+          delay_samples=node.delay_samples,
+          feedback=node.value0,
+        ),
       )
     _ => None
   }
@@ -2302,6 +2513,7 @@ fn node_kind_matches(left : DspNodeKind, right : DspNodeKind) -> Bool {
     StereoGain => right is StereoGain
     StereoClip => right is StereoClip
     StereoBiquad => right is StereoBiquad
+    StereoDelay => right is StereoDelay
     StereoMixDown => right is StereoMixDown
     StereoOutput => right is StereoOutput
   }
@@ -2384,6 +2596,11 @@ fn valid_terminal_mono_shapes(nodes : FixedArray[DspNode]) -> Bool {
           Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
           _ => return false
         }
+      StereoDelay =>
+        match input_shape(node.input0, shapes) {
+          Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
+          _ => return false
+        }
       StereoMixDown =>
         match input_shape(node.input0, shapes) {
           Some(STEREO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
@@ -2459,6 +2676,11 @@ fn valid_terminal_stereo_shapes(nodes : FixedArray[DspNode]) -> Bool {
           _ => return false
         }
       StereoBiquad =>
+        match input_shape(node.input0, shapes) {
+          Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
+          _ => return false
+        }
+      StereoDelay =>
         match input_shape(node.input0, shapes) {
           Some(STEREO_SIGNAL_SHAPE) => STEREO_SIGNAL_SHAPE
           _ => return false

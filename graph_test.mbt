@@ -71,6 +71,18 @@ const DELAY_SAMPLES : Int = 2
 const DELAY_SAMPLES_DOUBLE : Double = 2.0
 
 ///|
+const DELAY_FEEDBACK : Double = 0.5
+
+///|
+const CLAMPED_HIGH_DELAY_FEEDBACK : Double = 0.995
+
+///|
+const CLAMPED_LOW_DELAY_FEEDBACK : Double = -0.995
+
+///|
+const INVALID_DELAY_FEEDBACK : Double = 1.0
+
+///|
 const PAN_HARD_LEFT : Double = -1.0
 
 ///|
@@ -423,6 +435,94 @@ test "compiled dsp runtime params update stereo biquad before mixdown" {
 }
 
 ///|
+test "compiled dsp applies stereo delay before mixdown" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(1, DELAY_CAPACITY, delay_samples=DELAY_SAMPLES),
+    DspNode::stereo_mixdown(2),
+    DspNode::output(3),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  compiled.process(context, output)
+
+  assert_eq(output.get(0), ZERO_SAMPLE)
+  assert_eq(output.get(1), ZERO_SAMPLE)
+  assert_true((output.get(2) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((output.get(3) - PAN_CENTER_GAIN).abs() < 0.000000001)
+}
+
+///|
+test "compiled dsp runtime params update stereo delay before mixdown" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(1, DELAY_CAPACITY, delay_samples=0),
+    DspNode::stereo_mixdown(2),
+    DspNode::output(3),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  assert_true(
+    compiled.apply_control(
+      GraphControl::set_param(
+        2,
+        GraphParamSlot::DelaySamples,
+        DELAY_SAMPLES_DOUBLE,
+      ),
+    ),
+  )
+  compiled.process(context, output)
+
+  assert_eq(output.get(0), ZERO_SAMPLE)
+  assert_eq(output.get(1), ZERO_SAMPLE)
+  assert_true((output.get(2) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((output.get(3) - PAN_CENTER_GAIN).abs() < 0.000000001)
+}
+
+///|
+test "compiled dsp runtime params update stereo delay feedback before mixdown" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(1, DELAY_CAPACITY, delay_samples=DELAY_SAMPLES),
+    DspNode::stereo_mixdown(2),
+    DspNode::output(3),
+  ]
+  let baseline = CompiledDsp::compile(nodes, context).unwrap()
+  let retuned = CompiledDsp::compile(nodes, context).unwrap()
+  let baseline_output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+  let retuned_output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  baseline.process(context, baseline_output)
+  retuned.process(context, retuned_output)
+  assert_true(
+    retuned.apply_control(
+      GraphControl::set_param(2, GraphParamSlot::Value0, DELAY_FEEDBACK),
+    ),
+  )
+  baseline.process(context, baseline_output)
+  retuned.process(context, retuned_output)
+
+  assert_true((baseline_output.get(0) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((baseline_output.get(1) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true(
+    (retuned_output.get(0) - baseline_output.get(0)).abs() < 0.000000001,
+  )
+  assert_true(
+    (retuned_output.get(1) - baseline_output.get(1)).abs() < 0.000000001,
+  )
+  assert_true(retuned_output.get(2) > baseline_output.get(2))
+  assert_true(retuned_output.get(3) > baseline_output.get(3))
+}
+
+///|
 test "compiled stereo dsp pans mono input to stereo output" {
   let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
   let nodes = [
@@ -562,6 +662,31 @@ test "compiled stereo dsp applies stereo biquad after pan" {
 }
 
 ///|
+test "compiled stereo dsp applies stereo delay after pan" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(1, DELAY_CAPACITY, delay_samples=DELAY_SAMPLES),
+    DspNode::stereo_output(2),
+  ]
+  let compiled = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let left_output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+  let right_output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  compiled.process(context, left_output, right_output)
+
+  assert_eq(left_output.get(0), ZERO_SAMPLE)
+  assert_eq(left_output.get(1), ZERO_SAMPLE)
+  assert_true((left_output.get(2) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((left_output.get(3) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_eq(right_output.get(0), ZERO_SAMPLE)
+  assert_eq(right_output.get(1), ZERO_SAMPLE)
+  assert_true((right_output.get(2) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((right_output.get(3) - PAN_CENTER_GAIN).abs() < 0.000000001)
+}
+
+///|
 test "compiled dsp rejects stereo-only nodes" {
   let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
   let stereo_gain_nodes = [
@@ -579,10 +704,45 @@ test "compiled dsp rejects stereo-only nodes" {
     DspNode::stereo_biquad(0, BiquadMode::LowPass, LOWPASS_CUTOFF, LOWPASS_Q),
     DspNode::output(1),
   ]
+  let stereo_delay_nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::stereo_delay(0, DELAY_CAPACITY, delay_samples=DELAY_SAMPLES),
+    DspNode::output(1),
+  ]
 
   assert_true(CompiledDsp::compile(stereo_gain_nodes, context) is None)
   assert_true(CompiledDsp::compile(stereo_clip_nodes, context) is None)
   assert_true(CompiledDsp::compile(stereo_biquad_nodes, context) is None)
+  assert_true(CompiledDsp::compile(stereo_delay_nodes, context) is None)
+}
+
+///|
+test "compiled graphs reject delay feedback outside live supported range" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let mono_nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::delay(
+      0,
+      DELAY_CAPACITY,
+      delay_samples=DELAY_SAMPLES,
+      feedback=CLAMPED_HIGH_DELAY_FEEDBACK,
+    ),
+    DspNode::output(1),
+  ]
+  let stereo_nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(
+      1,
+      DELAY_CAPACITY,
+      delay_samples=DELAY_SAMPLES,
+      feedback=CLAMPED_LOW_DELAY_FEEDBACK,
+    ),
+    DspNode::stereo_output(2),
+  ]
+
+  assert_true(CompiledDsp::compile(mono_nodes, context) is None)
+  assert_true(CompiledStereoDsp::compile(stereo_nodes, context) is None)
 }
 
 ///|
@@ -676,6 +836,74 @@ test "compiled stereo dsp runtime params update stereo biquad" {
 
   assert_true(retuned_left.get(0) != baseline_left.get(0))
   assert_true(retuned_right.get(0) != baseline_right.get(0))
+}
+
+///|
+test "compiled stereo dsp runtime params update stereo delay" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(1, DELAY_CAPACITY, delay_samples=0),
+    DspNode::stereo_output(2),
+  ]
+  let compiled = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let left_output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+  let right_output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  assert_true(
+    compiled.apply_control(
+      GraphControl::set_param(
+        2,
+        GraphParamSlot::DelaySamples,
+        DELAY_SAMPLES_DOUBLE,
+      ),
+    ),
+  )
+  compiled.process(context, left_output, right_output)
+
+  assert_eq(left_output.get(0), ZERO_SAMPLE)
+  assert_eq(left_output.get(1), ZERO_SAMPLE)
+  assert_true((left_output.get(2) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((left_output.get(3) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_eq(right_output.get(0), ZERO_SAMPLE)
+  assert_eq(right_output.get(1), ZERO_SAMPLE)
+  assert_true((right_output.get(2) - PAN_CENTER_GAIN).abs() < 0.000000001)
+  assert_true((right_output.get(3) - PAN_CENTER_GAIN).abs() < 0.000000001)
+}
+
+///|
+test "compiled stereo dsp runtime params update stereo delay feedback" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(UNIT_SAMPLE),
+    DspNode::pan(0, PAN_CENTER),
+    DspNode::stereo_delay(1, DELAY_CAPACITY, delay_samples=DELAY_SAMPLES),
+    DspNode::stereo_output(2),
+  ]
+  let baseline = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let retuned = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let baseline_left = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+  let baseline_right = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+  let retuned_left = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+  let retuned_right = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  baseline.process(context, baseline_left, baseline_right)
+  retuned.process(context, retuned_left, retuned_right)
+  assert_true(
+    retuned.apply_control(
+      GraphControl::set_param(2, GraphParamSlot::Value0, DELAY_FEEDBACK),
+    ),
+  )
+  baseline.process(context, baseline_left, baseline_right)
+  retuned.process(context, retuned_left, retuned_right)
+
+  assert_true((retuned_left.get(0) - baseline_left.get(0)).abs() < 0.000000001)
+  assert_true(
+    (retuned_right.get(0) - baseline_right.get(0)).abs() < 0.000000001,
+  )
+  assert_true(retuned_left.get(2) > baseline_left.get(2))
+  assert_true(retuned_right.get(2) > baseline_right.get(2))
 }
 
 ///|
@@ -862,6 +1090,20 @@ test "compiled dsp runtime param update rejects unsupported or invalid values" {
   assert_false(
     compiled.apply_control(
       GraphControl::set_param(1, GraphParamSlot::DelaySamples, 0.0 / 0.0),
+    ),
+  )
+  assert_false(
+    compiled.apply_control(
+      GraphControl::set_param(1, GraphParamSlot::Value0, INVALID_DELAY_FEEDBACK),
+    ),
+  )
+  assert_false(
+    compiled.apply_control(
+      GraphControl::set_param(
+        1,
+        GraphParamSlot::Value0,
+        CLAMPED_HIGH_DELAY_FEEDBACK,
+      ),
     ),
   )
 

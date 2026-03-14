@@ -413,6 +413,18 @@ test "delay line wraps around its circular buffer" {
 }
 
 ///|
+test "delay line recirculates echoes when feedback is enabled" {
+  let delay = DelayLine::new(4, delay_samples=2, feedback=0.5)
+
+  assert_eq(delay.tick(1.0), 0.0)
+  assert_eq(delay.tick(0.0), 0.0)
+  assert_eq(delay.tick(0.0), 1.0)
+  assert_eq(delay.tick(0.0), 0.0)
+  assert_eq(delay.tick(0.0), 0.5)
+  assert_eq(delay.tick(0.0), 0.0)
+}
+
+///|
 test "pan sends mono input fully left at -1 position" {
   let pan = Pan::new()
   let context = DspContext::new(48000.0, 4)

@@ -107,6 +107,18 @@ const GRAPH_STEREO_FILTER_RETUNED_CUTOFF : Double = 4000.0
 const GRAPH_STEREO_FILTER_Q : Double = 0.707
 
 ///|
+const GRAPH_STEREO_DELAY_CAPACITY : Int = 8
+
+///|
+const GRAPH_STEREO_DELAY_SAMPLES : Int = 4
+
+///|
+const GRAPH_STEREO_DELAY_FEEDBACK : Double = 0.5
+
+///|
+const GRAPH_STEREO_CENTER_GAIN : Double = 0.7071067811865476
+
+///|
 const INTEGRATION_BUFFER_EPSILON : Double = 0.000000000001
 
 ///|
@@ -476,6 +488,187 @@ test "compiled stereo graph stereo biquad retune changes output" {
   )
   assert_true(
     integration_abs_sum(retuned_left) > integration_abs_sum(baseline_left),
+  )
+}
+
+///|
+test "compiled stereo graph stereo delay retune changes output" {
+  let context = DspContext::new(
+    GRAPH_STEREO_SAMPLE_RATE,
+    GRAPH_STEREO_BLOCK_SIZE,
+  )
+  let nodes = [
+    DspNode::constant(1.0),
+    DspNode::pan(0, GRAPH_STEREO_CENTER),
+    DspNode::stereo_delay(
+      1,
+      GRAPH_STEREO_DELAY_CAPACITY,
+      delay_samples=GRAPH_STEREO_DELAY_SAMPLES,
+    ),
+    DspNode::stereo_output(2),
+  ]
+  let baseline = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let retuned = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let baseline_left = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let baseline_right = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let retuned_left = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let retuned_right = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+
+  baseline.process(context, baseline_left, baseline_right)
+  assert_true(
+    retuned.apply_control(
+      GraphControl::set_param(2, GraphParamSlot::DelaySamples, 0.0),
+    ),
+  )
+  retuned.process(context, retuned_left, retuned_right)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(
+      baseline_left,
+      GRAPH_STEREO_CENTER_GAIN,
+    ),
+  )
+  assert_true(
+    integration_buffer_is_finite_and_bounded(
+      retuned_left,
+      GRAPH_STEREO_CENTER_GAIN,
+    ),
+  )
+  assert_true(
+    integration_buffers_close(
+      baseline_left,
+      baseline_right,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+  assert_true(
+    integration_buffers_close(
+      retuned_left,
+      retuned_right,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+  assert_false(
+    integration_buffers_close(
+      baseline_left,
+      retuned_left,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+  assert_true(
+    integration_abs_sum(retuned_left) > integration_abs_sum(baseline_left),
+  )
+}
+
+///|
+test "compiled stereo graph stereo delay feedback increases tail energy" {
+  let context = DspContext::new(
+    GRAPH_STEREO_SAMPLE_RATE,
+    GRAPH_STEREO_BLOCK_SIZE,
+  )
+  let nodes = [
+    DspNode::constant(1.0),
+    DspNode::pan(0, GRAPH_STEREO_CENTER),
+    DspNode::stereo_delay(
+      1,
+      GRAPH_STEREO_DELAY_CAPACITY,
+      delay_samples=GRAPH_STEREO_DELAY_SAMPLES,
+    ),
+    DspNode::stereo_output(2),
+  ]
+  let baseline = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let retuned = CompiledStereoDsp::compile(nodes, context).unwrap()
+  let baseline_left = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let baseline_right = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let retuned_left = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let retuned_right = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+
+  baseline.process(context, baseline_left, baseline_right)
+  retuned.process(context, retuned_left, retuned_right)
+  assert_true(
+    retuned.apply_control(
+      GraphControl::set_param(
+        2,
+        GraphParamSlot::Value0,
+        GRAPH_STEREO_DELAY_FEEDBACK,
+      ),
+    ),
+  )
+  baseline.process(context, baseline_left, baseline_right)
+  retuned.process(context, retuned_left, retuned_right)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(
+      baseline_left,
+      GRAPH_STEREO_CENTER_GAIN,
+    ),
+  )
+  assert_true(integration_buffer_is_finite_and_bounded(retuned_left, 2.0))
+  assert_true(
+    integration_buffers_close(
+      baseline_left,
+      baseline_right,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+  assert_true(
+    integration_buffers_close(
+      retuned_left,
+      retuned_right,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
+  )
+  assert_true(
+    integration_abs_sum(retuned_left) > integration_abs_sum(baseline_left),
+  )
+}
+
+///|
+test "compiled graph stereo delay mixdown matches equivalent mono delay path" {
+  let context = DspContext::new(
+    GRAPH_STEREO_SAMPLE_RATE,
+    GRAPH_STEREO_BLOCK_SIZE,
+  )
+  let stereo_nodes = [
+    DspNode::constant(1.0),
+    DspNode::pan(0, GRAPH_STEREO_CENTER),
+    DspNode::stereo_delay(
+      1,
+      GRAPH_STEREO_DELAY_CAPACITY,
+      delay_samples=GRAPH_STEREO_DELAY_SAMPLES,
+    ),
+    DspNode::stereo_mixdown(2),
+    DspNode::output(3),
+  ]
+  let mono_nodes = [
+    DspNode::constant(GRAPH_STEREO_CENTER_GAIN),
+    DspNode::delay(
+      0,
+      GRAPH_STEREO_DELAY_CAPACITY,
+      delay_samples=GRAPH_STEREO_DELAY_SAMPLES,
+    ),
+    DspNode::output(1),
+  ]
+  let stereo_mixdown = CompiledDsp::compile(stereo_nodes, context).unwrap()
+  let mono = CompiledDsp::compile(mono_nodes, context).unwrap()
+  let stereo_mixdown_output = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+  let mono_output = AudioBuffer::filled(GRAPH_STEREO_BLOCK_SIZE)
+
+  stereo_mixdown.process(context, stereo_mixdown_output)
+  mono.process(context, mono_output)
+
+  assert_true(
+    integration_buffer_is_finite_and_bounded(
+      stereo_mixdown_output,
+      GRAPH_STEREO_CENTER_GAIN,
+    ),
+  )
+  assert_true(
+    integration_buffers_close(
+      stereo_mixdown_output,
+      mono_output,
+      INTEGRATION_BUFFER_EPSILON,
+    ),
   )
 }
 

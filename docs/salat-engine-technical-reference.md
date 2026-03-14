@@ -531,6 +531,10 @@ kabelsalat's approach: detect back-edges during topological sort. For each back-
 // 5. FeedbackWrite stores current sample's value to that register
 ```
 
+Current status note: the implementation still rejects graph cycles during
+compile. The only supported feedback today is node-local recirculation on
+`Delay` and `StereoDelay` via their internal feedback coefficient.
+
 ### 3.5 Compilation Approaches
 
 #### Approach A: Interpreter (Start Here)
@@ -640,7 +644,7 @@ The current repository already implements:
 - a first stereo graph path: the same `DspNode` authoring language can compile
   into `CompiledStereoDsp` for `Mono -> Pan -> Stereo post-processing ->
   StereoOutput`, where the current stereo post-processing node set is
-  `StereoGain`, `StereoClip`, and `StereoBiquad`
+  `StereoGain`, `StereoClip`, `StereoBiquad`, and `StereoDelay`
 - input nodes may be declared in authoring order; the compiler topologically
   sorts reachable nodes from a single terminal output node
 - compile rejects:
@@ -651,6 +655,7 @@ The current repository already implements:
   - invalid references
   - non-finite constants
   - invalid fixed `Biquad` parameters
+  - fixed `Delay` / `StereoDelay` feedback outside the live supported range
 - runtime processing fails closed to silence if the caller requests a block size
   larger than the graph was compiled for
 
@@ -670,6 +675,7 @@ Current graph node support:
 - `StereoGain`
 - `StereoClip`
 - `StereoBiquad`
+- `StereoDelay`
 - `StereoMixDown`
 - `Output`
 - `StereoOutput`
@@ -683,7 +689,9 @@ Current runtime control support:
   - `gate_on(node_index)` / `gate_off(node_index)` for `Adsr`
 - partial `set_param(node_index, slot, value)` for selected numeric params
   (`Gain`, `Clip`, `Biquad`, `Delay`, `Constant`, `Oscillator`, `Pan`,
-  `StereoGain`, `StereoClip`, `StereoBiquad`)
+  `StereoGain`, `StereoClip`, `StereoBiquad`, `StereoDelay`)
+- `Delay` and `StereoDelay` now each expose a node-local feedback coefficient:
+  `Value0 = feedback` and `DelaySamples = delay length`
 - integration coverage now includes successful runtime `Biquad` retunes in
   compiled mono graphs for `LowPass`, `HighPass`, and `BandPass`
 - the current graph tests also include directional runtime-retune assertions for
@@ -691,12 +699,13 @@ Current runtime control support:
 - stereo graph coverage now includes:
   - graph-unit checks for `Pan -> StereoOutput` shape enforcement
   - stereo post-processing through `StereoGain`, `StereoClip`, and
-    `StereoBiquad`
+    `StereoBiquad`, plus `StereoDelay`
   - direct runtime updates for `Pan`, `StereoGain`, `StereoClip`, and
-    `StereoBiquad`
+    `StereoBiquad`, plus `StereoDelay`
   - end-to-end compiled stereo voice-path and batched-control integration tests
 - mono graph coverage now includes explicit stereo fold-down through
-  `StereoMixDown`, including a stereo-filtered path through `StereoBiquad`
+  `StereoMixDown`, including stereo-filtered and stereo-delayed paths through
+  `StereoBiquad` and `StereoDelay`
 
 Current `set_param(node_index, slot, value)` support matrix:
 
@@ -707,7 +716,7 @@ Current `set_param(node_index, slot, value)` support matrix:
 | `Noise` | none | No runtime seed update yet |
 | `Adsr` | none | Runtime control is `gate_on` / `gate_off` only |
 | `Biquad` | `Value0`, `Value1` | `Value0 = cutoff`, `Value1 = q`; validated against the compile-time sample rate |
-| `Delay` | `DelaySamples` | Exact integer values only; applied to the live `DelayLine` state |
+| `Delay` | `Value0`, `DelaySamples` | `Value0 = feedback`; finite values in `[-0.99, 0.99]` only. `DelaySamples` requires exact integer values. Both are applied to the live `DelayLine` state |
 | `Gain` | `Value0` | Finite gain only |
 | `Mul` | none | No runtime params |
 | `Mix` | none | No runtime params |
@@ -716,6 +725,7 @@ Current `set_param(node_index, slot, value)` support matrix:
 | `StereoGain` | `Value0` | Finite gain only |
 | `StereoClip` | `Value0` | Positive finite threshold only |
 | `StereoBiquad` | `Value0`, `Value1` | `Value0 = cutoff`, `Value1 = q`; validated against the compile-time sample rate |
+| `StereoDelay` | `Value0`, `DelaySamples` | `Value0 = feedback`; finite values in `[-0.99, 0.99]` only. `DelaySamples` requires exact integer values. Both are applied to the live left/right `DelayLine` states |
 | `StereoMixDown` | none | Fixed equal-weight fold-down: `0.5 * (left + right)` |
 | `Output` | none | No runtime params |
 | `StereoOutput` | none | No runtime params |
@@ -725,8 +735,11 @@ Current limits:
 - stereo graph support is still narrow: terminal stereo remains
   `Pan -> stereo post-processing -> StereoOutput`, while mono graphs may now
   fold stereo back through `StereoMixDown`
-- only one stereo filter node exists so far: `StereoBiquad`; no stereo delay
-  nodes yet
+- stereo post-processing remains intentionally small: the current effect slice
+  is `StereoBiquad` plus `StereoDelay`, with no broader stereo mix/effect set
+  yet
+- feedback support is currently node-local only: `Delay` and `StereoDelay`
+  recirculate internally, but arbitrary graph cycles are still rejected
 - no feedback-edge insertion yet
 - no graph hot-swap yet
 - runtime parameter updates are partial, not universal across node kinds

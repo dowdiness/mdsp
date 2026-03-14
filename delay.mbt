@@ -4,8 +4,13 @@ pub struct DelayLine {
   buffer : FixedArray[Double]
   mut write_pos : Int
   mut delay_samples : Int
+  mut feedback : Double
 
-  fn new(max_delay_samples : Int, delay_samples? : Int) -> DelayLine
+  fn new(
+    max_delay_samples : Int,
+    delay_samples? : Int,
+    feedback? : Double,
+  ) -> DelayLine
 }
 
 ///|
@@ -13,12 +18,14 @@ pub struct DelayLine {
 pub fn DelayLine::new(
   max_delay_samples : Int,
   delay_samples? : Int = default_delay_samples(max_delay_samples),
+  feedback? : Double = 0.0,
 ) -> DelayLine {
   let capacity = max_delay_capacity(max_delay_samples)
   {
     buffer: FixedArray::make(capacity, 0.0),
     write_pos: 0,
     delay_samples: normalize_delay_samples(delay_samples, capacity),
+    feedback: normalize_feedback(feedback),
   }
 }
 
@@ -35,6 +42,12 @@ pub fn DelayLine::delay_samples(self : DelayLine) -> Int {
 }
 
 ///|
+/// Return the active feedback amount.
+pub fn DelayLine::feedback(self : DelayLine) -> Double {
+  self.feedback
+}
+
+///|
 /// Update the active delay length, clamping to the allocated storage range.
 pub fn DelayLine::set_delay_samples(
   self : DelayLine,
@@ -44,6 +57,12 @@ pub fn DelayLine::set_delay_samples(
     delay_samples,
     self.buffer.length(),
   )
+}
+
+///|
+/// Update the feedback amount, clamping to the stable supported range.
+pub fn DelayLine::set_feedback(self : DelayLine, feedback : Double) -> Unit {
+  self.feedback = normalize_feedback(feedback)
 }
 
 ///|
@@ -67,7 +86,7 @@ pub fn DelayLine::tick(self : DelayLine, input : Double) -> Double {
       self.buffer.length(),
     )
     let output = self.buffer[read_pos]
-    self.buffer[self.write_pos] = input
+    self.buffer[self.write_pos] = input + output * self.feedback
     self.advance_write_pos()
     output
   }
@@ -150,6 +169,24 @@ fn normalize_delay_samples(value : Int, capacity : Int) -> Int {
   } else {
     value
   }
+}
+
+///|
+fn normalize_feedback(value : Double) -> Double {
+  if value.is_nan() || value.is_inf() {
+    0.0
+  } else if value < -max_feedback_amount() {
+    -max_feedback_amount()
+  } else if value > max_feedback_amount() {
+    max_feedback_amount()
+  } else {
+    value
+  }
+}
+
+///|
+fn max_feedback_amount() -> Double {
+  0.99
 }
 
 ///|

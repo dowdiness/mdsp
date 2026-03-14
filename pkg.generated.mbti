@@ -97,15 +97,18 @@ pub struct DelayLine {
   buffer : FixedArray[Double]
   mut write_pos : Int
   mut delay_samples : Int
+  mut feedback : Double
 
-  fn new(Int, delay_samples? : Int) -> DelayLine
+  fn new(Int, delay_samples? : Int, feedback? : Double) -> DelayLine
 }
 pub fn DelayLine::delay_samples(Self) -> Int
+pub fn DelayLine::feedback(Self) -> Double
 pub fn DelayLine::max_delay_samples(Self) -> Int
-pub fn DelayLine::new(Int, delay_samples? : Int) -> Self
+pub fn DelayLine::new(Int, delay_samples? : Int, feedback? : Double) -> Self
 pub fn DelayLine::process(Self, DspContext, AudioBuffer) -> Unit
 pub fn DelayLine::reset(Self) -> Unit
 pub fn DelayLine::set_delay_samples(Self, Int) -> Unit
+pub fn DelayLine::set_feedback(Self, Double) -> Unit
 pub fn DelayLine::tick(Self, Double) -> Double
 
 pub struct DspContext {
@@ -138,7 +141,7 @@ pub fn DspNode::adsr(Double, Double, Double, Double) -> Self
 pub fn DspNode::biquad(Int, BiquadMode, Double, Double) -> Self
 pub fn DspNode::clip(Int, Double) -> Self
 pub fn DspNode::constant(Double) -> Self
-pub fn DspNode::delay(Int, Int, delay_samples? : Int) -> Self
+pub fn DspNode::delay(Int, Int, delay_samples? : Int, feedback? : Double) -> Self
 pub fn DspNode::gain(Int, Double) -> Self
 pub fn DspNode::mix(Int, Int) -> Self
 pub fn DspNode::mul(Int, Int) -> Self
@@ -148,6 +151,7 @@ pub fn DspNode::output(Int) -> Self
 pub fn DspNode::pan(Int, Double) -> Self
 pub fn DspNode::stereo_biquad(Int, BiquadMode, Double, Double) -> Self
 pub fn DspNode::stereo_clip(Int, Double) -> Self
+pub fn DspNode::stereo_delay(Int, Int, delay_samples? : Int, feedback? : Double) -> Self
 pub fn DspNode::stereo_gain(Int, Double) -> Self
 pub fn DspNode::stereo_mixdown(Int) -> Self
 pub fn DspNode::stereo_output(Int) -> Self
@@ -168,6 +172,7 @@ pub(all) enum DspNodeKind {
   StereoGain
   StereoClip
   StereoBiquad
+  StereoDelay
   StereoMixDown
   StereoOutput
 }

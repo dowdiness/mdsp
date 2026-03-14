@@ -380,6 +380,17 @@ test "delay line clamps invalid delay lengths deterministically" {
 }
 
 ///|
+test "delay line clamps invalid feedback deterministically" {
+  let delay = DelayLine::new(4, feedback=99.0)
+  assert_eq(delay.feedback(), 0.99)
+
+  delay.set_feedback(-2.0)
+  assert_eq(delay.feedback(), -0.99)
+  delay.set_feedback(0.0 / 0.0)
+  assert_eq(delay.feedback(), 0.0)
+}
+
+///|
 test "delay line process respects context block size" {
   let delay = DelayLine::new(4, delay_samples=1)
   let context = DspContext::new(48000.0, 2)

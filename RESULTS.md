@@ -15,7 +15,8 @@ current Phase 2 graph-compiler checkpoint.
 - `web/index.html` and `web/processor.js` now provide the current Phase 2
   browser proof: the AudioWorklet runs a fixed MoonBit `CompiledStereoDsp`
   graph once per render quantum and reads its left/right output blocks back for
-  playback, metering, filter retuning, and pan verification.
+  playback, metering, filter retuning, and pan verification. That fixed graph
+  now includes both `StereoDelay` and `StereoBiquad`.
 - `serve.sh` copies the browser wrapper `.wasm` into `web/` and starts a local
   server.
 - Browser validation is complete for the current prototype.
@@ -60,6 +61,14 @@ Confirmed on 2026-03-13:
 This means the browser prototype now exercises the actual Phase 2 compiled
 stereo graph runtime, not just the earlier per-sample wrapper ABI.
 
+Confirmed on 2026-03-14:
+
+- The fixed browser `CompiledStereoDsp` graph now includes `StereoDelay` ahead
+  of the live `StereoBiquad` stage.
+- Browser automation compares the first rendered block with
+  `delaySamples=0` versus `delaySamples=24` and confirms the delayed path starts
+  with the expected silent offset.
+
 ## Phase 1 Completion
 
 Confirmed on 2026-03-11:
@@ -97,6 +106,16 @@ Confirmed on 2026-03-11:
   runtime and batched updates for `Pan`, `StereoGain`, `StereoClip`, and
   `StereoBiquad`.
 
+Confirmed on 2026-03-14:
+
+- The current terminal-stereo slice now also includes `StereoDelay`.
+- Stereo graph coverage now includes `StereoDelay` runtime updates plus
+  mono-mixdown equivalence, stereo-delay retune integration checks, and
+  local `StereoDelay` feedback updates.
+- `Delay` and `StereoDelay` now support internal recirculating feedback
+  coefficients. This is node-local delay feedback only; general graph-cycle
+  feedback insertion is still pending.
+
 Authoritative detailed Phase 2 graph status now lives in
 `docs/salat-engine-technical-reference.md`, including:
 - current node coverage
@@ -110,7 +129,7 @@ Authoritative detailed Phase 2 graph status now lives in
 3. Open the URL printed by `serve.sh` (for example `http://127.0.0.1:8080` or
    the next free port if `8080` is occupied)
 4. Click `Start Audio`
-5. Move the frequency, cutoff, gain, and pan controls
+5. Move the frequency, cutoff, delay, gain, and pan controls
 6. Watch the signal meter if you need visual confirmation that samples are
    flowing
 
@@ -127,8 +146,10 @@ Authoritative detailed Phase 2 graph status now lives in
   the browser wrapper wasm exports
 - The page reports `CompiledStereoDsp block runtime`
 - Audible output is confirmed manually
-- The frequency, cutoff, gain, and pan controls update the running demo
+- The frequency, cutoff, delay, gain, and pan controls update the running demo
 - The signal meter shows non-zero output while running
+- The first rendered block changes as expected when the page starts with
+  different `delaySamples` query values
 - The cutoff control changes the running stereo-filtered output
 - The left/right meters shift in the expected direction when pan changes
 

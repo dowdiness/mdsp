@@ -6,8 +6,39 @@ fn main {
 }
 
 ///|
+const BROWSER_TEST_FEEDBACK_FREQ_SCALE : Double = 440.0
+
+///|
+const BROWSER_TEST_FEEDBACK_DEFAULT_CONSTANT : Double = 1.0
+
+///|
+const BROWSER_TEST_FEEDBACK_DEFAULT_GAIN : Double = 0.3
+
+///|
+const BROWSER_TEST_FEEDBACK_CLIP_THRESHOLD : Double = 1.0
+
+///|
+const BROWSER_TEST_FEEDBACK_MAX_GAIN : Double = 0.95
+
+///|
+let compiled_graph : @ref.Ref[@lib.CompiledDsp?] = @ref.new(None)
+
+///|
+let compiled_context : @ref.Ref[@lib.DspContext?] = @ref.new(None)
+
+///|
+let compiled_output : @ref.Ref[@lib.AudioBuffer?] = @ref.new(None)
+
+///|
+let compiled_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
+
+///|
+let compiled_block_size : @ref.Ref[Int] = @ref.new(0)
+
+///|
 pub fn reset_phase() -> Unit {
   @browser.reset_phase()
+  reset_compiled_graph()
 }
 
 ///|
@@ -26,7 +57,7 @@ pub fn tick_source(
 
 ///|
 pub fn init_compiled_graph(sample_rate : Double, block_size : Int) -> Bool {
-  @browser.init_compiled_graph(sample_rate, block_size)
+  ensure_compiled_graph(sample_rate, block_size)
 }
 
 ///|
@@ -36,12 +67,39 @@ pub fn process_compiled_block(
   sample_rate : Double,
   block_size : Int,
 ) -> Bool {
-  @browser.process_compiled_block(freq, gain, sample_rate, block_size)
+  if !ensure_compiled_graph(sample_rate, block_size) {
+    return false
+  }
+  let graph = compiled_graph.val.unwrap()
+  if !graph.apply_controls([
+      @lib.GraphControl::set_param(
+        0,
+        @lib.GraphParamSlot::Value0,
+        bounded_feedback_constant(freq),
+      ),
+      @lib.GraphControl::set_param(
+        2,
+        @lib.GraphParamSlot::Value0,
+        bounded_feedback_gain(gain),
+      ),
+    ]) {
+    return false
+  }
+  graph.process(compiled_context.val.unwrap(), compiled_output.val.unwrap())
+  true
 }
 
 ///|
 pub fn compiled_output_sample(index : Int) -> Double {
-  @browser.compiled_output_sample(index)
+  match compiled_output.val {
+    Some(output) =>
+      if index >= 0 && index < output.length() {
+        output.get(index)
+      } else {
+        0.0
+      }
+    None => 0.0
+  }
 }
 
 ///|
@@ -73,4 +131,79 @@ pub fn compiled_stereo_left_sample(_index : Int) -> Double {
 ///|
 pub fn compiled_stereo_right_sample(_index : Int) -> Double {
   0.0
+}
+
+///|
+fn ensure_compiled_graph(sample_rate : Double, block_size : Int) -> Bool {
+  if sample_rate <= 0.0 || block_size <= 0 {
+    reset_compiled_graph()
+    return false
+  }
+  if compiled_graph.val is Some(_) &&
+    compiled_sample_rate.val == sample_rate &&
+    compiled_block_size.val == block_size {
+    return true
+  }
+
+  let context = @lib.DspContext::new(sample_rate, block_size)
+  let output = @lib.AudioBuffer::filled(block_size)
+  let nodes = [
+    @lib.DspNode::constant(BROWSER_TEST_FEEDBACK_DEFAULT_CONSTANT),
+    @lib.DspNode::mix(0, 3),
+    @lib.DspNode::gain(1, BROWSER_TEST_FEEDBACK_DEFAULT_GAIN),
+    @lib.DspNode::clip(2, BROWSER_TEST_FEEDBACK_CLIP_THRESHOLD),
+    @lib.DspNode::output(3),
+  ]
+  match @lib.CompiledDsp::compile(nodes, context) {
+    Some(graph) => {
+      compiled_graph.val = Some(graph)
+      compiled_context.val = Some(context)
+      compiled_output.val = Some(output)
+      compiled_sample_rate.val = sample_rate
+      compiled_block_size.val = block_size
+      true
+    }
+    None => {
+      reset_compiled_graph()
+      false
+    }
+  }
+}
+
+///|
+fn bounded_feedback_constant(freq : Double) -> Double {
+  if freq.is_nan() || freq.is_inf() {
+    BROWSER_TEST_FEEDBACK_DEFAULT_CONSTANT
+  } else {
+    let normalized = freq / BROWSER_TEST_FEEDBACK_FREQ_SCALE
+    if normalized < 0.0 {
+      0.0
+    } else if normalized > 1.0 {
+      1.0
+    } else {
+      normalized
+    }
+  }
+}
+
+///|
+fn bounded_feedback_gain(gain : Double) -> Double {
+  if gain.is_nan() || gain.is_inf() {
+    BROWSER_TEST_FEEDBACK_DEFAULT_GAIN
+  } else if gain < 0.0 {
+    0.0
+  } else if gain > BROWSER_TEST_FEEDBACK_MAX_GAIN {
+    BROWSER_TEST_FEEDBACK_MAX_GAIN
+  } else {
+    gain
+  }
+}
+
+///|
+fn reset_compiled_graph() -> Unit {
+  compiled_graph.val = None
+  compiled_context.val = None
+  compiled_output.val = None
+  compiled_sample_rate.val = 0.0
+  compiled_block_size.val = 0
 }

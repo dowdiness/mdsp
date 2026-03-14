@@ -270,6 +270,11 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.port.postMessage({
       type: "telemetry",
       sequence: this.telemetrySequence,
+      freq: this.freq,
+      gain: this.gain,
+      pan: this.pan,
+      delaySamples: this.delaySamples,
+      cutoff: this.cutoff,
       overallPeak: Math.max(leftPeak, rightPeak),
       leftPeak,
       rightPeak,

@@ -24,6 +24,10 @@ async function firstTelemetry(page) {
   return page.evaluate(() => window.__mdspFirstTelemetry);
 }
 
+async function currentTelemetry(page) {
+  return page.evaluate(() => window.__mdspTelemetry);
+}
+
 function previewEnergy(samples) {
   return samples.reduce((sum, sample) => sum + Math.abs(sample), 0);
 }
@@ -112,14 +116,37 @@ test('browser demo falls back to CompiledDsp when stereo init fails', async ({ p
   await expect(page.locator('#status')).toContainText('CompiledDsp block runtime');
   await expect(page.locator('#status')).not.toContainText('Processor init failed');
   await expect
-    .poll(async () => (await renderPeaks(page)).overall, { timeout: 10_000 })
-    .toBeGreaterThan(0.02);
+    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const initialTelemetry = await firstTelemetry(page);
 
-  await setRangeValue(page, '#gainSlider', 40);
-  await setRangeValue(page, '#freqSlider', 550);
-  await expect(page.locator('#gainValue')).toHaveText('40');
-  await expect(page.locator('#freqValue')).toHaveText('550');
+  expect(initialTelemetry.leftPreview[0]).toBeCloseTo(0.3, 6);
+  expect(initialTelemetry.leftPreview[1]).toBeCloseTo(0.39, 6);
+  expect(initialTelemetry.leftPreview[2]).toBeCloseTo(0.417, 6);
+  expect(initialTelemetry.leftPreview[3]).toBeCloseTo(0.4251, 6);
+  expect(initialTelemetry.rightPreview[0]).toBeCloseTo(initialTelemetry.leftPreview[0], 9);
+  expect(initialTelemetry.rightPreview[3]).toBeCloseTo(initialTelemetry.leftPreview[3], 9);
+
+  await setRangeValue(page, '#gainSlider', 50);
+  await expect(page.locator('#gainValue')).toHaveText('50');
   await expect
-    .poll(async () => (await renderPeaks(page)).overall, { timeout: 10_000 })
-    .toBeGreaterThan(0.02);
+    .poll(async () => {
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return telemetry.sequence > initialTelemetry.sequence &&
+        Math.abs(telemetry.gain - 0.5) < 0.000001
+        ? telemetry.sequence
+        : 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const retunedTelemetry = await currentTelemetry(page);
+
+  expect(retunedTelemetry.gain).toBeCloseTo(0.5, 6);
+  expect(retunedTelemetry.leftPreview[0]).toBeGreaterThan(0.7);
+  expect(retunedTelemetry.leftPreview[3]).toBeGreaterThan(0.95);
+  expect(retunedTelemetry.leftPreview.every(Number.isFinite)).toBeTruthy();
+  expect(retunedTelemetry.overallPeak).toBeGreaterThan(0.95);
+  expect(retunedTelemetry.overallPeak).toBeLessThan(1.01);
 });

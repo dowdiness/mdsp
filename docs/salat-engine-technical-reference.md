@@ -720,6 +720,10 @@ Current runtime control support:
   a direct multi-back-edge fanout regression, runtime
   gain/delay/biquad/control-batch retunes on accepted loops, and rejection
   coverage for unsupported output/stereo cycles
+- browser automation now also exercises the mono `CompiledDsp` feedback path
+  through the wasm-side stereo-init-failure fallback route, checking both the
+  first-block `z^-1` recurrence preview and a live loop-gain retune in the
+  AudioWorklet pipeline
 
 Current `set_param(node_index, slot, value)` support matrix:
 

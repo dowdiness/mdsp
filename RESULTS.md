@@ -68,6 +68,12 @@ Confirmed on 2026-03-14:
 - Browser automation compares the first rendered block with
   `delaySamples=0` versus `delaySamples=24` and confirms the delayed path starts
   with the expected silent offset.
+- The dedicated `browser_test/` wasm now drives the stereo-init-failure route
+  with a deterministic mono feedback `CompiledDsp` graph instead of a generic
+  acyclic fallback.
+- Browser automation confirms that fallback route renders the expected first
+  `z^-1` recurrence samples and that a live loop-gain retune changes the next
+  block while staying finite.
 
 ## Phase 1 Completion
 
@@ -155,6 +161,8 @@ Authoritative detailed Phase 2 graph status now lives in
 - The signal meter shows non-zero output while running
 - The first rendered block changes as expected when the page starts with
   different `delaySamples` query values
+- The stereo-init-failure route reports `CompiledDsp block runtime` and now
+  renders the expected mono feedback recurrence preview
 - The cutoff control changes the running stereo-filtered output
 - The left/right meters shift in the expected direction when pan changes
 

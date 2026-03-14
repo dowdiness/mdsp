@@ -4,6 +4,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.freq = 440.0;
     this.gain = 0.3;
     this.pan = 0.0;
+    this.delaySamples = Number(options?.processorOptions?.initialDelaySamples ?? 24);
     this.cutoff = 1800.0;
     this.ready = false;
     this.initError = null;
@@ -12,6 +13,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.usesCompiledGraph = false;
     this.reportedRuntimeError = false;
     this.telemetryCountdown = 0;
+    this.telemetryWarmupBlocks = 16;
+    this.telemetrySequence = 0;
 
     this.port.onmessage = (event) => {
       const data = event.data;
@@ -24,6 +27,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         this.gain = Number(data.value);
       } else if (data.type === "set-pan") {
         this.pan = Number(data.value);
+      } else if (data.type === "set-delay-samples") {
+        this.delaySamples = Number(data.value);
       } else if (data.type === "set-cutoff") {
         this.cutoff = Number(data.value);
       }
@@ -144,6 +149,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         this.freq,
         this.gain,
         this.pan,
+        this.delaySamples,
         this.cutoff,
         sampleRate,
         left.length,
@@ -229,11 +235,15 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
   }
 
   reportBlockTelemetry(left, right) {
-    if (this.telemetryCountdown > 0) {
-      this.telemetryCountdown -= 1;
-      return;
+    if (this.telemetryWarmupBlocks > 0) {
+      this.telemetryWarmupBlocks -= 1;
+    } else {
+      if (this.telemetryCountdown > 0) {
+        this.telemetryCountdown -= 1;
+        return;
+      }
+      this.telemetryCountdown = 7;
     }
-    this.telemetryCountdown = 7;
 
     let leftPeak = 0;
     let rightPeak = 0;
@@ -247,11 +257,24 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       rightPeak = leftPeak;
     }
 
+    const previewCount = Math.min(8, left.length);
+    const leftPreview = [];
+    const rightPreview = [];
+    for (let index = 0; index < previewCount; index += 1) {
+      leftPreview.push(left[index]);
+      rightPreview.push(right ? right[index] : left[index]);
+    }
+
+    this.telemetrySequence += 1;
+
     this.port.postMessage({
       type: "telemetry",
+      sequence: this.telemetrySequence,
       overallPeak: Math.max(leftPeak, rightPeak),
       leftPeak,
       rightPeak,
+      leftPreview,
+      rightPreview,
     });
   }
 }

@@ -23,6 +23,12 @@ const BROWSER_COMPILED_DEFAULT_CUTOFF : Double = 1800.0
 const BROWSER_COMPILED_FILTER_Q : Double = 0.707
 
 ///|
+const BROWSER_COMPILED_DELAY_CAPACITY : Int = 128
+
+///|
+const BROWSER_COMPILED_DELAY_SAMPLES : Int = 24
+
+///|
 let compiled_graph : @ref.Ref[@lib.CompiledDsp?] = @ref.new(None)
 
 ///|
@@ -136,6 +142,7 @@ pub fn process_compiled_stereo_block(
   freq : Double,
   gain : Double,
   pan : Double,
+  delay_samples : Double,
   cutoff : Double,
   sample_rate : Double,
   block_size : Int,
@@ -147,8 +154,13 @@ pub fn process_compiled_stereo_block(
   if !graph.apply_controls([
       @lib.GraphControl::set_param(0, @lib.GraphParamSlot::Value0, freq),
       @lib.GraphControl::set_param(1, @lib.GraphParamSlot::Value0, pan),
-      @lib.GraphControl::set_param(2, @lib.GraphParamSlot::Value0, cutoff),
-      @lib.GraphControl::set_param(3, @lib.GraphParamSlot::Value0, gain),
+      @lib.GraphControl::set_param(
+        2,
+        @lib.GraphParamSlot::DelaySamples,
+        delay_samples,
+      ),
+      @lib.GraphControl::set_param(3, @lib.GraphParamSlot::Value0, cutoff),
+      @lib.GraphControl::set_param(4, @lib.GraphParamSlot::Value0, gain),
     ]) {
     return false
   }
@@ -232,15 +244,20 @@ fn ensure_compiled_stereo_graph(sample_rate : Double, block_size : Int) -> Bool 
       BROWSER_COMPILED_DEFAULT_FREQ,
     ),
     @lib.DspNode::pan(0, BROWSER_COMPILED_DEFAULT_PAN),
-    @lib.DspNode::stereo_biquad(
+    @lib.DspNode::stereo_delay(
       1,
+      BROWSER_COMPILED_DELAY_CAPACITY,
+      delay_samples=BROWSER_COMPILED_DELAY_SAMPLES,
+    ),
+    @lib.DspNode::stereo_biquad(
+      2,
       @lib.BiquadMode::LowPass,
       BROWSER_COMPILED_DEFAULT_CUTOFF,
       BROWSER_COMPILED_FILTER_Q,
     ),
-    @lib.DspNode::stereo_gain(2, BROWSER_COMPILED_DEFAULT_GAIN),
-    @lib.DspNode::stereo_clip(3, BROWSER_COMPILED_CLIP_THRESHOLD),
-    @lib.DspNode::stereo_output(4),
+    @lib.DspNode::stereo_gain(3, BROWSER_COMPILED_DEFAULT_GAIN),
+    @lib.DspNode::stereo_clip(4, BROWSER_COMPILED_CLIP_THRESHOLD),
+    @lib.DspNode::stereo_output(5),
   ]
   match @lib.CompiledStereoDsp::compile(nodes, context) {
     Some(graph) => {

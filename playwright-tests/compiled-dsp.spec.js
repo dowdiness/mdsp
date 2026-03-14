@@ -20,10 +20,39 @@ async function renderPeaks(page) {
   };
 }
 
+async function firstTelemetry(page) {
+  return page.evaluate(() => window.__mdspFirstTelemetry);
+}
+
+function previewEnergy(samples) {
+  return samples.reduce((sum, sample) => sum + Math.abs(sample), 0);
+}
+
 async function startAudio(page, path) {
   await page.goto(path);
   await page.click('#startBtn');
 }
+
+test('browser demo first render proves StereoDelay startup offset', async ({ page }) => {
+  await startAudio(page, '/?delaySamples=0');
+  await expect
+    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const zeroDelayTelemetry = await firstTelemetry(page);
+  const zeroDelayEnergy = previewEnergy(zeroDelayTelemetry.leftPreview);
+
+  await startAudio(page, '/?delaySamples=24');
+  await expect
+    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const delayedTelemetry = await firstTelemetry(page);
+  const delayedLeftEnergy = previewEnergy(delayedTelemetry.leftPreview);
+  const delayedRightEnergy = previewEnergy(delayedTelemetry.rightPreview);
+
+  expect(zeroDelayEnergy).toBeGreaterThan(0.001);
+  expect(delayedLeftEnergy).toBeLessThan(0.000000001);
+  expect(delayedRightEnergy).toBeLessThan(0.000000001);
+});
 
 test('browser demo reports CompiledStereoDsp mode and reacts to pan', async ({ page }) => {
   await startAudio(page, '/');

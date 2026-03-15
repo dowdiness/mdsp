@@ -240,9 +240,10 @@ Still planned in Phase 2:
   unary `InsertNode` / `DeleteNode` recompilation
 
 **Current deliverable**: compiled mono graph execution including explicit
-stereo fold-down, the first terminal-stereo graph slice, and a first mono-only
-compiled-graph hot-swap wrapper, all with runtime control and integration
-coverage.
+stereo fold-down, the first terminal-stereo graph slice, mono/stereo compiled
+graph hot-swap, and mono/stereo topology-edit control with browser proof for
+mono length-changing insert/delete round-trips, all with runtime control and
+integration coverage.
 
 **Phase 2 exit deliverable**: `sine(2).range(200,400).sine().lpf(800,1).out()`
 produces sound with graph hot-swap and feedback handling.

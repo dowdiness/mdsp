@@ -374,6 +374,70 @@ test "compiled dsp topology controller rejects invalid deletes transactionally" 
 }
 
 ///|
+test "compiled dsp topology controller insert delete roundtrip restores baseline" {
+  let context = DspContext::new(HOT_SWAP_SAMPLE_RATE, HOT_SWAP_BLOCK_SIZE)
+  let topology = CompiledDspTopologyController::from_nodes(
+    [DspNode::constant(1.0), DspNode::output(0)],
+    context,
+    crossfade_samples=HOT_SWAP_CROSSFADE_SAMPLES,
+  ).unwrap()
+  let insert_first_block = AudioBuffer::filled(HOT_SWAP_BLOCK_SIZE)
+  let insert_second_block = AudioBuffer::filled(HOT_SWAP_BLOCK_SIZE)
+  let inserted_block = AudioBuffer::filled(HOT_SWAP_BLOCK_SIZE)
+  let delete_first_block = AudioBuffer::filled(HOT_SWAP_BLOCK_SIZE)
+  let delete_second_block = AudioBuffer::filled(HOT_SWAP_BLOCK_SIZE)
+  let restored_block = AudioBuffer::filled(HOT_SWAP_BLOCK_SIZE)
+
+  assert_true(
+    topology.queue_topology_edit(
+      GraphTopologyEdit::insert_node(
+        1,
+        GraphTopologyInputSlot::Input0,
+        DspNode::gain(0, 0.5),
+      ),
+    ),
+  )
+  topology.process(context, insert_first_block)
+  topology.process(context, insert_second_block)
+  topology.process(context, inserted_block)
+  assert_true(inserted_block.as_fixed_array().every(sample => sample == 0.5))
+
+  assert_true(
+    topology.queue_topology_edit(
+      GraphTopologyEdit::delete_node(2, 1, GraphTopologyInputSlot::Input0, 2),
+    ),
+  )
+  topology.process(context, delete_first_block)
+  topology.process(context, delete_second_block)
+  topology.process(context, restored_block)
+
+  for index = 0; index < HOT_SWAP_BLOCK_SIZE; index = index + 1 {
+    let first_progress = topology_test_hot_swap_progress(
+      index,
+      HOT_SWAP_CROSSFADE_SAMPLES,
+    )
+    let first_expected = 0.5 * topology_test_old_gain(first_progress) +
+      topology_test_new_gain(first_progress)
+    assert_true(
+      (delete_first_block.get(index) - first_expected).abs() < HOT_SWAP_EPSILON,
+    )
+
+    let second_position = HOT_SWAP_BLOCK_SIZE + index
+    let second_progress = topology_test_hot_swap_progress(
+      second_position,
+      HOT_SWAP_CROSSFADE_SAMPLES,
+    )
+    let second_expected = 0.5 * topology_test_old_gain(second_progress) +
+      topology_test_new_gain(second_progress)
+    assert_true(
+      (delete_second_block.get(index) - second_expected).abs() <
+      HOT_SWAP_EPSILON,
+    )
+  }
+  assert_true(restored_block.as_fixed_array().every(sample => sample == 1.0))
+}
+
+///|
 test "compiled dsp topology controller rejects deletes with mismatched retarget nodes" {
   let context = DspContext::new(HOT_SWAP_SAMPLE_RATE, HOT_SWAP_BLOCK_SIZE)
   let topology = CompiledDspTopologyController::from_nodes(

@@ -42,8 +42,10 @@ current Phase 2 graph-compiler checkpoint.
   that unary insert model, collapsing the graph back to a shorter shape through
   the same staged crossfade path.
 - The browser wrapper now also exports a dedicated mono topology-edit proof
-  path, and browser automation confirms one queued `DeleteNode` edit yields
-  the expected mixed crossfade block and settled rebuilt block.
+  path, and browser automation now confirms the full length-changing round-trip:
+  one queued `InsertNode` edit yields the expected mixed and settled rebuilt
+  block, and the next queued `DeleteNode` edit returns that path to the
+  original baseline shape.
 - `CompiledStereoDspTopologyController` now brings the same narrow
   topology-edit model to terminal-stereo graphs, and the browser wrapper
   exports a dedicated stereo topology-edit proof path as well.

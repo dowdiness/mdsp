@@ -924,6 +924,8 @@ Current limits:
     staged swap; the inserted node becomes the new final authoring index
   - `DeleteNode` compacts authoring indices after removal and is currently
     mono-only, matching the append-only insert slice rather than stereo parity
+  - on the mono path, `InsertNode` followed by `DeleteNode` can round-trip a
+    unary append-only edit back to the original shorter graph shape
   - only one topology replacement may be staged at a time
   - stereo parity exists only for terminal-stereo graphs through
     `CompiledStereoDspTopologyController`
@@ -934,8 +936,10 @@ Current limits:
   AudioWorklet pipeline
 - browser/AudioWorklet topology-edit proof is now present for the mono slice:
   the `browser/` wrapper exports a dedicated `CompiledDspTopologyController`
-  proof path, and Playwright checks that one queued `DeleteNode` edit yields
-  the expected mixed crossfade block and settled rebuilt block
+  proof path, and Playwright checks an `InsertNode` / `DeleteNode` round-trip:
+  the first queued edit inserts one unary node with the expected mixed and
+  settled rebuilt blocks, and the second queued edit deletes that node and
+  returns the browser output to the original baseline shape
   - terminal-stereo parity now exists through a dedicated
     `CompiledStereoDspTopologyController` browser proof path, with Playwright
     checking the mixed and settled channel-shape transition from a queued

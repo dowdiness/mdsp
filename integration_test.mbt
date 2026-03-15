@@ -1104,6 +1104,66 @@ test "compiled graph topology edit deletes rebuilt mono graphs" {
 }
 
 ///|
+test "compiled graph topology edit insert delete roundtrip restores rebuilt mono graphs" {
+  let context = DspContext::new(
+    GRAPH_FEEDBACK_SAMPLE_RATE,
+    GRAPH_FEEDBACK_BLOCK_SIZE,
+  )
+  let topology = CompiledDspTopologyController::from_nodes(
+    [DspNode::constant(1.0), DspNode::output(0)],
+    context,
+    crossfade_samples=8,
+  ).unwrap()
+  let insert_first_block = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let insert_second_block = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let inserted_block = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let delete_first_block = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let delete_second_block = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let restored_block = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+
+  assert_true(
+    topology.queue_topology_edit(
+      GraphTopologyEdit::insert_node(
+        1,
+        GraphTopologyInputSlot::Input0,
+        DspNode::gain(0, HALF_GAIN),
+      ),
+    ),
+  )
+  topology.process(context, insert_first_block)
+  topology.process(context, insert_second_block)
+  topology.process(context, inserted_block)
+
+  assert_true(
+    topology.queue_topology_edit(
+      GraphTopologyEdit::delete_node(2, 1, GraphTopologyInputSlot::Input0, 2),
+    ),
+  )
+  topology.process(context, delete_first_block)
+  topology.process(context, delete_second_block)
+  topology.process(context, restored_block)
+
+  assert_true(integration_buffer_is_finite_and_bounded(insert_first_block, 1.2))
+  assert_true(
+    integration_buffer_is_finite_and_bounded(insert_second_block, 1.2),
+  )
+  assert_true(
+    integration_buffer_is_finite_and_bounded(inserted_block, HALF_GAIN),
+  )
+  assert_true(integration_buffer_is_finite_and_bounded(delete_first_block, 1.2))
+  assert_true(
+    integration_buffer_is_finite_and_bounded(delete_second_block, 1.2),
+  )
+  assert_true(integration_buffer_is_finite_and_bounded(restored_block, 1.0))
+  assert_true(insert_first_block.get(0) == 1.0)
+  assert_true(
+    inserted_block.as_fixed_array().every(sample => sample == HALF_GAIN),
+  )
+  assert_true(delete_first_block.get(0) == HALF_GAIN)
+  assert_true(restored_block.as_fixed_array().every(sample => sample == 1.0))
+}
+
+///|
 test "compiled stereo graph hot swap preserves bounded stereo output" {
   let context = DspContext::new(
     GRAPH_FEEDBACK_SAMPLE_RATE,

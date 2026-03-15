@@ -37,6 +37,9 @@ current Phase 2 graph-compiler checkpoint.
 - The browser wrapper now also exports a dedicated mono topology-edit proof
   path, and browser automation confirms one queued `ReplaceNode` edit yields the
   expected mixed crossfade block and settled rebuilt block.
+- `CompiledStereoDspTopologyController` now brings the same narrow
+  topology-edit model to terminal-stereo graphs, and the browser wrapper
+  exports a dedicated stereo topology-edit proof path as well.
 
 ## Confirmed Outcome
 
@@ -187,6 +190,13 @@ Confirmed on 2026-03-15:
   `CompiledDspTopologyController` proof path, and browser automation confirms
   the queued topology edit runs through the AudioWorklet with the expected
   mixed crossfade block and settled rebuilt block.
+- `CompiledStereoDspTopologyController` now adds stereo topology-edit parity for
+  terminal-stereo graphs, with queued `ReplaceNode` recompilation staged
+  through `CompiledStereoDspHotSwap`.
+- The browser wrapper now also exports a dedicated
+  `CompiledStereoDspTopologyController` proof path, and browser automation
+  confirms the queued stereo topology edit yields the expected mixed and
+  settled channel-shape transition in the AudioWorklet.
 
 Authoritative detailed Phase 2 graph status now lives in
 `docs/salat-engine-technical-reference.md`, including:

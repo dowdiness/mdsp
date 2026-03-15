@@ -115,6 +115,14 @@ pub fn CompiledStereoDspHotSwap::from_graph(CompiledStereoDsp, crossfade_samples
 pub fn CompiledStereoDspHotSwap::process(Self, DspContext, AudioBuffer, AudioBuffer) -> Unit
 pub fn CompiledStereoDspHotSwap::queue_swap(Self, CompiledStereoDsp) -> Bool
 
+type CompiledStereoDspTopologyController
+pub fn CompiledStereoDspTopologyController::apply_control(Self, GraphControl) -> Bool
+pub fn CompiledStereoDspTopologyController::apply_controls(Self, Array[GraphControl]) -> Bool
+pub fn CompiledStereoDspTopologyController::from_nodes(Array[DspNode], DspContext, crossfade_samples? : Int) -> Self?
+pub fn CompiledStereoDspTopologyController::process(Self, DspContext, AudioBuffer, AudioBuffer) -> Unit
+pub fn CompiledStereoDspTopologyController::queue_topology_edit(Self, GraphTopologyEdit) -> Bool
+pub fn CompiledStereoDspTopologyController::queue_topology_edits(Self, Array[GraphTopologyEdit]) -> Bool
+
 pub struct DelayLine {
   buffer : FixedArray[Double]
   mut write_pos : Int

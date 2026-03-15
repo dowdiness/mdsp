@@ -12,9 +12,11 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.prefersCompiledHotSwap = Boolean(options?.processorOptions?.useCompiledHotSwap);
     this.prefersCompiledTopologyEdit = Boolean(options?.processorOptions?.useCompiledTopologyEdit);
     this.prefersCompiledStereoHotSwap = Boolean(options?.processorOptions?.useCompiledStereoHotSwap);
+    this.prefersCompiledStereoTopologyEdit = Boolean(options?.processorOptions?.useCompiledStereoTopologyEdit);
     this.usesCompiledHotSwap = false;
     this.usesCompiledTopologyEdit = false;
     this.usesCompiledStereoHotSwap = false;
+    this.usesCompiledStereoTopologyEdit = false;
     this.usesCompiledStereoGraph = false;
     this.usesCompiledGraph = false;
     this.reportedRuntimeError = false;
@@ -63,6 +65,19 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
             });
           } else {
             this.port.postMessage({ type: "error", message: "CompiledStereoDspHotSwap queue_swap failed" });
+          }
+        }
+      } else if (data.type === "queue-stereo-topology-edit") {
+        if (this.usesCompiledStereoTopologyEdit && this.wasm && typeof this.wasm.queue_compiled_stereo_topology_edit === "function") {
+          const queued = this.wasm.queue_compiled_stereo_topology_edit();
+          if (queued) {
+            this.forceTelemetryBlocks = 2;
+            this.port.postMessage({
+              type: "stereo-topology-edit-queued",
+              telemetrySequence: this.telemetrySequence,
+            });
+          } else {
+            this.port.postMessage({ type: "error", message: "CompiledStereoDspTopologyController queue_topology_edit failed" });
           }
         }
       } else if (data.type === "queue-topology-edit") {
@@ -123,6 +138,13 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         typeof this.wasm.compiled_stereo_hot_swap_left_sample === "function" &&
         typeof this.wasm.compiled_stereo_hot_swap_right_sample === "function";
 
+      const supportsCompiledStereoTopologyEdit =
+        typeof this.wasm.init_compiled_stereo_topology_edit_graph === "function" &&
+        typeof this.wasm.queue_compiled_stereo_topology_edit === "function" &&
+        typeof this.wasm.process_compiled_stereo_topology_edit_block === "function" &&
+        typeof this.wasm.compiled_stereo_topology_edit_left_sample === "function" &&
+        typeof this.wasm.compiled_stereo_topology_edit_right_sample === "function";
+
       const supportsCompiledHotSwap =
         typeof this.wasm.init_compiled_hot_swap_graph === "function" &&
         typeof this.wasm.queue_compiled_hot_swap === "function" &&
@@ -143,6 +165,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       this.usesCompiledHotSwap = false;
       this.usesCompiledTopologyEdit = false;
       this.usesCompiledStereoHotSwap = false;
+      this.usesCompiledStereoTopologyEdit = false;
       this.usesCompiledStereoGraph = false;
       this.usesCompiledGraph = false;
 
@@ -167,6 +190,19 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       if (
         !this.usesCompiledHotSwap &&
         !this.usesCompiledTopologyEdit &&
+        this.prefersCompiledStereoTopologyEdit &&
+        supportsCompiledStereoTopologyEdit
+      ) {
+        const initialized = this.wasm.init_compiled_stereo_topology_edit_graph(sampleRate, 128);
+        if (initialized) {
+          this.usesCompiledStereoTopologyEdit = true;
+        }
+      }
+
+      if (
+        !this.usesCompiledHotSwap &&
+        !this.usesCompiledTopologyEdit &&
+        !this.usesCompiledStereoTopologyEdit &&
         this.prefersCompiledStereoHotSwap &&
         supportsCompiledStereoHotSwap
       ) {
@@ -176,7 +212,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         }
       }
 
-      if (!this.usesCompiledHotSwap && !this.usesCompiledTopologyEdit && !this.usesCompiledStereoHotSwap && supportsCompiledStereoGraph) {
+      if (!this.usesCompiledHotSwap && !this.usesCompiledTopologyEdit && !this.usesCompiledStereoTopologyEdit && !this.usesCompiledStereoHotSwap && supportsCompiledStereoGraph) {
         const initialized = this.wasm.init_compiled_stereo_graph(sampleRate, 128);
         if (initialized) {
           this.usesCompiledStereoGraph = true;
@@ -186,6 +222,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       if (
         !this.usesCompiledHotSwap &&
         !this.usesCompiledTopologyEdit &&
+        !this.usesCompiledStereoTopologyEdit &&
         !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         supportsCompiledGraph
@@ -199,12 +236,14 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       if (
         !this.usesCompiledHotSwap &&
         !this.usesCompiledTopologyEdit &&
+        !this.usesCompiledStereoTopologyEdit &&
         !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         !this.usesCompiledGraph &&
         (
           supportsCompiledHotSwap ||
           supportsCompiledTopologyEdit ||
+          supportsCompiledStereoTopologyEdit ||
           supportsCompiledStereoHotSwap ||
           supportsCompiledStereoGraph ||
           supportsCompiledGraph
@@ -216,6 +255,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       if (
         !this.usesCompiledHotSwap &&
         !this.usesCompiledTopologyEdit &&
+        !this.usesCompiledStereoTopologyEdit &&
         !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         !this.usesCompiledGraph &&
@@ -235,6 +275,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
           ? "compiled-hot-swap-dsp"
           : this.usesCompiledTopologyEdit
             ? "compiled-topology-edit-dsp"
+          : this.usesCompiledStereoTopologyEdit
+            ? "compiled-stereo-topology-edit-dsp"
           : this.usesCompiledStereoHotSwap
             ? "compiled-stereo-hot-swap-dsp"
           : this.usesCompiledStereoGraph
@@ -318,6 +360,34 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         left[index] = sample;
         if (right) {
           right[index] = sample;
+        }
+      }
+
+      this.reportBlockTelemetry(left, right);
+      return true;
+    }
+
+    if (this.usesCompiledStereoTopologyEdit) {
+      const processed = this.wasm.process_compiled_stereo_topology_edit_block(
+        sampleRate,
+        left.length,
+      );
+      if (!processed) {
+        this.fillSilence(left, right);
+        if (!this.reportedRuntimeError) {
+          this.reportedRuntimeError = true;
+          this.port.postMessage({
+            type: "error",
+            message: "CompiledStereoDspTopologyController browser block processing failed",
+          });
+        }
+        return true;
+      }
+
+      for (let index = 0; index < left.length; index += 1) {
+        left[index] = this.wasm.compiled_stereo_topology_edit_left_sample(index);
+        if (right) {
+          right[index] = this.wasm.compiled_stereo_topology_edit_right_sample(index);
         }
       }
 

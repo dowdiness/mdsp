@@ -242,8 +242,10 @@
       output, metering, exact recurrence checks, live loop-gain retuning, and
       stereo pan verification. Query-param browser proofs also exercise the
       mono <code>CompiledDspHotSwap</code> path, the mono
-      <code>CompiledDspTopologyController</code> path, and the stereo
-      <code>CompiledStereoDspHotSwap</code> path in the same AudioWorklet.
+      <code>CompiledDspTopologyController</code> path, the stereo
+      <code>CompiledStereoDspHotSwap</code> path, and the stereo
+      <code>CompiledStereoDspTopologyController</code> path in the same
+      AudioWorklet.
     </p>
 
     <div class="buttons">
@@ -371,6 +373,7 @@
     const useCompiledHotSwap = urlParams.get("hotSwapMono") === "1";
     const useCompiledTopologyEdit = urlParams.get("topologyEditMono") === "1";
     const useCompiledStereoHotSwap = urlParams.get("hotSwapStereo") === "1";
+    const useCompiledStereoTopologyEdit = urlParams.get("topologyEditStereo") === "1";
 
     let audioContext = null;
     let node = null;
@@ -405,6 +408,7 @@
     window.__mdspHotSwapQueued = null;
     window.__mdspTopologyEditQueued = null;
     window.__mdspStereoHotSwapQueued = null;
+    window.__mdspStereoTopologyEditQueued = null;
 
     function setStatus(message, state = "idle") {
       statusBox.textContent = message;
@@ -524,6 +528,7 @@
       window.__mdspHotSwapQueued = null;
       window.__mdspTopologyEditQueued = null;
       window.__mdspStereoHotSwapQueued = null;
+      window.__mdspStereoTopologyEditQueued = null;
       setStatus("Creating AudioContext...");
       audioContext = new AudioContext({ sampleRate: 48000 });
 
@@ -554,6 +559,7 @@
             useCompiledHotSwap,
             useCompiledTopologyEdit,
             useCompiledStereoHotSwap,
+            useCompiledStereoTopologyEdit,
           },
           numberOfInputs: 0,
           numberOfOutputs: 1,
@@ -567,6 +573,8 @@
               ? "CompiledDspHotSwap block runtime"
               : event.data.mode === "compiled-topology-edit-dsp"
               ? "CompiledDspTopologyController block runtime"
+              : event.data.mode === "compiled-stereo-topology-edit-dsp"
+              ? "CompiledStereoDspTopologyController block runtime"
               : event.data.mode === "compiled-stereo-hot-swap-dsp"
               ? "CompiledStereoDspHotSwap block runtime"
               : event.data.mode === "compiled-stereo-dsp"
@@ -595,6 +603,8 @@
             window.__mdspTopologyEditQueued = event.data;
           } else if (event.data?.type === "stereo-hot-swap-queued") {
             window.__mdspStereoHotSwapQueued = event.data;
+          } else if (event.data?.type === "stereo-topology-edit-queued") {
+            window.__mdspStereoTopologyEditQueued = event.data;
           }
         };
 
@@ -682,6 +692,7 @@
       window.__mdspHotSwapQueued = null;
       window.__mdspTopologyEditQueued = null;
       window.__mdspStereoHotSwapQueued = null;
+      window.__mdspStereoTopologyEditQueued = null;
       setStatus("Stopped.");
     }
 

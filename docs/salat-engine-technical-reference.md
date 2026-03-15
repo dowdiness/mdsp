@@ -893,6 +893,10 @@ Current semantics:
 - during an in-flight crossfade, runtime controls are validated against both
   active and pending graphs and applied to both graphs transactionally
   - if either graph rejects the control batch, nothing is applied
+- topology controllers also mirror accepted runtime `set_param(...)` updates
+  into their stored authoring-order nodes, so later `queue_topology_edit(...)`
+  recompiles preserve the current parameter baseline instead of rebuilding from
+  stale pre-control node values
 
 Current limits:
 
@@ -904,8 +908,8 @@ Current limits:
   - only `GraphTopologyEdit::replace_node(...)` exists
   - the graph length stays fixed; there is no node insert/delete frame yet
   - only one topology replacement may be staged at a time
-- stereo topology edits still require explicit whole-graph recompilation outside
-  this wrapper
+  - stereo parity exists only for terminal-stereo graphs through
+    `CompiledStereoDspTopologyController`
 - browser/AudioWorklet hot-swap proof is now narrow but present for both paths:
   the `browser/` wrapper exports dedicated mono `CompiledDspHotSwap` and
   terminal-stereo `CompiledStereoDspHotSwap` proof paths, and Playwright checks
@@ -915,6 +919,10 @@ Current limits:
   the `browser/` wrapper exports a dedicated `CompiledDspTopologyController`
   proof path, and Playwright checks that one queued `ReplaceNode` edit yields
   the expected mixed crossfade block and settled rebuilt block
+  - terminal-stereo parity now exists through a dedicated
+    `CompiledStereoDspTopologyController` browser proof path, with Playwright
+    checking the mixed and settled channel-shape transition from a queued
+    stereo `ReplaceNode` edit
 
 ### 3.7 Multichannel Expansion (SuperCollider-Style)
 

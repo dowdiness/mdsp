@@ -1088,6 +1088,71 @@ test "compiled stereo graph hot swap preserves bounded stereo output" {
 }
 
 ///|
+test "compiled stereo graph topology edit crossfades rebuilt stereo graphs" {
+  let context = DspContext::new(
+    GRAPH_FEEDBACK_SAMPLE_RATE,
+    GRAPH_FEEDBACK_BLOCK_SIZE,
+  )
+  let topology = CompiledStereoDspTopologyController::from_nodes(
+    [
+      DspNode::constant(1.0),
+      DspNode::pan(0, GRAPH_STEREO_CENTER),
+      DspNode::stereo_output(1),
+    ],
+    context,
+    crossfade_samples=8,
+  ).unwrap()
+  let first_left = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let first_right = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let second_left = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let second_right = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let settled_left = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+  let settled_right = AudioBuffer::filled(GRAPH_FEEDBACK_BLOCK_SIZE)
+
+  assert_true(
+    topology.queue_topology_edit(
+      GraphTopologyEdit::replace_node(
+        1,
+        DspNode::pan(0, GRAPH_STEREO_HARD_RIGHT),
+      ),
+    ),
+  )
+  assert_true(
+    topology.apply_control(
+      GraphControl::set_param(1, GraphParamSlot::Value0, GRAPH_STEREO_HARD_LEFT),
+    ),
+  )
+  topology.process(context, first_left, first_right)
+  topology.process(context, second_left, second_right)
+  topology.process(context, settled_left, settled_right)
+
+  assert_true(integration_buffer_is_finite_and_bounded(first_left, 1.5))
+  assert_true(integration_buffer_is_finite_and_bounded(second_left, 1.5))
+  assert_true(integration_buffer_is_finite_and_bounded(settled_left, 1.0))
+  assert_true(integration_buffer_is_finite_and_bounded(first_right, 1.0))
+  assert_true(integration_buffer_is_finite_and_bounded(second_right, 1.0))
+  assert_true(integration_buffer_is_finite_and_bounded(settled_right, 0.0))
+  assert_true(first_left.get(0) == 1.0)
+  assert_true(second_left.get(0) >= 1.0)
+  assert_true(
+    first_right
+    .as_fixed_array()
+    .every(sample => sample.abs() < INTEGRATION_BUFFER_EPSILON),
+  )
+  assert_true(
+    second_right
+    .as_fixed_array()
+    .every(sample => sample.abs() < INTEGRATION_BUFFER_EPSILON),
+  )
+  assert_true(settled_left.as_fixed_array().every(sample => sample == 1.0))
+  assert_true(
+    settled_right
+    .as_fixed_array()
+    .every(sample => sample.abs() < INTEGRATION_BUFFER_EPSILON),
+  )
+}
+
+///|
 test "compiled graph voice path stays coherent across gates and runtime updates" {
   let context = DspContext::new(GRAPH_VOICE_SAMPLE_RATE, GRAPH_VOICE_BLOCK_SIZE)
   let nodes = [

@@ -43,6 +43,10 @@ async function topologyEditQueued(page) {
   return page.evaluate(() => window.__mdspTopologyEditQueued);
 }
 
+async function stereoTopologyEditQueued(page) {
+  return page.evaluate(() => window.__mdspStereoTopologyEditQueued);
+}
+
 async function telemetryHistory(page) {
   return page.evaluate(() => window.__mdspTelemetryHistory);
 }
@@ -68,6 +72,19 @@ function hotSwapExpectedSample(index) {
 
 function stereoHotSwapExpectedSample(index) {
   return hotSwapExpectedSample(index) * PAN_CENTER_GAIN;
+}
+
+function stereoTopologyEditExpectedLeft(index) {
+  const progress = index / HOT_SWAP_CROSSFADE_SAMPLES;
+  const oldGain = Math.cos(progress * Math.PI * 0.5);
+  return PAN_CENTER_GAIN * oldGain;
+}
+
+function stereoTopologyEditExpectedRight(index) {
+  const progress = index / HOT_SWAP_CROSSFADE_SAMPLES;
+  const oldGain = Math.cos(progress * Math.PI * 0.5);
+  const newGain = Math.sin(progress * Math.PI * 0.5);
+  return (PAN_CENTER_GAIN * oldGain) + newGain;
 }
 
 async function startAudio(page, path) {
@@ -399,6 +416,75 @@ test('browser demo proves CompiledDspTopologyController crossfade in the worklet
   expect(settledTelemetry.leftPreview.every(sample => Math.abs(sample - 0.25) < 0.000001)).toBeFalsy();
   expect(settledTelemetry.rightPreview.every(sample => Math.abs(sample - 0.25) < 0.000001)).toBeFalsy();
   expect(settledTelemetry.overallPeak).toBeGreaterThan(0.02);
+});
+
+test('browser demo proves CompiledStereoDspTopologyController crossfade in the worklet', async ({ page }) => {
+  await startAudio(page, '/?topologyEditStereo=1');
+  await expect(page.locator('#status')).toContainText('CompiledStereoDspTopologyController block runtime');
+  await expect
+    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const initialTelemetry = await firstTelemetry(page);
+
+  expect(
+    initialTelemetry.leftPreview.every(
+      sample => Math.abs(sample - PAN_CENTER_GAIN) < 0.000001,
+    ),
+  ).toBeTruthy();
+  expect(
+    initialTelemetry.rightPreview.every(
+      sample => Math.abs(sample - PAN_CENTER_GAIN) < 0.000001,
+    ),
+  ).toBeTruthy();
+
+  await page.evaluate(() => {
+    window.__mdspNode.port.postMessage({ type: 'queue-stereo-topology-edit' });
+  });
+  await expect
+    .poll(async () => (await stereoTopologyEditQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })
+    .toBeGreaterThanOrEqual(initialTelemetry.sequence);
+  const queueAck = await stereoTopologyEditQueued(page);
+
+  await expect
+    .poll(async () => {
+      const history = await telemetryHistory(page);
+      const match = history.find((telemetry) =>
+        telemetry.sequence > queueAck.telemetrySequence &&
+        Math.abs(telemetry.leftPreview[0] - PAN_CENTER_GAIN) < 0.000001 &&
+        telemetry.leftPreview.some(sample => sample > 0.1 && sample < PAN_CENTER_GAIN - 0.001) &&
+        telemetry.rightPreview.some(sample => sample > PAN_CENTER_GAIN + 0.01));
+      return match?.sequence || 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(queueAck.telemetrySequence);
+  const crossfadeTelemetry = (await telemetryHistory(page)).find((telemetry) =>
+    telemetry.sequence > queueAck.telemetrySequence &&
+    Math.abs(telemetry.leftPreview[0] - PAN_CENTER_GAIN) < 0.000001 &&
+    telemetry.leftPreview.some(sample => sample > 0.1 && sample < PAN_CENTER_GAIN - 0.001) &&
+    telemetry.rightPreview.some(sample => sample > PAN_CENTER_GAIN + 0.01));
+
+  for (let index = 0; index < crossfadeTelemetry.leftPreview.length; index += 1) {
+    expect(crossfadeTelemetry.leftPreview[index]).toBeCloseTo(stereoTopologyEditExpectedLeft(index), 6);
+    expect(crossfadeTelemetry.rightPreview[index]).toBeCloseTo(stereoTopologyEditExpectedRight(index), 6);
+  }
+
+  await expect
+    .poll(async () => {
+      const history = await telemetryHistory(page);
+      const match = history.find((telemetry) =>
+        telemetry.sequence > crossfadeTelemetry.sequence &&
+        telemetry.leftPreview.every(sample => Math.abs(sample) < 0.000001) &&
+        telemetry.rightPreview.every(sample => Math.abs(sample - 1.0) < 0.000001));
+      return match?.sequence || 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(crossfadeTelemetry.sequence);
+  const settledTelemetry = (await telemetryHistory(page)).find((telemetry) =>
+    telemetry.sequence > crossfadeTelemetry.sequence &&
+    telemetry.leftPreview.every(sample => Math.abs(sample) < 0.000001) &&
+    telemetry.rightPreview.every(sample => Math.abs(sample - 1.0) < 0.000001));
+
+  expect(settledTelemetry.leftPeak).toBeCloseTo(0.0, 6);
+  expect(settledTelemetry.rightPeak).toBeCloseTo(1.0, 6);
+  expect(settledTelemetry.overallPeak).toBeCloseTo(1.0, 6);
 });
 
 test('browser demo proves CompiledStereoDspHotSwap crossfade in the worklet', async ({ page }) => {

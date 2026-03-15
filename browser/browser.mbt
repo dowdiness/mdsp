@@ -62,6 +62,15 @@ const BROWSER_STEREO_HOT_SWAP_NEW_CONSTANT : Double = 0.75
 const BROWSER_STEREO_HOT_SWAP_CROSSFADE_SAMPLES : Int = 128
 
 ///|
+const BROWSER_STEREO_TOPOLOGY_EDIT_OLD_PAN : Double = 0.0
+
+///|
+const BROWSER_STEREO_TOPOLOGY_EDIT_NEW_PAN : Double = 1.0
+
+///|
+const BROWSER_STEREO_TOPOLOGY_EDIT_CROSSFADE_SAMPLES : Int = 128
+
+///|
 let compiled_graph : @ref.Ref[@lib.CompiledDsp?] = @ref.new(None)
 
 ///|
@@ -151,6 +160,32 @@ let compiled_stereo_hot_swap_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
 let compiled_stereo_hot_swap_block_size : @ref.Ref[Int] = @ref.new(0)
 
 ///|
+let compiled_stereo_topology_edit : @ref.Ref[
+  @lib.CompiledStereoDspTopologyController?,
+] = @ref.new(None)
+
+///|
+let compiled_stereo_topology_edit_context : @ref.Ref[@lib.DspContext?] = @ref.new(
+  None,
+)
+
+///|
+let compiled_stereo_topology_edit_left : @ref.Ref[@lib.AudioBuffer?] = @ref.new(
+  None,
+)
+
+///|
+let compiled_stereo_topology_edit_right : @ref.Ref[@lib.AudioBuffer?] = @ref.new(
+  None,
+)
+
+///|
+let compiled_stereo_topology_edit_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
+
+///|
+let compiled_stereo_topology_edit_block_size : @ref.Ref[Int] = @ref.new(0)
+
+///|
 /// Reset browser demo state.
 pub fn reset_phase() -> Unit {
   @lib.reset_phase()
@@ -159,6 +194,7 @@ pub fn reset_phase() -> Unit {
   reset_compiled_topology_edit_graph()
   reset_compiled_stereo_graph()
   reset_compiled_stereo_hot_swap_graph()
+  reset_compiled_stereo_topology_edit_graph()
 }
 
 ///|
@@ -302,7 +338,13 @@ pub fn queue_compiled_topology_edit() -> Bool {
     None => return false
   }
   topology.queue_topology_edit(
-    @lib.GraphTopologyEdit::replace_node(0, @lib.DspNode::oscillator(@lib.Waveform::Triangle, BROWSER_TOPOLOGY_EDIT_NEW_FREQ)),
+    @lib.GraphTopologyEdit::replace_node(
+      0,
+      @lib.DspNode::oscillator(
+        @lib.Waveform::Triangle,
+        BROWSER_TOPOLOGY_EDIT_NEW_FREQ,
+      ),
+    ),
   )
 }
 
@@ -463,6 +505,62 @@ pub fn compiled_stereo_hot_swap_left_sample(index : Int) -> Double {
 /// Read one sample from the most recent stereo hot-swap browser right block.
 pub fn compiled_stereo_hot_swap_right_sample(index : Int) -> Double {
   compiled_stereo_sample(index, compiled_stereo_hot_swap_right.val)
+}
+
+///|
+/// Initialize the browser proof graph that runs through
+/// `CompiledStereoDspTopologyController`.
+pub fn init_compiled_stereo_topology_edit_graph(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  ensure_compiled_stereo_topology_edit_graph(sample_rate, block_size)
+}
+
+///|
+/// Queue the fixed browser stereo topology edit that replaces the pan node.
+pub fn queue_compiled_stereo_topology_edit() -> Bool {
+  let topology = match compiled_stereo_topology_edit.val {
+    Some(topology) => topology
+    None => return false
+  }
+  topology.queue_topology_edit(
+    @lib.GraphTopologyEdit::replace_node(
+      1,
+      @lib.DspNode::pan(0, BROWSER_STEREO_TOPOLOGY_EDIT_NEW_PAN),
+    ),
+  )
+}
+
+///|
+/// Run one render quantum through the browser proof
+/// `CompiledStereoDspTopologyController` graph.
+pub fn process_compiled_stereo_topology_edit_block(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  if !ensure_compiled_stereo_topology_edit_graph(sample_rate, block_size) {
+    return false
+  }
+  let topology = compiled_stereo_topology_edit.val.unwrap()
+  topology.process(
+    compiled_stereo_topology_edit_context.val.unwrap(),
+    compiled_stereo_topology_edit_left.val.unwrap(),
+    compiled_stereo_topology_edit_right.val.unwrap(),
+  )
+  true
+}
+
+///|
+/// Read one sample from the most recent stereo topology-edit browser left block.
+pub fn compiled_stereo_topology_edit_left_sample(index : Int) -> Double {
+  compiled_stereo_sample(index, compiled_stereo_topology_edit_left.val)
+}
+
+///|
+/// Read one sample from the most recent stereo topology-edit browser right block.
+pub fn compiled_stereo_topology_edit_right_sample(index : Int) -> Double {
+  compiled_stereo_sample(index, compiled_stereo_topology_edit_right.val)
 }
 
 ///|
@@ -688,6 +786,49 @@ fn ensure_compiled_stereo_hot_swap_graph(
 }
 
 ///|
+fn ensure_compiled_stereo_topology_edit_graph(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  if sample_rate <= 0.0 || block_size <= 0 {
+    reset_compiled_stereo_topology_edit_graph()
+    return false
+  }
+  if compiled_stereo_topology_edit.val is Some(_) &&
+    compiled_stereo_topology_edit_sample_rate.val == sample_rate &&
+    compiled_stereo_topology_edit_block_size.val == block_size {
+    return true
+  }
+
+  let context = @lib.DspContext::new(sample_rate, block_size)
+  let left = @lib.AudioBuffer::filled(block_size)
+  let right = @lib.AudioBuffer::filled(block_size)
+  let topology = match
+    @lib.CompiledStereoDspTopologyController::from_nodes(
+      [
+        @lib.DspNode::constant(1.0),
+        @lib.DspNode::pan(0, BROWSER_STEREO_TOPOLOGY_EDIT_OLD_PAN),
+        @lib.DspNode::stereo_output(1),
+      ],
+      context,
+      crossfade_samples=BROWSER_STEREO_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,
+    ) {
+    Some(topology) => topology
+    None => {
+      reset_compiled_stereo_topology_edit_graph()
+      return false
+    }
+  }
+  compiled_stereo_topology_edit.val = Some(topology)
+  compiled_stereo_topology_edit_context.val = Some(context)
+  compiled_stereo_topology_edit_left.val = Some(left)
+  compiled_stereo_topology_edit_right.val = Some(right)
+  compiled_stereo_topology_edit_sample_rate.val = sample_rate
+  compiled_stereo_topology_edit_block_size.val = block_size
+  true
+}
+
+///|
 fn bounded_feedback_gain(gain : Double) -> Double {
   if gain.is_nan() || gain.is_inf() {
     BROWSER_COMPILED_DEFAULT_GAIN
@@ -758,4 +899,14 @@ fn reset_compiled_stereo_hot_swap_graph() -> Unit {
   compiled_stereo_hot_swap_right.val = None
   compiled_stereo_hot_swap_sample_rate.val = 0.0
   compiled_stereo_hot_swap_block_size.val = 0
+}
+
+///|
+fn reset_compiled_stereo_topology_edit_graph() -> Unit {
+  compiled_stereo_topology_edit.val = None
+  compiled_stereo_topology_edit_context.val = None
+  compiled_stereo_topology_edit_left.val = None
+  compiled_stereo_topology_edit_right.val = None
+  compiled_stereo_topology_edit_sample_rate.val = 0.0
+  compiled_stereo_topology_edit_block_size.val = 0
 }

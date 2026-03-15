@@ -35,8 +35,11 @@ current Phase 2 graph-compiler checkpoint.
   above mono `CompiledDspHotSwap`, with ordered transactional
   `ReplaceNode` / `RewireInput` frames that recompile and stage a replacement
   graph.
+- The mono topology-edit slice now also supports an append-only
+  `InsertNode` frame for unary nodes, keeping existing authoring indices stable
+  while still changing graph length.
 - The browser wrapper now also exports a dedicated mono topology-edit proof
-  path, and browser automation confirms one queued `RewireInput` edit yields
+  path, and browser automation confirms one queued `InsertNode` edit yields
   the expected mixed crossfade block and settled rebuilt block.
 - `CompiledStereoDspTopologyController` now brings the same narrow
   topology-edit model to terminal-stereo graphs, and the browser wrapper
@@ -182,16 +185,17 @@ Confirmed on 2026-03-15:
   browser proof of the mixed and settled stereo swap blocks.
 - `CompiledDspTopologyController` now adds the first topology-edit wrapper
   beyond whole-graph swap for mono graphs, with transactional
-  `GraphTopologyEdit::replace_node(...)` and `GraphTopologyEdit::rewire_input(...)`
-  batches compiled and staged through the mono hot-swap path.
+  `GraphTopologyEdit::replace_node(...)`, `GraphTopologyEdit::rewire_input(...)`,
+  and append-only `GraphTopologyEdit::insert_node(...)` batches compiled and
+  staged through the mono hot-swap path.
 - Coverage now includes exact crossfade expectations for a rebuilt mono graph,
   transactional rejection of invalid edit batches, and runtime-control mirroring
   into a queued topology-edited replacement.
 - The browser wrapper now also exports a dedicated
   `CompiledDspTopologyController` proof path, and browser automation confirms
   the queued topology edit runs through the AudioWorklet with the expected
-  mixed crossfade block and settled rebuilt block, now including a structural
-  `RewireInput` proof on the mono path.
+  mixed crossfade block and settled rebuilt block, now including an
+  `InsertNode` proof on the mono path.
 - `CompiledStereoDspTopologyController` now adds stereo topology-edit parity for
   terminal-stereo graphs, with queued `ReplaceNode` / `RewireInput`
   recompilation staged through `CompiledStereoDspHotSwap`.

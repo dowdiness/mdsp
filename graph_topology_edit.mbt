@@ -3,6 +3,7 @@
 pub(all) enum GraphTopologyEditKind {
   ReplaceNode
   RewireInput
+  InsertNode
 }
 
 ///|
@@ -73,12 +74,36 @@ pub fn GraphTopologyEdit::rewire_input(
 }
 
 ///|
+/// Insert one unary authoring-order node and retarget one downstream input to
+/// the inserted node.
+///
+/// This first slice appends the inserted node at the end of the authoring
+/// array so existing node indices remain stable across the staged replacement.
+/// `retarget_node_index` and `retarget_input_slot` identify the downstream
+/// input that will be rerouted to the inserted node. The inserted node itself
+/// inherits that input's previous upstream source as its own `input0`.
+pub fn GraphTopologyEdit::insert_node(
+  retarget_node_index : Int,
+  retarget_input_slot : GraphTopologyInputSlot,
+  inserted_node : DspNode,
+) -> GraphTopologyEdit {
+  GraphTopologyEdit(
+    GraphTopologyEditKind::InsertNode,
+    retarget_node_index,
+    inserted_node,
+    retarget_input_slot,
+    -1,
+  )
+}
+
+///|
 /// Mono topology-edit wrapper that recompiles authoring nodes and stages the
 /// replacement through `CompiledDspHotSwap`.
 ///
 /// This first slice keeps edits narrow and deterministic: only `ReplaceNode`
-/// and `RewireInput` frames are supported, the graph length stays fixed, and
-/// only one staged topology replacement may be pending at a time.
+/// and `RewireInput` frames are supported, plus one narrow unary `InsertNode`
+/// frame on the mono path. Only one staged topology replacement may be pending
+/// at a time.
 struct CompiledDspTopologyController {
   mut authoring_nodes : Array[DspNode]
   compile_sample_rate : Double
@@ -242,6 +267,129 @@ fn apply_topology_edit(
           edit.source_index,
         )
       }
+    GraphTopologyEditKind::InsertNode =>
+      apply_topology_insert_node(
+        nodes,
+        edit.node_index,
+        edit.replacement,
+        edit.input_slot,
+      )
+  }
+}
+
+///|
+fn apply_topology_insert_node(
+  nodes : Array[DspNode],
+  retarget_node_index : Int,
+  inserted_template : DspNode,
+  retarget_input_slot : GraphTopologyInputSlot,
+) -> Bool {
+  if retarget_node_index < 0 || retarget_node_index >= nodes.length() {
+    return false
+  }
+  let old_source = match
+    topology_node_input(nodes[retarget_node_index], retarget_input_slot) {
+    Some(old_source) => old_source
+    None => return false
+  }
+  let inserted = match topology_inserted_node(inserted_template, old_source) {
+    Some(inserted) => inserted
+    None => return false
+  }
+  let inserted_index = nodes.length()
+  nodes.push(inserted)
+  if apply_topology_rewire_input(
+      nodes, retarget_node_index, retarget_input_slot, inserted_index,
+    ) {
+    true
+  } else {
+    ignore(nodes.pop())
+    false
+  }
+}
+
+///|
+fn topology_node_input(
+  node : DspNode,
+  input_slot : GraphTopologyInputSlot,
+) -> Int? {
+  match (node.kind, input_slot) {
+    (DspNodeKind::Mul, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::Mul, GraphTopologyInputSlot::Input1) => Some(node.input1)
+    (DspNodeKind::Mix, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::Mix, GraphTopologyInputSlot::Input1) => Some(node.input1)
+    (DspNodeKind::Gain, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::Clip, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::Output, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::Pan, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::StereoGain, GraphTopologyInputSlot::Input0) =>
+      Some(node.input0)
+    (DspNodeKind::StereoClip, GraphTopologyInputSlot::Input0) =>
+      Some(node.input0)
+    (DspNodeKind::StereoMixDown, GraphTopologyInputSlot::Input0) =>
+      Some(node.input0)
+    (DspNodeKind::StereoOutput, GraphTopologyInputSlot::Input0) =>
+      Some(node.input0)
+    (DspNodeKind::Biquad, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::Delay, GraphTopologyInputSlot::Input0) => Some(node.input0)
+    (DspNodeKind::StereoBiquad, GraphTopologyInputSlot::Input0) =>
+      Some(node.input0)
+    (DspNodeKind::StereoDelay, GraphTopologyInputSlot::Input0) =>
+      Some(node.input0)
+    _ => None
+  }
+}
+
+///|
+fn topology_inserted_node(template : DspNode, input_source : Int) -> DspNode? {
+  match template.kind {
+    DspNodeKind::Gain => Some(DspNode::gain(input_source, template.value0))
+    DspNodeKind::Clip => Some(DspNode::clip(input_source, template.value0))
+    DspNodeKind::Pan => Some(DspNode::pan(input_source, template.value0))
+    DspNodeKind::StereoGain =>
+      Some(DspNode::stereo_gain(input_source, template.value0))
+    DspNodeKind::StereoClip =>
+      Some(DspNode::stereo_clip(input_source, template.value0))
+    DspNodeKind::StereoMixDown => Some(DspNode::stereo_mixdown(input_source))
+    DspNodeKind::Output => Some(DspNode::output(input_source))
+    DspNodeKind::StereoOutput => Some(DspNode::stereo_output(input_source))
+    DspNodeKind::Biquad =>
+      Some(
+        DspNode::biquad(
+          input_source,
+          template.filter_mode,
+          template.value0,
+          template.value1,
+        ),
+      )
+    DspNodeKind::Delay =>
+      Some(
+        DspNode::delay(
+          input_source,
+          template.delay_max_samples,
+          delay_samples=template.delay_samples,
+          feedback=template.value0,
+        ),
+      )
+    DspNodeKind::StereoBiquad =>
+      Some(
+        DspNode::stereo_biquad(
+          input_source,
+          template.filter_mode,
+          template.value0,
+          template.value1,
+        ),
+      )
+    DspNodeKind::StereoDelay =>
+      Some(
+        DspNode::stereo_delay(
+          input_source,
+          template.delay_max_samples,
+          delay_samples=template.delay_samples,
+          feedback=template.value0,
+        ),
+      )
+    _ => None
   }
 }
 
@@ -437,6 +585,9 @@ pub fn CompiledStereoDspTopologyController::queue_topology_edits(
   if self.hot_swap.pending is Some(_) {
     return false
   }
+  if !valid_stereo_topology_edits(edits) {
+    return false
+  }
   let edited_nodes = self.authoring_nodes.copy()
   if !apply_topology_edits(edited_nodes, edits) {
     return false
@@ -454,6 +605,16 @@ pub fn CompiledStereoDspTopologyController::queue_topology_edits(
     return false
   }
   self.authoring_nodes = edited_nodes
+  true
+}
+
+///|
+fn valid_stereo_topology_edits(edits : Array[GraphTopologyEdit]) -> Bool {
+  for index = 0; index < edits.length(); index = index + 1 {
+    if edits[index].kind is InsertNode {
+      return false
+    }
+  }
   true
 }
 

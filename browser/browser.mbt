@@ -44,13 +44,10 @@ const BROWSER_HOT_SWAP_NEW_CONSTANT : Double = 0.75
 const BROWSER_HOT_SWAP_CROSSFADE_SAMPLES : Int = 128
 
 ///|
-const BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT : Double = 0.25
+const BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT : Double = 1.0
 
 ///|
-const BROWSER_TOPOLOGY_EDIT_NEW_CONSTANT : Double = -0.0625
-
-///|
-const BROWSER_TOPOLOGY_EDIT_OLD_GAIN : Double = 1.0
+const BROWSER_TOPOLOGY_EDIT_INSERTED_GAIN : Double = 0.5
 
 ///|
 const BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES : Int = 128
@@ -334,18 +331,18 @@ pub fn init_compiled_topology_edit_graph(
 }
 
 ///|
-/// Queue the fixed browser topology edit that rewires the join node to the
-/// alternate constant branch.
+/// Queue the fixed browser topology edit that inserts a gain node before the
+/// output.
 pub fn queue_compiled_topology_edit() -> Bool {
   let topology = match compiled_topology_edit.val {
     Some(topology) => topology
     None => return false
   }
   topology.queue_topology_edit(
-    @lib.GraphTopologyEdit::rewire_input(
-      4,
-      @lib.GraphTopologyInputSlot::Input1,
-      0,
+    @lib.GraphTopologyEdit::insert_node(
+      1,
+      @lib.GraphTopologyInputSlot::Input0,
+      @lib.DspNode::gain(0, BROWSER_TOPOLOGY_EDIT_INSERTED_GAIN),
     ),
   )
 }
@@ -668,12 +665,7 @@ fn ensure_compiled_topology_edit_graph(
     @lib.CompiledDspTopologyController::from_nodes(
       [
         @lib.DspNode::constant(BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT),
-        @lib.DspNode::constant(BROWSER_TOPOLOGY_EDIT_NEW_CONSTANT),
-        @lib.DspNode::gain(0, BROWSER_TOPOLOGY_EDIT_OLD_GAIN),
-        @lib.DspNode::gain(1, BROWSER_TOPOLOGY_EDIT_OLD_GAIN),
-        @lib.DspNode::mix(2, 3),
-        @lib.DspNode::mix(4, 3),
-        @lib.DspNode::output(5),
+        @lib.DspNode::output(0),
       ],
       context,
       crossfade_samples=BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,

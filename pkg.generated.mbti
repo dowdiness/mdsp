@@ -258,12 +258,14 @@ pub struct GraphTopologyEdit {
 
   fn new(GraphTopologyEditKind, Int, DspNode, GraphTopologyInputSlot, Int) -> GraphTopologyEdit
 }
+pub fn GraphTopologyEdit::insert_node(Int, GraphTopologyInputSlot, DspNode) -> Self
 pub fn GraphTopologyEdit::replace_node(Int, DspNode) -> Self
 pub fn GraphTopologyEdit::rewire_input(Int, GraphTopologyInputSlot, Int) -> Self
 
 pub(all) enum GraphTopologyEditKind {
   ReplaceNode
   RewireInput
+  InsertNode
 }
 
 pub(all) enum GraphTopologyInputSlot {

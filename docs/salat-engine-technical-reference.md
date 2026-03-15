@@ -911,6 +911,10 @@ Current limits:
   terminal-stereo `CompiledStereoDspHotSwap` proof paths, and Playwright checks
   both the mixed crossfade block and the settled replacement block in the
   AudioWorklet pipeline
+- browser/AudioWorklet topology-edit proof is now present for the mono slice:
+  the `browser/` wrapper exports a dedicated `CompiledDspTopologyController`
+  proof path, and Playwright checks that one queued `ReplaceNode` edit yields
+  the expected mixed crossfade block and settled rebuilt block
 
 ### 3.7 Multichannel Expansion (SuperCollider-Style)
 

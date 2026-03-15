@@ -34,6 +34,9 @@ current Phase 2 graph-compiler checkpoint.
 - `CompiledDspTopologyController` now adds a first narrow topology-edit layer
   above mono `CompiledDspHotSwap`, with ordered transactional `ReplaceNode`
   frames that recompile and stage a replacement graph.
+- The browser wrapper now also exports a dedicated mono topology-edit proof
+  path, and browser automation confirms one queued `ReplaceNode` edit yields the
+  expected mixed crossfade block and settled rebuilt block.
 
 ## Confirmed Outcome
 
@@ -180,6 +183,10 @@ Confirmed on 2026-03-15:
 - Coverage now includes exact crossfade expectations for a rebuilt mono graph,
   transactional rejection of invalid edit batches, and runtime-control mirroring
   into a queued topology-edited replacement.
+- The browser wrapper now also exports a dedicated
+  `CompiledDspTopologyController` proof path, and browser automation confirms
+  the queued topology edit runs through the AudioWorklet with the expected
+  mixed crossfade block and settled rebuilt block.
 
 Authoritative detailed Phase 2 graph status now lives in
 `docs/salat-engine-technical-reference.md`, including:

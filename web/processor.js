@@ -10,8 +10,10 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.initError = null;
     this.wasm = null;
     this.prefersCompiledHotSwap = Boolean(options?.processorOptions?.useCompiledHotSwap);
+    this.prefersCompiledTopologyEdit = Boolean(options?.processorOptions?.useCompiledTopologyEdit);
     this.prefersCompiledStereoHotSwap = Boolean(options?.processorOptions?.useCompiledStereoHotSwap);
     this.usesCompiledHotSwap = false;
+    this.usesCompiledTopologyEdit = false;
     this.usesCompiledStereoHotSwap = false;
     this.usesCompiledStereoGraph = false;
     this.usesCompiledGraph = false;
@@ -61,6 +63,19 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
             });
           } else {
             this.port.postMessage({ type: "error", message: "CompiledStereoDspHotSwap queue_swap failed" });
+          }
+        }
+      } else if (data.type === "queue-topology-edit") {
+        if (this.usesCompiledTopologyEdit && this.wasm && typeof this.wasm.queue_compiled_topology_edit === "function") {
+          const queued = this.wasm.queue_compiled_topology_edit();
+          if (queued) {
+            this.forceTelemetryBlocks = 2;
+            this.port.postMessage({
+              type: "topology-edit-queued",
+              telemetrySequence: this.telemetrySequence,
+            });
+          } else {
+            this.port.postMessage({ type: "error", message: "CompiledDspTopologyController queue_topology_edit failed" });
           }
         }
       }
@@ -114,12 +129,19 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         typeof this.wasm.process_compiled_hot_swap_block === "function" &&
         typeof this.wasm.compiled_hot_swap_output_sample === "function";
 
+      const supportsCompiledTopologyEdit =
+        typeof this.wasm.init_compiled_topology_edit_graph === "function" &&
+        typeof this.wasm.queue_compiled_topology_edit === "function" &&
+        typeof this.wasm.process_compiled_topology_edit_block === "function" &&
+        typeof this.wasm.compiled_topology_edit_output_sample === "function";
+
       const supportsCompiledGraph =
         typeof this.wasm.init_compiled_graph === "function" &&
         typeof this.wasm.process_compiled_block === "function" &&
         typeof this.wasm.compiled_output_sample === "function";
 
       this.usesCompiledHotSwap = false;
+      this.usesCompiledTopologyEdit = false;
       this.usesCompiledStereoHotSwap = false;
       this.usesCompiledStereoGraph = false;
       this.usesCompiledGraph = false;
@@ -133,6 +155,18 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
 
       if (
         !this.usesCompiledHotSwap &&
+        this.prefersCompiledTopologyEdit &&
+        supportsCompiledTopologyEdit
+      ) {
+        const initialized = this.wasm.init_compiled_topology_edit_graph(sampleRate, 128);
+        if (initialized) {
+          this.usesCompiledTopologyEdit = true;
+        }
+      }
+
+      if (
+        !this.usesCompiledHotSwap &&
+        !this.usesCompiledTopologyEdit &&
         this.prefersCompiledStereoHotSwap &&
         supportsCompiledStereoHotSwap
       ) {
@@ -142,7 +176,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         }
       }
 
-      if (!this.usesCompiledHotSwap && !this.usesCompiledStereoHotSwap && supportsCompiledStereoGraph) {
+      if (!this.usesCompiledHotSwap && !this.usesCompiledTopologyEdit && !this.usesCompiledStereoHotSwap && supportsCompiledStereoGraph) {
         const initialized = this.wasm.init_compiled_stereo_graph(sampleRate, 128);
         if (initialized) {
           this.usesCompiledStereoGraph = true;
@@ -151,6 +185,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
 
       if (
         !this.usesCompiledHotSwap &&
+        !this.usesCompiledTopologyEdit &&
         !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         supportsCompiledGraph
@@ -163,11 +198,13 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
 
       if (
         !this.usesCompiledHotSwap &&
+        !this.usesCompiledTopologyEdit &&
         !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         !this.usesCompiledGraph &&
         (
           supportsCompiledHotSwap ||
+          supportsCompiledTopologyEdit ||
           supportsCompiledStereoHotSwap ||
           supportsCompiledStereoGraph ||
           supportsCompiledGraph
@@ -178,6 +215,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
 
       if (
         !this.usesCompiledHotSwap &&
+        !this.usesCompiledTopologyEdit &&
         !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         !this.usesCompiledGraph &&
@@ -195,6 +233,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         exports: Object.keys(this.wasm),
         mode: this.usesCompiledHotSwap
           ? "compiled-hot-swap-dsp"
+          : this.usesCompiledTopologyEdit
+            ? "compiled-topology-edit-dsp"
           : this.usesCompiledStereoHotSwap
             ? "compiled-stereo-hot-swap-dsp"
           : this.usesCompiledStereoGraph
@@ -246,6 +286,35 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
 
       for (let index = 0; index < left.length; index += 1) {
         const sample = this.wasm.compiled_hot_swap_output_sample(index);
+        left[index] = sample;
+        if (right) {
+          right[index] = sample;
+        }
+      }
+
+      this.reportBlockTelemetry(left, right);
+      return true;
+    }
+
+    if (this.usesCompiledTopologyEdit) {
+      const processed = this.wasm.process_compiled_topology_edit_block(
+        sampleRate,
+        left.length,
+      );
+      if (!processed) {
+        this.fillSilence(left, right);
+        if (!this.reportedRuntimeError) {
+          this.reportedRuntimeError = true;
+          this.port.postMessage({
+            type: "error",
+            message: "CompiledDspTopologyController browser block processing failed",
+          });
+        }
+        return true;
+      }
+
+      for (let index = 0; index < left.length; index += 1) {
+        const sample = this.wasm.compiled_topology_edit_output_sample(index);
         left[index] = sample;
         if (right) {
           right[index] = sample;

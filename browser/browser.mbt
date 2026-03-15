@@ -44,6 +44,15 @@ const BROWSER_HOT_SWAP_NEW_CONSTANT : Double = 0.75
 const BROWSER_HOT_SWAP_CROSSFADE_SAMPLES : Int = 128
 
 ///|
+const BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT : Double = 0.25
+
+///|
+const BROWSER_TOPOLOGY_EDIT_NEW_FREQ : Double = 440.0
+
+///|
+const BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES : Int = 128
+
+///|
 const BROWSER_STEREO_HOT_SWAP_OLD_CONSTANT : Double = 0.25
 
 ///|
@@ -81,6 +90,23 @@ let compiled_hot_swap_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
 
 ///|
 let compiled_hot_swap_block_size : @ref.Ref[Int] = @ref.new(0)
+
+///|
+let compiled_topology_edit : @ref.Ref[@lib.CompiledDspTopologyController?] = @ref.new(
+  None,
+)
+
+///|
+let compiled_topology_edit_context : @ref.Ref[@lib.DspContext?] = @ref.new(None)
+
+///|
+let compiled_topology_edit_output : @ref.Ref[@lib.AudioBuffer?] = @ref.new(None)
+
+///|
+let compiled_topology_edit_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
+
+///|
+let compiled_topology_edit_block_size : @ref.Ref[Int] = @ref.new(0)
 
 ///|
 let compiled_stereo_graph : @ref.Ref[@lib.CompiledStereoDsp?] = @ref.new(None)
@@ -130,6 +156,7 @@ pub fn reset_phase() -> Unit {
   @lib.reset_phase()
   reset_compiled_graph()
   reset_compiled_hot_swap_graph()
+  reset_compiled_topology_edit_graph()
   reset_compiled_stereo_graph()
   reset_compiled_stereo_hot_swap_graph()
 }
@@ -247,6 +274,60 @@ pub fn process_compiled_hot_swap_block(
 /// Read one sample from the most recent hot-swap browser output block.
 pub fn compiled_hot_swap_output_sample(index : Int) -> Double {
   match compiled_hot_swap_output.val {
+    Some(output) =>
+      if index >= 0 && index < output.length() {
+        output.get(index)
+      } else {
+        0.0
+      }
+    None => 0.0
+  }
+}
+
+///|
+/// Initialize the browser proof graph that runs through
+/// `CompiledDspTopologyController`.
+pub fn init_compiled_topology_edit_graph(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  ensure_compiled_topology_edit_graph(sample_rate, block_size)
+}
+
+///|
+/// Queue the fixed browser topology edit that replaces the constant source node.
+pub fn queue_compiled_topology_edit() -> Bool {
+  let topology = match compiled_topology_edit.val {
+    Some(topology) => topology
+    None => return false
+  }
+  topology.queue_topology_edit(
+    @lib.GraphTopologyEdit::replace_node(0, @lib.DspNode::oscillator(@lib.Waveform::Triangle, BROWSER_TOPOLOGY_EDIT_NEW_FREQ)),
+  )
+}
+
+///|
+/// Run one render quantum through the browser proof `CompiledDspTopologyController`
+/// graph.
+pub fn process_compiled_topology_edit_block(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  if !ensure_compiled_topology_edit_graph(sample_rate, block_size) {
+    return false
+  }
+  let topology = compiled_topology_edit.val.unwrap()
+  topology.process(
+    compiled_topology_edit_context.val.unwrap(),
+    compiled_topology_edit_output.val.unwrap(),
+  )
+  true
+}
+
+///|
+/// Read one sample from the most recent topology-edit browser output block.
+pub fn compiled_topology_edit_output_sample(index : Int) -> Double {
+  match compiled_topology_edit_output.val {
     Some(output) =>
       if index >= 0 && index < output.length() {
         output.get(index)
@@ -467,6 +548,46 @@ fn ensure_compiled_hot_swap_graph(
 }
 
 ///|
+fn ensure_compiled_topology_edit_graph(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  if sample_rate <= 0.0 || block_size <= 0 {
+    reset_compiled_topology_edit_graph()
+    return false
+  }
+  if compiled_topology_edit.val is Some(_) &&
+    compiled_topology_edit_sample_rate.val == sample_rate &&
+    compiled_topology_edit_block_size.val == block_size {
+    return true
+  }
+
+  let context = @lib.DspContext::new(sample_rate, block_size)
+  let output = @lib.AudioBuffer::filled(block_size)
+  let topology = match
+    @lib.CompiledDspTopologyController::from_nodes(
+      [
+        @lib.DspNode::constant(BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT),
+        @lib.DspNode::output(0),
+      ],
+      context,
+      crossfade_samples=BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,
+    ) {
+    Some(topology) => topology
+    None => {
+      reset_compiled_topology_edit_graph()
+      return false
+    }
+  }
+  compiled_topology_edit.val = Some(topology)
+  compiled_topology_edit_context.val = Some(context)
+  compiled_topology_edit_output.val = Some(output)
+  compiled_topology_edit_sample_rate.val = sample_rate
+  compiled_topology_edit_block_size.val = block_size
+  true
+}
+
+///|
 fn ensure_compiled_stereo_graph(sample_rate : Double, block_size : Int) -> Bool {
   if sample_rate <= 0.0 || block_size <= 0 {
     reset_compiled_stereo_graph()
@@ -608,6 +729,15 @@ fn reset_compiled_hot_swap_graph() -> Unit {
   compiled_hot_swap_output.val = None
   compiled_hot_swap_sample_rate.val = 0.0
   compiled_hot_swap_block_size.val = 0
+}
+
+///|
+fn reset_compiled_topology_edit_graph() -> Unit {
+  compiled_topology_edit.val = None
+  compiled_topology_edit_context.val = None
+  compiled_topology_edit_output.val = None
+  compiled_topology_edit_sample_rate.val = 0.0
+  compiled_topology_edit_block_size.val = 0
 }
 
 ///|

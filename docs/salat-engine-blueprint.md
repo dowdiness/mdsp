@@ -217,6 +217,8 @@ Current implemented surface:
   current terminal-stereo slice, including browser proof in the AudioWorklet
 - `CompiledDspTopologyController` now adds a first narrow mono topology-edit
   layer above hot-swap with transactional node replacement
+- The browser prototype now also proves that mono topology-edit path in the
+  AudioWorklet via a dedicated wrapper mode
 - Topological sorting, graph validation, and runtime control for the current
   graph paths
 - Integration coverage for compiled mono voice paths, runtime retuning, and the

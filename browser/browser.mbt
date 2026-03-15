@@ -26,7 +26,13 @@ const BROWSER_COMPILED_FILTER_Q : Double = 0.707
 const BROWSER_COMPILED_DELAY_CAPACITY : Int = 128
 
 ///|
-const BROWSER_COMPILED_DELAY_SAMPLES : Int = 24
+const BROWSER_COMPILED_DELAY_SAMPLES : Int = 0
+
+///|
+const BROWSER_COMPILED_OSC_GAIN : Double = 0.2
+
+///|
+const BROWSER_COMPILED_MAX_FEEDBACK_GAIN : Double = 0.95
 
 ///|
 let compiled_graph : @ref.Ref[@lib.CompiledDsp?] = @ref.new(None)
@@ -152,15 +158,19 @@ pub fn process_compiled_stereo_block(
   }
   let graph = compiled_stereo_graph.val.unwrap()
   if !graph.apply_controls([
-      @lib.GraphControl::set_param(0, @lib.GraphParamSlot::Value0, freq),
-      @lib.GraphControl::set_param(1, @lib.GraphParamSlot::Value0, pan),
+      @lib.GraphControl::set_param(1, @lib.GraphParamSlot::Value0, freq),
       @lib.GraphControl::set_param(
-        2,
+        5,
+        @lib.GraphParamSlot::Value0,
+        bounded_feedback_gain(gain),
+      ),
+      @lib.GraphControl::set_param(6, @lib.GraphParamSlot::Value0, pan),
+      @lib.GraphControl::set_param(
+        7,
         @lib.GraphParamSlot::DelaySamples,
         delay_samples,
       ),
-      @lib.GraphControl::set_param(3, @lib.GraphParamSlot::Value0, cutoff),
-      @lib.GraphControl::set_param(4, @lib.GraphParamSlot::Value0, gain),
+      @lib.GraphControl::set_param(8, @lib.GraphParamSlot::Value0, cutoff),
     ]) {
     return false
   }
@@ -239,25 +249,26 @@ fn ensure_compiled_stereo_graph(sample_rate : Double, block_size : Int) -> Bool 
   let left = @lib.AudioBuffer::filled(block_size)
   let right = @lib.AudioBuffer::filled(block_size)
   let nodes = [
-    @lib.DspNode::oscillator(
-      @lib.Waveform::Triangle,
-      BROWSER_COMPILED_DEFAULT_FREQ,
-    ),
-    @lib.DspNode::pan(0, BROWSER_COMPILED_DEFAULT_PAN),
+    @lib.DspNode::constant(1.0),
+    @lib.DspNode::oscillator(@lib.Waveform::Sine, BROWSER_COMPILED_DEFAULT_FREQ),
+    @lib.DspNode::gain(1, BROWSER_COMPILED_OSC_GAIN),
+    @lib.DspNode::mix(0, 2),
+    @lib.DspNode::mix(3, 5),
+    @lib.DspNode::gain(4, BROWSER_COMPILED_DEFAULT_GAIN),
+    @lib.DspNode::pan(5, BROWSER_COMPILED_DEFAULT_PAN),
     @lib.DspNode::stereo_delay(
-      1,
+      6,
       BROWSER_COMPILED_DELAY_CAPACITY,
       delay_samples=BROWSER_COMPILED_DELAY_SAMPLES,
     ),
     @lib.DspNode::stereo_biquad(
-      2,
+      7,
       @lib.BiquadMode::LowPass,
       BROWSER_COMPILED_DEFAULT_CUTOFF,
       BROWSER_COMPILED_FILTER_Q,
     ),
-    @lib.DspNode::stereo_gain(3, BROWSER_COMPILED_DEFAULT_GAIN),
-    @lib.DspNode::stereo_clip(4, BROWSER_COMPILED_CLIP_THRESHOLD),
-    @lib.DspNode::stereo_output(5),
+    @lib.DspNode::stereo_clip(8, BROWSER_COMPILED_CLIP_THRESHOLD),
+    @lib.DspNode::stereo_output(9),
   ]
   match @lib.CompiledStereoDsp::compile(nodes, context) {
     Some(graph) => {
@@ -273,6 +284,19 @@ fn ensure_compiled_stereo_graph(sample_rate : Double, block_size : Int) -> Bool 
       reset_compiled_stereo_graph()
       false
     }
+  }
+}
+
+///|
+fn bounded_feedback_gain(gain : Double) -> Double {
+  if gain.is_nan() || gain.is_inf() {
+    BROWSER_COMPILED_DEFAULT_GAIN
+  } else if gain < 0.0 {
+    0.0
+  } else if gain > BROWSER_COMPILED_MAX_FEEDBACK_GAIN {
+    BROWSER_COMPILED_MAX_FEEDBACK_GAIN
+  } else {
+    gain
   }
 }
 

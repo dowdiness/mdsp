@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mdsp Phase 2 Stereo Effects Browser Proof</title>
+  <title>mdsp Phase 2 Stereo Feedback Browser Proof</title>
   <style>
     :root {
       --bg: #f3efe5;
@@ -232,15 +232,15 @@
 </head>
 <body>
   <main>
-    <h1>MoonBit DSP<br>Phase 2 Stereo Effects</h1>
+    <h1>MoonBit DSP<br>Phase 2 Stereo Feedback</h1>
     <p>
       This page proves the browser pipeline now runs the compiled graph runtime
       itself. The AudioWorklet calls a fixed MoonBit
-      <code>CompiledStereoDsp</code> graph with live
-      <code>StereoDelay</code> and <code>StereoBiquad</code> processing once
-      per render quantum and reads the generated left and right blocks back
-      sample by sample for output, metering, delay/filter retuning, and pan
-      verification.
+      <code>CompiledStereoDsp</code> graph that contains a mono
+      <code>z^-1</code> feedback loop before <code>Pan</code>. The worklet
+      reads the generated left and right blocks back sample by sample for
+      output, metering, exact recurrence checks, live loop-gain retuning, and
+      stereo pan verification.
     </p>
 
     <div class="buttons">
@@ -295,10 +295,10 @@
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Frequency</strong>
-          <span><span id="freqValue">440</span> Hz</span>
+          <strong>Input</strong>
+          <span><span id="freqValue">440</span> / 440</span>
         </div>
-        <input id="freqSlider" type="range" min="20" max="2000" value="440" step="1">
+        <input id="freqSlider" type="range" min="0" max="2000" value="440" step="1">
       </div>
 
       <div class="slider-card">
@@ -312,14 +312,14 @@
       <div class="slider-card">
         <div class="slider-row">
           <strong>Delay</strong>
-          <span><span id="delayValue">24</span> samples</span>
+          <span><span id="delayValue">0</span> samples</span>
         </div>
-        <input id="delaySlider" type="range" min="0" max="128" value="24" step="1">
+        <input id="delaySlider" type="range" min="0" max="128" value="0" step="1">
       </div>
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Gain</strong>
+          <strong>Loop Gain</strong>
           <span><span id="gainValue">30</span>%</span>
         </div>
         <input id="gainSlider" type="range" min="0" max="100" value="30" step="1">
@@ -363,6 +363,7 @@
     const statusBox = document.getElementById("status");
     const scopeCtx = scope.getContext("2d");
     const urlParams = new URLSearchParams(window.location.search);
+    const initialFreq = Number(urlParams.get("freq"));
     const initialDelaySamples = Number(urlParams.get("delaySamples"));
 
     let audioContext = null;
@@ -376,6 +377,10 @@
     let leftAnalyserData = null;
     let rightAnalyserData = null;
     let meterFrame = 0;
+
+    if (Number.isFinite(initialFreq) && initialFreq >= 0 && initialFreq <= 2000) {
+      freqSlider.value = String(initialFreq);
+    }
 
     if (Number.isFinite(initialDelaySamples) && initialDelaySamples >= 0 && initialDelaySamples <= 128) {
       delaySlider.value = String(Math.trunc(initialDelaySamples));

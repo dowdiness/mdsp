@@ -15,6 +15,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.telemetryCountdown = 0;
     this.telemetryWarmupBlocks = 16;
     this.telemetrySequence = 0;
+    this.firstBlockTelemetryReported = false;
 
     this.port.onmessage = (event) => {
       const data = event.data;
@@ -235,16 +236,6 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
   }
 
   reportBlockTelemetry(left, right) {
-    if (this.telemetryWarmupBlocks > 0) {
-      this.telemetryWarmupBlocks -= 1;
-    } else {
-      if (this.telemetryCountdown > 0) {
-        this.telemetryCountdown -= 1;
-        return;
-      }
-      this.telemetryCountdown = 7;
-    }
-
     let leftPeak = 0;
     let rightPeak = 0;
     for (let index = 0; index < left.length; index += 1) {
@@ -264,6 +255,36 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       leftPreview.push(left[index]);
       rightPreview.push(right ? right[index] : left[index]);
     }
+
+    if (!this.firstBlockTelemetryReported) {
+      this.firstBlockTelemetryReported = true;
+      this.telemetrySequence += 1;
+      this.port.postMessage({
+        type: "telemetry",
+        sequence: this.telemetrySequence,
+        freq: this.freq,
+        gain: this.gain,
+        pan: this.pan,
+        delaySamples: this.delaySamples,
+        cutoff: this.cutoff,
+        overallPeak: Math.max(leftPeak, rightPeak),
+        leftPeak,
+        rightPeak,
+        leftPreview,
+        rightPreview,
+      });
+      return;
+    }
+
+    if (this.telemetryWarmupBlocks > 0) {
+      this.telemetryWarmupBlocks -= 1;
+      return;
+    }
+    if (this.telemetryCountdown > 0) {
+      this.telemetryCountdown -= 1;
+      return;
+    }
+    this.telemetryCountdown = 7;
 
     this.telemetrySequence += 1;
 

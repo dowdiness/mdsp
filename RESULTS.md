@@ -15,8 +15,10 @@ current Phase 2 graph-compiler checkpoint.
 - `web/index.html` and `web/processor.js` now provide the current Phase 2
   browser proof: the AudioWorklet runs a fixed MoonBit `CompiledStereoDsp`
   graph once per render quantum and reads its left/right output blocks back for
-  playback, metering, filter retuning, and pan verification. That fixed graph
-  now includes both `StereoDelay` and `StereoBiquad`.
+  playback, metering, exact feedback-recurrence checks, loop-gain retuning,
+  and pan verification. That fixed graph now proves the accepted mono-valued
+  `z^-1` feedback slice before `Pan` while still exercising `StereoDelay` and
+  `StereoBiquad` on the main browser wasm path.
 - `serve.sh` copies the browser wrapper `.wasm` into `web/` and starts a local
   server.
 - Browser validation is complete for the current prototype.
@@ -74,6 +76,17 @@ Confirmed on 2026-03-14:
 - Browser automation confirms that fallback route renders the expected first
   `z^-1` recurrence samples and that a live loop-gain retune changes the next
   block while staying finite.
+
+Confirmed on 2026-03-15:
+
+- The main browser `CompiledStereoDsp` proof graph now runs a deterministic
+  mono `z^-1` feedback loop before `Pan` instead of the earlier acyclic
+  delay/filter chain.
+- Browser automation confirms the first rendered stereo block matches the
+  expected center-pan recurrence from that feedback graph.
+- Browser automation also confirms `StereoDelay` startup offset, live
+  `StereoBiquad` cutoff retuning, bounded loop-gain retuning, and hard-left /
+  center / hard-right pan behavior on the same stereo feedback path.
 
 ## Phase 1 Completion
 

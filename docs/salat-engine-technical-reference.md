@@ -732,6 +732,10 @@ Current runtime control support:
   through the wasm-side stereo-init-failure fallback route, checking both the
   first-block `z^-1` recurrence preview and a live loop-gain retune in the
   AudioWorklet pipeline
+- browser automation now also exercises the `CompiledStereoDsp` feedback path
+  on the main browser wasm, checking the first-block center-pan recurrence of a
+  mono `z^-1` loop before `Pan` plus live loop-gain retuning and directional
+  pan behavior in the AudioWorklet pipeline
 
 Current `set_param(node_index, slot, value)` support matrix:
 

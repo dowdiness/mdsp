@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const PAN_CENTER_GAIN = 0.7071067811865476;
+
 async function setRangeValue(page, selector, value) {
   await page.locator(selector).evaluate((element, nextValue) => {
     element.value = String(nextValue);
@@ -32,12 +34,38 @@ function previewEnergy(samples) {
   return samples.reduce((sum, sample) => sum + Math.abs(sample), 0);
 }
 
+function previewVariation(samples) {
+  let total = 0;
+  for (let index = 1; index < samples.length; index += 1) {
+    total += Math.abs(samples[index] - samples[index - 1]);
+  }
+  return total;
+}
+
 async function startAudio(page, path) {
   await page.goto(path);
   await page.click('#startBtn');
 }
 
-test('browser demo first render proves StereoDelay startup offset', async ({ page }) => {
+test('browser demo first render proves CompiledStereoDsp feedback recurrence', async ({ page }) => {
+  await startAudio(page, '/?freq=0&delaySamples=0');
+  await expect(page.locator('#status')).toContainText('CompiledStereoDsp block runtime');
+  await expect
+    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const telemetry = await firstTelemetry(page);
+
+  expect(telemetry.freq).toBeCloseTo(0, 9);
+  expect(telemetry.leftPreview[0]).toBeGreaterThan(0.001);
+  expect(telemetry.leftPreview[1]).toBeGreaterThan(telemetry.leftPreview[0]);
+  expect(telemetry.leftPreview[2]).toBeGreaterThan(telemetry.leftPreview[1]);
+  expect(telemetry.leftPreview[3]).toBeGreaterThan(telemetry.leftPreview[2]);
+  expect(telemetry.leftPreview[0]).toBeLessThan(0.3 * PAN_CENTER_GAIN);
+  expect(telemetry.rightPreview[0]).toBeCloseTo(telemetry.leftPreview[0], 9);
+  expect(telemetry.rightPreview[3]).toBeCloseTo(telemetry.leftPreview[3], 9);
+});
+
+test('browser demo first render proves StereoDelay startup offset on feedback graph', async ({ page }) => {
   await startAudio(page, '/?delaySamples=0');
   await expect
     .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
@@ -58,39 +86,107 @@ test('browser demo first render proves StereoDelay startup offset', async ({ pag
   expect(delayedRightEnergy).toBeLessThan(0.000000001);
 });
 
-test('browser demo reports CompiledStereoDsp mode and reacts to pan', async ({ page }) => {
+test('browser demo retunes stereo feedback gain and reacts to pan', async ({ page }) => {
   await startAudio(page, '/');
   await expect(page.locator('#status')).toContainText('CompiledStereoDsp block runtime');
-
   await expect
-    .poll(async () => (await renderPeaks(page)).overall, { timeout: 10_000 })
-    .toBeGreaterThan(0.02);
+    .poll(async () => (await currentTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const initialTelemetry = await currentTelemetry(page);
+
+  await setRangeValue(page, '#gainSlider', 50);
+  await expect(page.locator('#gainValue')).toHaveText('50');
+  await expect
+    .poll(async () => {
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return telemetry.sequence > initialTelemetry.sequence &&
+        Math.abs(telemetry.gain - 0.5) < 0.000001
+        ? telemetry.overallPeak - initialTelemetry.overallPeak
+        : 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(0.4);
+  const retunedTelemetry = await currentTelemetry(page);
+  expect(retunedTelemetry.gain).toBeCloseTo(0.5, 6);
+  expect(retunedTelemetry.overallPeak).toBeGreaterThan(0.7);
+  expect(retunedTelemetry.overallPeak).toBeLessThan(1.01);
+  expect(retunedTelemetry.leftPreview.every(Number.isFinite)).toBeTruthy();
 
   await setRangeValue(page, '#freqSlider', 660);
-  await setRangeValue(page, '#cutoffSlider', 180);
-  await setRangeValue(page, '#gainSlider', 55);
-  await expect(page.locator('#cutoffValue')).toHaveText('180');
-  await expect(page.locator('#gainValue')).toHaveText('55');
   await expect(page.locator('#freqValue')).toHaveText('660');
   await expect
-    .poll(async () => (await renderPeaks(page)).overall, { timeout: 10_000 })
-    .toBeGreaterThan(0.02);
-  const lowCutoffPeak = (await renderPeaks(page)).overall;
+    .poll(async () => {
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return Math.abs(telemetry.freq - 660) < 0.000001 ? telemetry.overallPeak : 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(0.01);
+
+  await setRangeValue(page, '#delaySlider', 0);
+  await expect(page.locator('#delayValue')).toHaveText('0');
+  await expect
+    .poll(async () => {
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return -1;
+      }
+      return Math.abs(telemetry.delaySamples);
+    }, { timeout: 10_000 })
+    .toBeLessThan(0.000001);
+
+  await setRangeValue(page, '#cutoffSlider', 180);
+  await expect(page.locator('#cutoffValue')).toHaveText('180');
+  await expect
+    .poll(async () => {
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return Math.abs(telemetry.cutoff - 180) < 0.000001
+        ? previewVariation(telemetry.leftPreview)
+        : 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(0.0001);
+  const lowCutoffTelemetry = await currentTelemetry(page);
+  const lowCutoffVariation = previewVariation(lowCutoffTelemetry.leftPreview);
 
   await setRangeValue(page, '#cutoffSlider', 4000);
   await expect(page.locator('#cutoffValue')).toHaveText('4000');
   await expect
-    .poll(async () => (await renderPeaks(page)).overall - lowCutoffPeak, { timeout: 10_000 })
-    .toBeGreaterThan(0.03);
+    .poll(async () => {
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return Math.abs(telemetry.cutoff - 4000) < 0.000001
+        ? previewVariation(telemetry.leftPreview) - lowCutoffVariation
+        : 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(0.0005);
+  const highCutoffTelemetry = await currentTelemetry(page);
+  const highCutoffVariation = previewVariation(highCutoffTelemetry.leftPreview);
+
+  expect(previewEnergy(lowCutoffTelemetry.leftPreview)).toBeGreaterThan(0.01);
+  expect(highCutoffVariation).toBeGreaterThan(lowCutoffVariation);
 
   await setRangeValue(page, '#panSlider', -100);
   await expect(page.locator('#panValue')).toHaveText('-100');
   await expect
     .poll(async () => {
-      const { left, right } = await renderPeaks(page);
-      return left - right;
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return telemetry.pan <= -1 &&
+        telemetry.sequence > retunedTelemetry.sequence
+        ? telemetry.leftPeak - telemetry.rightPeak
+        : 0;
     }, { timeout: 10_000 })
-    .toBeGreaterThan(0.2);
+    .toBeGreaterThan(0.8);
 
   await setRangeValue(page, '#panSlider', 0);
   await expect(page.locator('#panValue')).toHaveText('0');
@@ -105,14 +201,17 @@ test('browser demo reports CompiledStereoDsp mode and reacts to pan', async ({ p
   await expect(page.locator('#panValue')).toHaveText('100');
   await expect
     .poll(async () => {
-      const { left, right } = await renderPeaks(page);
-      return right - left;
+      const telemetry = await currentTelemetry(page);
+      if (!telemetry) {
+        return 0;
+      }
+      return telemetry.pan >= 1 ? telemetry.rightPeak - telemetry.leftPeak : 0;
     }, { timeout: 10_000 })
-    .toBeGreaterThan(0.2);
+    .toBeGreaterThan(0.8);
 });
 
 test('browser demo falls back to CompiledDsp when stereo init fails', async ({ page }) => {
-  await startAudio(page, '/?forceStereoInitFailure=1');
+  await startAudio(page, '/?forceStereoInitFailure=1&freq=440');
   await expect(page.locator('#status')).toContainText('CompiledDsp block runtime');
   await expect(page.locator('#status')).not.toContainText('Processor init failed');
   await expect

@@ -778,9 +778,11 @@ Current limits:
   mono/stereo shape change is rejected
 - feedback graphs currently use a sample-by-sample fallback inside
   `CompiledDsp` and `CompiledStereoDsp` whenever feedback edges are present
-- graph hot-swap is now narrow: `CompiledDspHotSwap` supports mono
-  `CompiledDsp` replacement only, with block-boundary `queue_swap(...)` and an
-  optional equal-power crossfade
+- graph hot-swap is now narrow but no longer mono-only:
+  `CompiledDspHotSwap` supports mono `CompiledDsp` replacement and
+  `CompiledStereoDspHotSwap` supports terminal-stereo `CompiledStereoDsp`
+  replacement, both with block-boundary `queue_swap(...)` and optional
+  equal-power crossfade
 - runtime parameter updates are partial, not universal across node kinds
 
 ### 3.5.2 Control Frames
@@ -822,7 +824,8 @@ Current limits of the control-frame model:
 
 ### 3.6 Graph Hot-Swap
 
-The current implementation provides a narrow mono-only hot-swap wrapper:
+The current implementation provides narrow mono and terminal-stereo hot-swap
+wrappers:
 
 ```moonbit
 let active = CompiledDsp::compile(old_nodes, context).unwrap()
@@ -833,9 +836,22 @@ assert(hot_swap.queue_swap(replacement))
 hot_swap.process(context, output)
 ```
 
+```moonbit
+let active_stereo = CompiledStereoDsp::compile(old_nodes, context).unwrap()
+let replacement_stereo = CompiledStereoDsp::compile(new_nodes, context).unwrap()
+let hot_swap_stereo = CompiledStereoDspHotSwap::from_graph(
+  active_stereo,
+  crossfade_samples=128,
+)
+
+assert(hot_swap_stereo.queue_swap(replacement_stereo))
+hot_swap_stereo.process(context, left_output, right_output)
+```
+
 Current semantics:
 
 - `CompiledDspHotSwap` owns one active mono `CompiledDsp`
+- `CompiledStereoDspHotSwap` owns one active terminal-stereo `CompiledStereoDsp`
 - `queue_swap(...)` stages one replacement graph for the next `process(...)`
   call
 - replacement graphs must match the active graph's compile-time sample rate and
@@ -855,17 +871,17 @@ Current semantics:
 
 Current limits:
 
-- mono `CompiledDsp` only; there is no `CompiledStereoDsp` hot-swap yet
 - no state migration between old and new graphs; the replacement graph starts
   from its own freshly compiled internal state
 - in-flight control mirroring requires both graphs to accept the same
   node-index / slot updates during the crossfade window
 - queued replacement is a whole compiled graph, not a `GraphControl`
   topology-edit frame
-- browser/AudioWorklet hot-swap proof is now narrow: the `browser/` wrapper
-  exports a dedicated mono `CompiledDspHotSwap` proof path and Playwright
-  checks both the mixed crossfade block and the settled replacement block in
-  the AudioWorklet pipeline
+- browser/AudioWorklet hot-swap proof is now narrow but present for both paths:
+  the `browser/` wrapper exports dedicated mono `CompiledDspHotSwap` and
+  terminal-stereo `CompiledStereoDspHotSwap` proof paths, and Playwright checks
+  both the mixed crossfade block and the settled replacement block in the
+  AudioWorklet pipeline
 
 ### 3.7 Multichannel Expansion (SuperCollider-Style)
 

@@ -28,6 +28,9 @@ current Phase 2 graph-compiler checkpoint.
 - The browser wrapper now also exports a dedicated mono hot-swap proof path,
   and browser automation confirms the AudioWorklet runs both the mixed
   crossfade block and the settled replacement block.
+- `CompiledStereoDspHotSwap` now brings the same hot-swap model to
+  terminal-stereo graphs, and the browser wrapper exports a dedicated stereo
+  hot-swap proof path as well.
 
 ## Confirmed Outcome
 
@@ -164,6 +167,9 @@ Confirmed on 2026-03-15:
   path, and browser automation confirms a queued swap yields one mixed
   crossfade block followed by the settled replacement block in the
   AudioWorklet.
+- `CompiledStereoDspHotSwap` now adds stereo hot-swap parity for
+  `CompiledStereoDsp`, including mirrored runtime controls during crossfade and
+  browser proof of the mixed and settled stereo swap blocks.
 
 Authoritative detailed Phase 2 graph status now lives in
 `docs/salat-engine-technical-reference.md`, including:

@@ -35,6 +35,10 @@ async function hotSwapQueued(page) {
   return page.evaluate(() => window.__mdspHotSwapQueued);
 }
 
+async function stereoHotSwapQueued(page) {
+  return page.evaluate(() => window.__mdspStereoHotSwapQueued);
+}
+
 async function telemetryHistory(page) {
   return page.evaluate(() => window.__mdspTelemetryHistory);
 }
@@ -56,6 +60,10 @@ function hotSwapExpectedSample(index) {
   const oldGain = Math.cos(progress * Math.PI * 0.5);
   const newGain = Math.sin(progress * Math.PI * 0.5);
   return (0.25 * oldGain) + (0.75 * newGain);
+}
+
+function stereoHotSwapExpectedSample(index) {
+  return hotSwapExpectedSample(index) * PAN_CENTER_GAIN;
 }
 
 async function startAudio(page, path) {
@@ -321,4 +329,79 @@ test('browser demo proves CompiledDspHotSwap crossfade in the worklet', async ({
   expect(settledTelemetry.leftPreview.every(sample => Math.abs(sample - 0.75) < 0.000001)).toBeTruthy();
   expect(settledTelemetry.rightPreview.every(sample => Math.abs(sample - 0.75) < 0.000001)).toBeTruthy();
   expect(settledTelemetry.overallPeak).toBeCloseTo(0.75, 6);
+});
+
+test('browser demo proves CompiledStereoDspHotSwap crossfade in the worklet', async ({ page }) => {
+  await startAudio(page, '/?hotSwapStereo=1');
+  await expect(page.locator('#status')).toContainText('CompiledStereoDspHotSwap block runtime');
+  await expect
+    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const initialTelemetry = await firstTelemetry(page);
+
+  expect(
+    initialTelemetry.leftPreview.every(
+      sample => Math.abs(sample - (0.25 * PAN_CENTER_GAIN)) < 0.000001,
+    ),
+  ).toBeTruthy();
+  expect(
+    initialTelemetry.rightPreview.every(
+      sample => Math.abs(sample - (0.25 * PAN_CENTER_GAIN)) < 0.000001,
+    ),
+  ).toBeTruthy();
+
+  await page.evaluate(() => {
+    window.__mdspNode.port.postMessage({ type: 'queue-stereo-hot-swap' });
+  });
+  await expect
+    .poll(async () => (await stereoHotSwapQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })
+    .toBeGreaterThanOrEqual(initialTelemetry.sequence);
+  const queueAck = await stereoHotSwapQueued(page);
+
+  await expect
+    .poll(async () => {
+      const history = await telemetryHistory(page);
+      const match = history.find((telemetry) =>
+        telemetry.sequence > queueAck.telemetrySequence &&
+        telemetry.leftPreview.some(sample =>
+          sample > (0.25 * PAN_CENTER_GAIN + 0.000001) &&
+          sample < (0.75 * PAN_CENTER_GAIN)));
+      return match?.sequence || 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(queueAck.telemetrySequence);
+  const crossfadeTelemetry = (await telemetryHistory(page)).find((telemetry) =>
+    telemetry.sequence > queueAck.telemetrySequence &&
+    telemetry.leftPreview.some(sample =>
+      sample > (0.25 * PAN_CENTER_GAIN + 0.000001) &&
+      sample < (0.75 * PAN_CENTER_GAIN)));
+
+  for (let index = 0; index < crossfadeTelemetry.leftPreview.length; index += 1) {
+    expect(crossfadeTelemetry.leftPreview[index]).toBeCloseTo(stereoHotSwapExpectedSample(index), 6);
+    expect(crossfadeTelemetry.rightPreview[index]).toBeCloseTo(stereoHotSwapExpectedSample(index), 6);
+  }
+
+  await expect
+    .poll(async () => {
+      const history = await telemetryHistory(page);
+      const match = history.find((telemetry) =>
+        telemetry.sequence > crossfadeTelemetry.sequence &&
+        telemetry.leftPreview.every(
+          sample => Math.abs(sample - (0.75 * PAN_CENTER_GAIN)) < 0.000001,
+        ) &&
+        telemetry.rightPreview.every(
+          sample => Math.abs(sample - (0.75 * PAN_CENTER_GAIN)) < 0.000001,
+        ));
+      return match?.sequence || 0;
+    }, { timeout: 10_000 })
+    .toBeGreaterThan(crossfadeTelemetry.sequence);
+  const settledTelemetry = (await telemetryHistory(page)).find((telemetry) =>
+    telemetry.sequence > crossfadeTelemetry.sequence &&
+    telemetry.leftPreview.every(
+      sample => Math.abs(sample - (0.75 * PAN_CENTER_GAIN)) < 0.000001,
+    ) &&
+    telemetry.rightPreview.every(
+      sample => Math.abs(sample - (0.75 * PAN_CENTER_GAIN)) < 0.000001,
+    ));
+
+  expect(settledTelemetry.overallPeak).toBeCloseTo(0.75 * PAN_CENTER_GAIN, 6);
 });

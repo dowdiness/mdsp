@@ -100,6 +100,13 @@ pub fn CompiledStereoDsp::gate_on(Self, Int) -> Bool
 pub fn CompiledStereoDsp::process(Self, DspContext, AudioBuffer, AudioBuffer) -> Unit
 pub fn CompiledStereoDsp::set_param(Self, Int, GraphParamSlot, Double) -> Bool
 
+type CompiledStereoDspHotSwap
+pub fn CompiledStereoDspHotSwap::apply_control(Self, GraphControl) -> Bool
+pub fn CompiledStereoDspHotSwap::apply_controls(Self, Array[GraphControl]) -> Bool
+pub fn CompiledStereoDspHotSwap::from_graph(CompiledStereoDsp, crossfade_samples? : Int) -> Self
+pub fn CompiledStereoDspHotSwap::process(Self, DspContext, AudioBuffer, AudioBuffer) -> Unit
+pub fn CompiledStereoDspHotSwap::queue_swap(Self, CompiledStereoDsp) -> Bool
+
 pub struct DelayLine {
   buffer : FixedArray[Double]
   mut write_pos : Int

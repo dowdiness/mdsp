@@ -10,7 +10,9 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.initError = null;
     this.wasm = null;
     this.prefersCompiledHotSwap = Boolean(options?.processorOptions?.useCompiledHotSwap);
+    this.prefersCompiledStereoHotSwap = Boolean(options?.processorOptions?.useCompiledStereoHotSwap);
     this.usesCompiledHotSwap = false;
+    this.usesCompiledStereoHotSwap = false;
     this.usesCompiledStereoGraph = false;
     this.usesCompiledGraph = false;
     this.reportedRuntimeError = false;
@@ -46,6 +48,19 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
             });
           } else {
             this.port.postMessage({ type: "error", message: "CompiledDspHotSwap queue_swap failed" });
+          }
+        }
+      } else if (data.type === "queue-stereo-hot-swap") {
+        if (this.usesCompiledStereoHotSwap && this.wasm && typeof this.wasm.queue_compiled_stereo_hot_swap === "function") {
+          const queued = this.wasm.queue_compiled_stereo_hot_swap();
+          if (queued) {
+            this.forceTelemetryBlocks = 2;
+            this.port.postMessage({
+              type: "stereo-hot-swap-queued",
+              telemetrySequence: this.telemetrySequence,
+            });
+          } else {
+            this.port.postMessage({ type: "error", message: "CompiledStereoDspHotSwap queue_swap failed" });
           }
         }
       }
@@ -86,6 +101,13 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         typeof this.wasm.compiled_stereo_left_sample === "function" &&
         typeof this.wasm.compiled_stereo_right_sample === "function";
 
+      const supportsCompiledStereoHotSwap =
+        typeof this.wasm.init_compiled_stereo_hot_swap_graph === "function" &&
+        typeof this.wasm.queue_compiled_stereo_hot_swap === "function" &&
+        typeof this.wasm.process_compiled_stereo_hot_swap_block === "function" &&
+        typeof this.wasm.compiled_stereo_hot_swap_left_sample === "function" &&
+        typeof this.wasm.compiled_stereo_hot_swap_right_sample === "function";
+
       const supportsCompiledHotSwap =
         typeof this.wasm.init_compiled_hot_swap_graph === "function" &&
         typeof this.wasm.queue_compiled_hot_swap === "function" &&
@@ -98,6 +120,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         typeof this.wasm.compiled_output_sample === "function";
 
       this.usesCompiledHotSwap = false;
+      this.usesCompiledStereoHotSwap = false;
       this.usesCompiledStereoGraph = false;
       this.usesCompiledGraph = false;
 
@@ -108,14 +131,30 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         }
       }
 
-      if (!this.usesCompiledHotSwap && supportsCompiledStereoGraph) {
+      if (
+        !this.usesCompiledHotSwap &&
+        this.prefersCompiledStereoHotSwap &&
+        supportsCompiledStereoHotSwap
+      ) {
+        const initialized = this.wasm.init_compiled_stereo_hot_swap_graph(sampleRate, 128);
+        if (initialized) {
+          this.usesCompiledStereoHotSwap = true;
+        }
+      }
+
+      if (!this.usesCompiledHotSwap && !this.usesCompiledStereoHotSwap && supportsCompiledStereoGraph) {
         const initialized = this.wasm.init_compiled_stereo_graph(sampleRate, 128);
         if (initialized) {
           this.usesCompiledStereoGraph = true;
         }
       }
 
-      if (!this.usesCompiledHotSwap && !this.usesCompiledStereoGraph && supportsCompiledGraph) {
+      if (
+        !this.usesCompiledHotSwap &&
+        !this.usesCompiledStereoHotSwap &&
+        !this.usesCompiledStereoGraph &&
+        supportsCompiledGraph
+      ) {
         const initialized = this.wasm.init_compiled_graph(sampleRate, 128);
         if (initialized) {
           this.usesCompiledGraph = true;
@@ -124,15 +163,22 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
 
       if (
         !this.usesCompiledHotSwap &&
+        !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         !this.usesCompiledGraph &&
-        (supportsCompiledHotSwap || supportsCompiledStereoGraph || supportsCompiledGraph)
+        (
+          supportsCompiledHotSwap ||
+          supportsCompiledStereoHotSwap ||
+          supportsCompiledStereoGraph ||
+          supportsCompiledGraph
+        )
       ) {
         throw new Error("Compiled browser graph failed to initialize");
       }
 
       if (
         !this.usesCompiledHotSwap &&
+        !this.usesCompiledStereoHotSwap &&
         !this.usesCompiledStereoGraph &&
         !this.usesCompiledGraph &&
         typeof this.wasm.tick !== "function" &&
@@ -149,6 +195,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         exports: Object.keys(this.wasm),
         mode: this.usesCompiledHotSwap
           ? "compiled-hot-swap-dsp"
+          : this.usesCompiledStereoHotSwap
+            ? "compiled-stereo-hot-swap-dsp"
           : this.usesCompiledStereoGraph
           ? "compiled-stereo-dsp"
           : this.usesCompiledGraph
@@ -201,6 +249,34 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         left[index] = sample;
         if (right) {
           right[index] = sample;
+        }
+      }
+
+      this.reportBlockTelemetry(left, right);
+      return true;
+    }
+
+    if (this.usesCompiledStereoHotSwap) {
+      const processed = this.wasm.process_compiled_stereo_hot_swap_block(
+        sampleRate,
+        left.length,
+      );
+      if (!processed) {
+        this.fillSilence(left, right);
+        if (!this.reportedRuntimeError) {
+          this.reportedRuntimeError = true;
+          this.port.postMessage({
+            type: "error",
+            message: "CompiledStereoDspHotSwap browser block processing failed",
+          });
+        }
+        return true;
+      }
+
+      for (let index = 0; index < left.length; index += 1) {
+        left[index] = this.wasm.compiled_stereo_hot_swap_left_sample(index);
+        if (right) {
+          right[index] = this.wasm.compiled_stereo_hot_swap_right_sample(index);
         }
       }
 

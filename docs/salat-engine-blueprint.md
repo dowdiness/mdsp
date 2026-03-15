@@ -219,7 +219,8 @@ Current implemented surface:
   layer above hot-swap with transactional node replacement, input rewiring, and
   append-only unary node insertion plus mono-only unary deletion
 - The browser prototype now also proves that mono topology-edit path in the
-  AudioWorklet via a dedicated wrapper mode
+  AudioWorklet via a dedicated wrapper mode with explicit insert and delete
+  queue operations
 - `CompiledStereoDspTopologyController` now brings the same narrow
   topology-edit model to terminal-stereo graphs, including browser proof in the
   AudioWorklet

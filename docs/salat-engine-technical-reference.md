@@ -937,9 +937,12 @@ Current limits:
 - browser/AudioWorklet topology-edit proof is now present for the mono slice:
   the `browser/` wrapper exports a dedicated `CompiledDspTopologyController`
   proof path, and Playwright checks an `InsertNode` / `DeleteNode` round-trip:
-  the first queued edit inserts one unary node with the expected mixed and
-  settled rebuilt blocks, and the second queued edit deletes that node and
-  returns the browser output to the original baseline shape
+  - `queue_compiled_topology_edit()` explicitly queues the fixed unary insert
+  - `queue_compiled_topology_delete_edit()` explicitly queues the matching
+    unary delete back to the baseline graph
+  - the first queued edit inserts one unary node with the expected mixed and
+    settled rebuilt blocks, and the second queued edit deletes that node and
+    returns the browser output to the original baseline shape
   - terminal-stereo parity now exists through a dedicated
     `CompiledStereoDspTopologyController` browser proof path, with Playwright
     checking the mixed and settled channel-shape transition from a queued

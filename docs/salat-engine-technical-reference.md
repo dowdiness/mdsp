@@ -859,10 +859,11 @@ let topology = CompiledDspTopologyController::from_nodes(
 
 assert(
   topology.queue_topology_edit(
-    GraphTopologyEdit::insert_node(
+    GraphTopologyEdit::delete_node(
+      gain_node,
       output_node,
       GraphTopologyInputSlot::Input0,
-      DspNode::gain(0, 0.5),
+      gain_node,
     ),
   ),
 )
@@ -885,6 +886,8 @@ Current semantics:
   - if the edited node array fails recompilation, nothing is staged
   - `RewireInput` also rejects unsupported input slots for the targeted node
   - `InsertNode` also rejects unsupported unary template nodes
+  - `DeleteNode` also rejects non-unary targets or delete shapes without a
+    single deterministic downstream consumer
 - replacement graphs must match the active graph's compile-time sample rate and
   block capacity
 - `process(...)` runs only the active graph when no swap is pending
@@ -915,9 +918,12 @@ Current limits:
   - `GraphTopologyEdit::rewire_input(...)` retargets one existing input edge
   - `GraphTopologyEdit::insert_node(...)` appends one unary node and retargets
     one existing downstream input to it
+  - `GraphTopologyEdit::delete_node(...)` removes one unary node and retargets
+    one downstream input to a replacement upstream source
   - append-only `InsertNode` keeps existing authoring indices stable during the
     staged swap; the inserted node becomes the new final authoring index
-  - there is still no node delete frame yet
+  - `DeleteNode` compacts authoring indices after removal and is currently
+    mono-only, matching the append-only insert slice rather than stereo parity
   - only one topology replacement may be staged at a time
   - stereo parity exists only for terminal-stereo graphs through
     `CompiledStereoDspTopologyController`
@@ -928,7 +934,7 @@ Current limits:
   AudioWorklet pipeline
 - browser/AudioWorklet topology-edit proof is now present for the mono slice:
   the `browser/` wrapper exports a dedicated `CompiledDspTopologyController`
-  proof path, and Playwright checks that one queued `InsertNode` edit yields
+  proof path, and Playwright checks that one queued `DeleteNode` edit yields
   the expected mixed crossfade block and settled rebuilt block
   - terminal-stereo parity now exists through a dedicated
     `CompiledStereoDspTopologyController` browser proof path, with Playwright

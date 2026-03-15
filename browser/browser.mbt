@@ -47,7 +47,7 @@ const BROWSER_HOT_SWAP_CROSSFADE_SAMPLES : Int = 128
 const BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT : Double = 1.0
 
 ///|
-const BROWSER_TOPOLOGY_EDIT_INSERTED_GAIN : Double = 0.5
+const BROWSER_TOPOLOGY_EDIT_DELETED_GAIN : Double = 0.5
 
 ///|
 const BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES : Int = 128
@@ -331,7 +331,7 @@ pub fn init_compiled_topology_edit_graph(
 }
 
 ///|
-/// Queue the fixed browser topology edit that inserts a gain node before the
+/// Queue the fixed browser topology edit that deletes the gain node before the
 /// output.
 pub fn queue_compiled_topology_edit() -> Bool {
   let topology = match compiled_topology_edit.val {
@@ -339,10 +339,11 @@ pub fn queue_compiled_topology_edit() -> Bool {
     None => return false
   }
   topology.queue_topology_edit(
-    @lib.GraphTopologyEdit::insert_node(
+    @lib.GraphTopologyEdit::delete_node(
       1,
+      2,
       @lib.GraphTopologyInputSlot::Input0,
-      @lib.DspNode::gain(0, BROWSER_TOPOLOGY_EDIT_INSERTED_GAIN),
+      1,
     ),
   )
 }
@@ -665,7 +666,8 @@ fn ensure_compiled_topology_edit_graph(
     @lib.CompiledDspTopologyController::from_nodes(
       [
         @lib.DspNode::constant(BROWSER_TOPOLOGY_EDIT_OLD_CONSTANT),
-        @lib.DspNode::output(0),
+        @lib.DspNode::gain(0, BROWSER_TOPOLOGY_EDIT_DELETED_GAIN),
+        @lib.DspNode::output(1),
       ],
       context,
       crossfade_samples=BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,

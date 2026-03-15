@@ -70,11 +70,11 @@ function hotSwapExpectedSample(index) {
   return (0.25 * oldGain) + (0.75 * newGain);
 }
 
-function topologyInsertExpectedSample(index) {
+function topologyDeleteExpectedSample(index) {
   const progress = index / HOT_SWAP_CROSSFADE_SAMPLES;
   const oldGain = Math.cos(progress * Math.PI * 0.5);
   const newGain = Math.sin(progress * Math.PI * 0.5);
-  return oldGain + (0.5 * newGain);
+  return (0.5 * oldGain) + newGain;
 }
 
 function stereoHotSwapExpectedSample(index) {
@@ -367,8 +367,8 @@ test('browser demo proves CompiledDspTopologyController crossfade in the worklet
     .toBeGreaterThan(0);
   const initialTelemetry = await firstTelemetry(page);
 
-  expect(initialTelemetry.leftPreview.every(sample => Math.abs(sample - 1.0) < 0.000001)).toBeTruthy();
-  expect(initialTelemetry.rightPreview.every(sample => Math.abs(sample - 1.0) < 0.000001)).toBeTruthy();
+  expect(initialTelemetry.leftPreview.every(sample => Math.abs(sample - 0.5) < 0.000001)).toBeTruthy();
+  expect(initialTelemetry.rightPreview.every(sample => Math.abs(sample - 0.5) < 0.000001)).toBeTruthy();
 
   await page.evaluate(() => {
     window.__mdspNode.port.postMessage({ type: 'queue-topology-edit' });
@@ -383,19 +383,19 @@ test('browser demo proves CompiledDspTopologyController crossfade in the worklet
       const history = await telemetryHistory(page);
       const match = history.find((telemetry) =>
         telemetry.sequence > queueAck.telemetrySequence &&
-        Math.abs(telemetry.leftPreview[0] - 1.0) < 0.000001 &&
-        telemetry.leftPreview.some(sample => sample > 1.001));
+        Math.abs(telemetry.leftPreview[0] - 0.5) < 0.000001 &&
+        telemetry.leftPreview.some(sample => sample > 0.501));
       return match?.sequence || 0;
     }, { timeout: 10_000 })
     .toBeGreaterThan(queueAck.telemetrySequence);
   const crossfadeTelemetry = (await telemetryHistory(page)).find((telemetry) =>
     telemetry.sequence > queueAck.telemetrySequence &&
-    Math.abs(telemetry.leftPreview[0] - 1.0) < 0.000001 &&
-    telemetry.leftPreview.some(sample => sample > 1.001));
+    Math.abs(telemetry.leftPreview[0] - 0.5) < 0.000001 &&
+    telemetry.leftPreview.some(sample => sample > 0.501));
 
   for (let index = 0; index < crossfadeTelemetry.leftPreview.length; index += 1) {
-    expect(crossfadeTelemetry.leftPreview[index]).toBeCloseTo(topologyInsertExpectedSample(index), 6);
-    expect(crossfadeTelemetry.rightPreview[index]).toBeCloseTo(topologyInsertExpectedSample(index), 6);
+    expect(crossfadeTelemetry.leftPreview[index]).toBeCloseTo(topologyDeleteExpectedSample(index), 6);
+    expect(crossfadeTelemetry.rightPreview[index]).toBeCloseTo(topologyDeleteExpectedSample(index), 6);
   }
 
   await expect
@@ -403,17 +403,17 @@ test('browser demo proves CompiledDspTopologyController crossfade in the worklet
       const history = await telemetryHistory(page);
       const match = history.find((telemetry) =>
         telemetry.sequence > crossfadeTelemetry.sequence &&
-        telemetry.leftPreview.every(sample => Math.abs(sample - 0.5) < 0.000001));
+        telemetry.leftPreview.every(sample => Math.abs(sample - 1.0) < 0.000001));
       return match?.sequence || 0;
     }, { timeout: 10_000 })
     .toBeGreaterThan(crossfadeTelemetry.sequence);
   const settledTelemetry = (await telemetryHistory(page)).find((telemetry) =>
     telemetry.sequence > crossfadeTelemetry.sequence &&
-    telemetry.leftPreview.every(sample => Math.abs(sample - 0.5) < 0.000001));
+    telemetry.leftPreview.every(sample => Math.abs(sample - 1.0) < 0.000001));
 
-  expect(settledTelemetry.leftPreview.every(sample => Math.abs(sample - 0.5) < 0.000001)).toBeTruthy();
-  expect(settledTelemetry.rightPreview.every(sample => Math.abs(sample - 0.5) < 0.000001)).toBeTruthy();
-  expect(settledTelemetry.overallPeak).toBeCloseTo(0.5, 6);
+  expect(settledTelemetry.leftPreview.every(sample => Math.abs(sample - 1.0) < 0.000001)).toBeTruthy();
+  expect(settledTelemetry.rightPreview.every(sample => Math.abs(sample - 1.0) < 0.000001)).toBeTruthy();
+  expect(settledTelemetry.overallPeak).toBeCloseTo(1.0, 6);
 });
 
 test('browser demo proves CompiledStereoDspTopologyController crossfade in the worklet', async ({ page }) => {

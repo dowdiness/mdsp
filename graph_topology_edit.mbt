@@ -4,6 +4,7 @@ pub(all) enum GraphTopologyEditKind {
   ReplaceNode
   RewireInput
   InsertNode
+  DeleteNode
 }
 
 ///|
@@ -18,6 +19,7 @@ pub(all) enum GraphTopologyInputSlot {
 pub struct GraphTopologyEdit {
   kind : GraphTopologyEditKind
   node_index : Int
+  aux_index : Int
   replacement : DspNode
   input_slot : GraphTopologyInputSlot
   source_index : Int
@@ -25,6 +27,7 @@ pub struct GraphTopologyEdit {
   fn new(
     kind : GraphTopologyEditKind,
     node_index : Int,
+    aux_index : Int,
     replacement : DspNode,
     input_slot : GraphTopologyInputSlot,
     source_index : Int,
@@ -35,11 +38,12 @@ pub struct GraphTopologyEdit {
 fn GraphTopologyEdit::new(
   kind : GraphTopologyEditKind,
   node_index : Int,
+  aux_index : Int,
   replacement : DspNode,
   input_slot : GraphTopologyInputSlot,
   source_index : Int,
 ) -> GraphTopologyEdit {
-  { kind, node_index, replacement, input_slot, source_index }
+  { kind, node_index, aux_index, replacement, input_slot, source_index }
 }
 
 ///|
@@ -51,6 +55,7 @@ pub fn GraphTopologyEdit::replace_node(
   GraphTopologyEdit(
     GraphTopologyEditKind::ReplaceNode,
     node_index,
+    -1,
     replacement,
     GraphTopologyInputSlot::Input0,
     -1,
@@ -67,6 +72,7 @@ pub fn GraphTopologyEdit::rewire_input(
   GraphTopologyEdit(
     GraphTopologyEditKind::RewireInput,
     node_index,
+    -1,
     DspNode::constant(0.0),
     input_slot,
     source_index,
@@ -90,9 +96,33 @@ pub fn GraphTopologyEdit::insert_node(
   GraphTopologyEdit(
     GraphTopologyEditKind::InsertNode,
     retarget_node_index,
+    -1,
     inserted_node,
     retarget_input_slot,
     -1,
+  )
+}
+
+///|
+/// Delete one unary authoring-order node and retarget one downstream input to a
+/// replacement upstream source.
+///
+/// This first slice is the inverse of append-only `InsertNode`: it only
+/// supports deleting unary nodes on the mono path, and the caller must provide
+/// the downstream target plus the replacement upstream source explicitly.
+pub fn GraphTopologyEdit::delete_node(
+  delete_node_index : Int,
+  retarget_node_index : Int,
+  retarget_input_slot : GraphTopologyInputSlot,
+  replacement_source_index : Int,
+) -> GraphTopologyEdit {
+  GraphTopologyEdit(
+    GraphTopologyEditKind::DeleteNode,
+    delete_node_index,
+    retarget_node_index,
+    DspNode::constant(0.0),
+    retarget_input_slot,
+    replacement_source_index,
   )
 }
 
@@ -101,9 +131,9 @@ pub fn GraphTopologyEdit::insert_node(
 /// replacement through `CompiledDspHotSwap`.
 ///
 /// This first slice keeps edits narrow and deterministic: only `ReplaceNode`
-/// and `RewireInput` frames are supported, plus one narrow unary `InsertNode`
-/// frame on the mono path. Only one staged topology replacement may be pending
-/// at a time.
+/// and `RewireInput` frames are supported, plus narrow unary `InsertNode` and
+/// `DeleteNode` frames on the mono path. Only one staged topology replacement
+/// may be pending at a time.
 struct CompiledDspTopologyController {
   mut authoring_nodes : Array[DspNode]
   compile_sample_rate : Double
@@ -274,6 +304,21 @@ fn apply_topology_edit(
         edit.replacement,
         edit.input_slot,
       )
+    GraphTopologyEditKind::DeleteNode =>
+      if edit.node_index < 0 ||
+        edit.node_index >= nodes.length() ||
+        edit.source_index < 0 ||
+        edit.source_index >= nodes.length() {
+        false
+      } else {
+        apply_topology_delete_node(
+          nodes,
+          edit.node_index,
+          edit.aux_index,
+          edit.input_slot,
+          edit.source_index,
+        )
+      }
   }
 }
 
@@ -305,6 +350,110 @@ fn apply_topology_insert_node(
   } else {
     ignore(nodes.pop())
     false
+  }
+}
+
+///|
+fn apply_topology_delete_node(
+  nodes : Array[DspNode],
+  delete_node_index : Int,
+  retarget_node_index : Int,
+  retarget_input_slot : GraphTopologyInputSlot,
+  replacement_source_index : Int,
+) -> Bool {
+  let unary_input = match
+    topology_node_input(
+      nodes[delete_node_index],
+      GraphTopologyInputSlot::Input0,
+    ) {
+    Some(unary_input) => unary_input
+    None => return false
+  }
+  if retarget_node_index < 0 || retarget_node_index >= nodes.length() {
+    return false
+  }
+  let consumer_index = match
+    topology_single_consumer_for_input(nodes, delete_node_index) {
+    Some(consumer_index) => consumer_index
+    _ => return false
+  }
+  if consumer_index != retarget_node_index {
+    return false
+  }
+  let expected_replacement = if replacement_source_index == delete_node_index {
+    unary_input
+  } else {
+    replacement_source_index
+  }
+  if !apply_topology_rewire_input(
+      nodes, consumer_index, retarget_input_slot, expected_replacement,
+    ) {
+    return false
+  }
+  let compacted = Array::new(capacity=nodes.length() - 1)
+  for index = 0; index < nodes.length(); index = index + 1 {
+    if index != delete_node_index {
+      compacted.push(
+        topology_compacted_node_inputs(nodes[index], delete_node_index),
+      )
+    }
+  }
+  nodes.clear()
+  for index = 0; index < compacted.length(); index = index + 1 {
+    nodes.push(compacted[index])
+  }
+  true
+}
+
+///|
+fn topology_single_consumer_for_input(
+  nodes : Array[DspNode],
+  source_index : Int,
+) -> Int? {
+  let mut consumer = -1
+  for index = 0; index < nodes.length(); index = index + 1 {
+    let node = nodes[index]
+    if node.input0 == source_index || node.input1 == source_index {
+      if consumer >= 0 {
+        return None
+      }
+      consumer = index
+    }
+  }
+  if consumer >= 0 {
+    Some(consumer)
+  } else {
+    None
+  }
+}
+
+///|
+fn topology_compacted_node_inputs(
+  node : DspNode,
+  deleted_index : Int,
+) -> DspNode {
+  DspNode(
+    node.kind,
+    topology_compacted_input(node.input0, deleted_index),
+    topology_compacted_input(node.input1, deleted_index),
+    node.value0,
+    node.value1,
+    node.value2,
+    node.value3,
+    node.waveform,
+    node.filter_mode,
+    node.delay_max_samples,
+    node.delay_samples,
+    node.seed,
+  )
+}
+
+///|
+fn topology_compacted_input(input : Int, deleted_index : Int) -> Int {
+  if input >= 0 && input > deleted_index {
+    input - 1
+  } else {
+    input
   }
 }
 
@@ -611,7 +760,7 @@ pub fn CompiledStereoDspTopologyController::queue_topology_edits(
 ///|
 fn valid_stereo_topology_edits(edits : Array[GraphTopologyEdit]) -> Bool {
   for index = 0; index < edits.length(); index = index + 1 {
-    if edits[index].kind is InsertNode {
+    if edits[index].kind is InsertNode || edits[index].kind is DeleteNode {
       return false
     }
   }

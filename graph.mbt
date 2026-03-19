@@ -232,6 +232,25 @@ pub fn DspNode::oscillator(waveform : Waveform, freq : Double) -> DspNode {
 }
 
 ///|
+/// Create an oscillator node that reads frequency from another node (FM mode).
+pub fn DspNode::oscillator_from(input : Int, waveform : Waveform) -> DspNode {
+  DspNode(
+    DspNodeKind::Oscillator,
+    input,
+    -1,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    waveform,
+    BiquadMode::LowPass,
+    0,
+    0,
+    0U,
+  )
+}
+
+///|
 /// Create a white-noise source node.
 pub fn DspNode::noise(seed : UInt) -> DspNode {
   DspNode(
@@ -745,9 +764,18 @@ pub fn CompiledDsp::process(
     match node.kind {
       Constant => fill_constant_buffer(buffer, sample_count, node.value0)
       Oscillator =>
-        self.osc_states[index]
-        .unwrap()
-        .process_waveform(context, buffer, node.waveform, node.value0)
+        if node.input0 >= 0 {
+          let osc = self.osc_states[index].unwrap()
+          let freq_buf = self.buffers[node.input0]
+          let sr = context.sample_rate()
+          for i = 0; i < sample_count; i = i + 1 {
+            buffer.set(i, osc.tick_waveform(node.waveform, freq_buf.get(i), sr))
+          }
+        } else {
+          self.osc_states[index]
+          .unwrap()
+          .process_waveform(context, buffer, node.waveform, node.value0)
+        }
       Noise => self.noise_states[index].unwrap().process(context, buffer)
       Adsr => self.env_states[index].unwrap().process(context, buffer)
       Biquad => {
@@ -1089,9 +1117,18 @@ pub fn CompiledStereoDsp::process(
     match node.kind {
       Constant => fill_constant_buffer(buffer, sample_count, node.value0)
       Oscillator =>
-        self.osc_states[index]
-        .unwrap()
-        .process_waveform(context, buffer, node.waveform, node.value0)
+        if node.input0 >= 0 {
+          let osc = self.osc_states[index].unwrap()
+          let freq_buf = self.buffers[node.input0]
+          let sr = context.sample_rate()
+          for i = 0; i < sample_count; i = i + 1 {
+            buffer.set(i, osc.tick_waveform(node.waveform, freq_buf.get(i), sr))
+          }
+        } else {
+          self.osc_states[index]
+          .unwrap()
+          .process_waveform(context, buffer, node.waveform, node.value0)
+        }
       Noise => self.noise_states[index].unwrap().process(context, buffer)
       Adsr => self.env_states[index].unwrap().process(context, buffer)
       Biquad => {
@@ -1257,9 +1294,19 @@ fn CompiledStereoDsp::process_feedback_graph(
           self.update_feedback_sources(node_index, value)
         }
         Oscillator => {
+          let freq = if node.input0 >= 0 {
+            feedback_graph_input_sample(
+              self.sample_values,
+              self.feedback_values,
+              node.input0,
+              self.feedback_input0_edges[node_index],
+            )
+          } else {
+            node.value0
+          }
           let value = self.osc_states[node_index]
             .unwrap()
-            .tick_waveform(node.waveform, node.value0, context.sample_rate())
+            .tick_waveform(node.waveform, freq, context.sample_rate())
           self.sample_values[node_index] = value
           self.buffers[node_index].set(sample_index, value)
           self.update_feedback_sources(node_index, value)
@@ -1853,7 +1900,12 @@ fn valid_node_inputs(
 ) -> Bool {
   match node.kind {
     Constant => valid_finite_value(node.value0)
-    Oscillator => valid_finite_value(node.value0)
+    Oscillator =>
+      if node.input0 >= 0 {
+        valid_reference(node.input0, node_count)
+      } else {
+        valid_finite_value(node.value0)
+      }
     Noise => true
     Adsr =>
       valid_finite_value(node.value0) &&
@@ -1909,7 +1961,12 @@ fn valid_stereo_node_inputs(
 ) -> Bool {
   match node.kind {
     Constant => valid_finite_value(node.value0)
-    Oscillator => valid_finite_value(node.value0)
+    Oscillator =>
+      if node.input0 >= 0 {
+        valid_reference(node.input0, node_count)
+      } else {
+        valid_finite_value(node.value0)
+      }
     Noise => true
     Adsr =>
       valid_finite_value(node.value0) &&
@@ -2344,7 +2401,18 @@ fn visit_graph_dependencies_with_feedback(
   let node = nodes[index]
   match node.kind {
     Constant => ()
-    Oscillator => ()
+    Oscillator =>
+      if node.input0 >= 0 {
+        visit_graph_input_with_feedback(
+          node.input0,
+          index,
+          0,
+          nodes,
+          marks,
+          order,
+          feedback_edges,
+        )
+      }
     Noise => ()
     Adsr => ()
     Biquad =>
@@ -3087,10 +3155,12 @@ fn process_feedback_graph_node_sample(
 ) -> Double {
   match node.kind {
     Constant => node.value0
-    Oscillator =>
+    Oscillator => {
+      let freq = if node.input0 >= 0 { input0 } else { node.value0 }
       compiled.osc_states[node_index]
       .unwrap()
-      .tick_waveform(node.waveform, node.value0, sample_rate)
+      .tick_waveform(node.waveform, freq, sample_rate)
+    }
     Noise => compiled.noise_states[node_index].unwrap().tick()
     Adsr => compiled.env_states[node_index].unwrap().tick(context)
     Biquad => compiled.biquad_states[node_index].unwrap().tick(input0)
@@ -3237,7 +3307,15 @@ fn valid_terminal_mono_shapes(nodes : FixedArray[DspNode]) -> Bool {
     let node = nodes[index]
     let shape = match node.kind {
       Constant => MONO_SIGNAL_SHAPE
-      Oscillator => MONO_SIGNAL_SHAPE
+      Oscillator =>
+        if node.input0 >= 0 {
+          match input_shape(node.input0, shapes) {
+            Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+            _ => return false
+          }
+        } else {
+          MONO_SIGNAL_SHAPE
+        }
       Noise => MONO_SIGNAL_SHAPE
       Adsr => MONO_SIGNAL_SHAPE
       Biquad =>
@@ -3330,7 +3408,15 @@ fn compiled_stereo_shapes(nodes : FixedArray[DspNode]) -> FixedArray[Int]? {
     let node = nodes[index]
     let shape = match node.kind {
       Constant => MONO_SIGNAL_SHAPE
-      Oscillator => MONO_SIGNAL_SHAPE
+      Oscillator =>
+        if node.input0 >= 0 {
+          match input_shape(node.input0, shapes) {
+            Some(MONO_SIGNAL_SHAPE) => MONO_SIGNAL_SHAPE
+            _ => return None
+          }
+        } else {
+          MONO_SIGNAL_SHAPE
+        }
       Noise => MONO_SIGNAL_SHAPE
       Adsr => MONO_SIGNAL_SHAPE
       Biquad =>

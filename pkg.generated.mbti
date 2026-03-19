@@ -181,6 +181,7 @@ pub fn DspNode::mix(Int, Int) -> Self
 pub fn DspNode::mul(Int, Int) -> Self
 pub fn DspNode::noise(UInt) -> Self
 pub fn DspNode::oscillator(Waveform, Double) -> Self
+pub fn DspNode::oscillator_from(Int, Waveform) -> Self
 pub fn DspNode::output(Int) -> Self
 pub fn DspNode::pan(Int, Double) -> Self
 pub fn DspNode::stereo_biquad(Int, BiquadMode, Double, Double) -> Self

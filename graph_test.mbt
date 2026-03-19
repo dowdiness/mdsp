@@ -1553,6 +1553,42 @@ test "compiled stereo dsp rejects stereo-shaped feedback edges" {
 }
 
 ///|
+test "compiled dsp: oscillator reads frequency from input buffer" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
+  let nodes = [
+    DspNode::constant(OSCILLATOR_FREQ),
+    DspNode::oscillator_from(0, Waveform::Sine),
+    DspNode::output(1),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(SMALL_BLOCK_SIZE)
+
+  compiled.process(context, output)
+
+  assert_eq(output.get(0), ZERO_SAMPLE)
+  assert_true(output.as_fixed_array().any(sample => sample != ZERO_SAMPLE))
+}
+
+///|
+test "compiled dsp: FM oscillator with modulated frequency" {
+  let context = DspContext::new(STANDARD_SAMPLE_RATE, LARGE_BLOCK_SIZE)
+  let nodes = [
+    DspNode::oscillator(Waveform::Sine, 2.0),
+    DspNode::constant(300.0),
+    DspNode::gain(0, 100.0),
+    DspNode::mix(2, 1),
+    DspNode::oscillator_from(3, Waveform::Sine),
+    DspNode::output(4),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  let output = AudioBuffer::filled(LARGE_BLOCK_SIZE)
+
+  compiled.process(context, output)
+
+  assert_true(output.as_fixed_array().any(sample => sample != ZERO_SAMPLE))
+}
+
+///|
 test "compiled dsp rejects graphs without a final output node" {
   let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
   let nodes = [DspNode::constant(QUARTER_SAMPLE)]

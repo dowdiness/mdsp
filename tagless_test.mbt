@@ -53,3 +53,96 @@ test "ArithSym Eval: clip" {
   let result = @mdsp.ArithSym::clip(a, 3.0)
   assert_eq(result.value, 3.0)
 }
+
+///|
+impl @mdsp.DspSym for Eval with oscillator(self, _waveform) {
+  { value: self.value }
+}
+
+///|
+impl @mdsp.DspSym for Eval with noise(_seed) {
+  { value: 0.0 }
+}
+
+///|
+impl @mdsp.DspSym for Eval with adsr(_a, _d, _s, _r) {
+  { value: 0.0 }
+}
+
+///|
+impl @mdsp.DspSym for Eval with gain(self, amount) {
+  { value: self.value * amount }
+}
+
+///|
+impl @mdsp.DspSym for Eval with output(self) {
+  self
+}
+
+///|
+impl @mdsp.FilterSym for Eval with biquad(self, _mode, _cutoff, _q) {
+  self
+}
+
+///|
+impl @mdsp.DelaySym for Eval with delay(self, _max, _samples, _feedback) {
+  self
+}
+
+///|
+impl @mdsp.StereoSym for Eval with pan(self, _pos) {
+  self
+}
+
+///|
+impl @mdsp.StereoSym for Eval with stereo_gain(self, _amount) {
+  self
+}
+
+///|
+impl @mdsp.StereoSym for Eval with stereo_clip(self, _threshold) {
+  self
+}
+
+///|
+impl @mdsp.StereoSym for Eval with stereo_mixdown(a, _b) {
+  a
+}
+
+///|
+impl @mdsp.StereoSym for Eval with stereo_output(a, _b) {
+  a
+}
+
+///|
+impl @mdsp.StereoFilterSym for Eval with stereo_biquad(self, _mode, _cutoff, _q) {
+  self
+}
+
+///|
+impl @mdsp.StereoDelaySym for Eval with stereo_delay(
+  self,
+  _max,
+  _samples,
+  _feedback,
+) {
+  self
+}
+
+///|
+fn[T : @mdsp.FilterSym] exercise_filter() -> T {
+  T::constant(1.0)
+}
+
+///|
+test "FilterSym bound implies ArithSym" {
+  let result : Eval = exercise_filter()
+  assert_eq(result.value, 1.0)
+}
+
+///|
+test "DspSym gain" {
+  let input : Eval = @mdsp.ArithSym::constant(10.0)
+  let result = @mdsp.DspSym::gain(input, 0.5)
+  assert_eq(result.value, 5.0)
+}

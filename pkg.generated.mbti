@@ -8,6 +8,8 @@ pub fn demo_tick(Double, Double) -> Double
 
 pub fn demo_tick_source(Int, Double, Double) -> Double
 
+pub fn[T : FilterSym] exit_deliverable() -> T
+
 pub fn[T : ArithSym] lin_map(T, Double, Double, Double, Double) -> T
 
 pub fn mono_shape() -> Int

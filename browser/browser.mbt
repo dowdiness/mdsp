@@ -203,6 +203,7 @@ pub fn reset_phase() -> Unit {
   reset_compiled_stereo_graph()
   reset_compiled_stereo_hot_swap_graph()
   reset_compiled_stereo_topology_edit_graph()
+  reset_exit_deliverable_graph()
 }
 
 ///|
@@ -638,6 +639,108 @@ pub fn compiled_stereo_topology_edit_left_sample(index : Int) -> Double {
 /// Read one sample from the most recent stereo topology-edit browser right block.
 pub fn compiled_stereo_topology_edit_right_sample(index : Int) -> Double {
   compiled_stereo_sample(index, compiled_stereo_topology_edit_right.val)
+}
+
+// ---------------------------------------------------------------------------
+// Exit deliverable graph
+// ---------------------------------------------------------------------------
+
+///|
+let exit_deliverable_graph : @ref.Ref[@lib.CompiledDsp?] = @ref.new(None)
+
+///|
+let exit_deliverable_context : @ref.Ref[@lib.DspContext?] = @ref.new(None)
+
+///|
+let exit_deliverable_output : @ref.Ref[@lib.AudioBuffer?] = @ref.new(None)
+
+///|
+let exit_deliverable_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
+
+///|
+let exit_deliverable_block_size : @ref.Ref[Int] = @ref.new(0)
+
+///|
+/// Initialize the exit deliverable graph: FM synthesis via tagless composition.
+pub fn init_exit_deliverable_graph(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  ensure_exit_deliverable_graph(sample_rate, block_size)
+}
+
+///|
+/// Run one render quantum through the exit deliverable graph.
+pub fn process_exit_deliverable_block(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  if !ensure_exit_deliverable_graph(sample_rate, block_size) {
+    return false
+  }
+  let graph = exit_deliverable_graph.val.unwrap()
+  graph.process(
+    exit_deliverable_context.val.unwrap(),
+    exit_deliverable_output.val.unwrap(),
+  )
+  true
+}
+
+///|
+/// Read one sample from the most recent exit deliverable output block.
+pub fn exit_deliverable_output_sample(index : Int) -> Double {
+  match exit_deliverable_output.val {
+    Some(output) =>
+      if index >= 0 && index < output.length() {
+        output.get(index)
+      } else {
+        0.0
+      }
+    None => 0.0
+  }
+}
+
+///|
+fn ensure_exit_deliverable_graph(
+  sample_rate : Double,
+  block_size : Int,
+) -> Bool {
+  if sample_rate <= 0.0 || block_size <= 0 {
+    reset_exit_deliverable_graph()
+    return false
+  }
+  if exit_deliverable_graph.val is Some(_) &&
+    exit_deliverable_sample_rate.val == sample_rate &&
+    exit_deliverable_block_size.val == block_size {
+    return true
+  }
+
+  let context = @lib.DspContext::new(sample_rate, block_size)
+  let output = @lib.AudioBuffer::filled(block_size)
+  let builder : @lib.GraphBuilder = @lib.exit_deliverable()
+  match @lib.CompiledDsp::compile(builder.nodes(), context) {
+    Some(graph) => {
+      exit_deliverable_graph.val = Some(graph)
+      exit_deliverable_context.val = Some(context)
+      exit_deliverable_output.val = Some(output)
+      exit_deliverable_sample_rate.val = sample_rate
+      exit_deliverable_block_size.val = block_size
+      true
+    }
+    None => {
+      reset_exit_deliverable_graph()
+      false
+    }
+  }
+}
+
+///|
+fn reset_exit_deliverable_graph() -> Unit {
+  exit_deliverable_graph.val = None
+  exit_deliverable_context.val = None
+  exit_deliverable_output.val = None
+  exit_deliverable_sample_rate.val = 0.0
+  exit_deliverable_block_size.val = 0
 }
 
 ///|

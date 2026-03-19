@@ -317,6 +317,7 @@ pub fn CompiledDspTopologyController::queue_topology_edits(
     Some(replacement) => replacement
     None => return false
   }
+  copy_compiled_dsp_state(self.hot_swap.active, replacement)
   if !self.hot_swap.queue_swap(replacement) {
     return false
   }
@@ -1026,6 +1027,7 @@ pub fn CompiledStereoDspTopologyController::queue_topology_edits(
     Some(replacement) => replacement
     None => return false
   }
+  copy_compiled_stereo_dsp_state(self.hot_swap.active, replacement)
   if !self.hot_swap.queue_swap(replacement) {
     return false
   }
@@ -1103,5 +1105,91 @@ fn apply_topology_runtime_control(
       true
     }
     _ => true
+  }
+}
+
+///|
+/// Copy runtime state from an old compiled mono graph to a new one for nodes
+/// that share the same authoring index and node kind.
+fn copy_compiled_dsp_state(
+  old_graph : CompiledDsp,
+  new_graph : CompiledDsp,
+) -> Unit {
+  let old_map = old_graph.index_map
+  let new_map = new_graph.index_map
+  let shared_count = if old_map.length() < new_map.length() {
+    old_map.length()
+  } else {
+    new_map.length()
+  }
+  for authoring_idx = 0
+      authoring_idx < shared_count
+      authoring_idx = authoring_idx + 1 {
+    let old_compiled = old_map[authoring_idx]
+    let new_compiled = new_map[authoring_idx]
+    if old_compiled >= 0 &&
+      new_compiled >= 0 &&
+      old_compiled < old_graph.nodes.length() &&
+      new_compiled < new_graph.nodes.length() &&
+      node_kind_matches(
+        old_graph.nodes[old_compiled].kind,
+        new_graph.nodes[new_compiled].kind,
+      ) {
+      new_graph.osc_states[new_compiled] = old_graph.osc_states[old_compiled]
+      new_graph.noise_states[new_compiled] = old_graph.noise_states[old_compiled]
+      new_graph.env_states[new_compiled] = old_graph.env_states[old_compiled]
+      new_graph.biquad_states[new_compiled] = old_graph.biquad_states[old_compiled]
+      new_graph.stereo_biquad_left_states[new_compiled] = old_graph.stereo_biquad_left_states[old_compiled]
+      new_graph.stereo_biquad_right_states[new_compiled] = old_graph.stereo_biquad_right_states[old_compiled]
+      new_graph.delay_states[new_compiled] = old_graph.delay_states[old_compiled]
+      new_graph.stereo_delay_left_states[new_compiled] = old_graph.stereo_delay_left_states[old_compiled]
+      new_graph.stereo_delay_right_states[new_compiled] = old_graph.stereo_delay_right_states[old_compiled]
+      new_graph.self_values[new_compiled] = old_graph.self_values[old_compiled]
+      new_graph.self_enabled[new_compiled] = old_graph.self_enabled[old_compiled]
+    }
+  }
+}
+
+///|
+/// Copy runtime state from an old compiled stereo graph to a new one for nodes
+/// that share the same authoring index and node kind.
+fn copy_compiled_stereo_dsp_state(
+  old_graph : CompiledStereoDsp,
+  new_graph : CompiledStereoDsp,
+) -> Unit {
+  let old_map = old_graph.index_map
+  let new_map = new_graph.index_map
+  let shared_count = if old_map.length() < new_map.length() {
+    old_map.length()
+  } else {
+    new_map.length()
+  }
+  for authoring_idx = 0
+      authoring_idx < shared_count
+      authoring_idx = authoring_idx + 1 {
+    let old_compiled = old_map[authoring_idx]
+    let new_compiled = new_map[authoring_idx]
+    if old_compiled >= 0 &&
+      new_compiled >= 0 &&
+      old_compiled < old_graph.nodes.length() &&
+      new_compiled < new_graph.nodes.length() &&
+      node_kind_matches(
+        old_graph.nodes[old_compiled].kind,
+        new_graph.nodes[new_compiled].kind,
+      ) {
+      new_graph.osc_states[new_compiled] = old_graph.osc_states[old_compiled]
+      new_graph.noise_states[new_compiled] = old_graph.noise_states[old_compiled]
+      new_graph.env_states[new_compiled] = old_graph.env_states[old_compiled]
+      new_graph.biquad_states[new_compiled] = old_graph.biquad_states[old_compiled]
+      new_graph.stereo_biquad_left_states[new_compiled] = old_graph.stereo_biquad_left_states[old_compiled]
+      new_graph.stereo_biquad_right_states[new_compiled] = old_graph.stereo_biquad_right_states[old_compiled]
+      new_graph.delay_states[new_compiled] = old_graph.delay_states[old_compiled]
+      new_graph.stereo_delay_left_states[new_compiled] = old_graph.stereo_delay_left_states[old_compiled]
+      new_graph.stereo_delay_right_states[new_compiled] = old_graph.stereo_delay_right_states[old_compiled]
+      new_graph.self_values[new_compiled] = old_graph.self_values[old_compiled]
+      new_graph.self_left_values[new_compiled] = old_graph.self_left_values[old_compiled]
+      new_graph.self_right_values[new_compiled] = old_graph.self_right_values[old_compiled]
+      new_graph.self_enabled[new_compiled] = old_graph.self_enabled[old_compiled]
+    }
   }
 }

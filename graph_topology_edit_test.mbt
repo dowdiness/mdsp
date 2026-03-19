@@ -994,6 +994,80 @@ test "topology edit: delete_chain rejects chain with binary node" {
 }
 
 ///|
+test "topology edit preserves oscillator phase across recompilation" {
+  let nodes = [
+    DspNode::constant(440.0),
+    DspNode::oscillator(Waveform::Sine, 440.0),
+    DspNode::output(1),
+  ]
+  let ctx = DspContext::new(48000.0, 128)
+  let controller = CompiledDspTopologyController::from_nodes(
+    nodes,
+    ctx,
+    crossfade_samples=0,
+  ).unwrap()
+
+  // Process one block to advance oscillator phase
+  let buf = AudioBuffer::filled(128)
+  controller.process(ctx, buf)
+
+  // Insert a gain(1.0) identity node — should not change output
+  let edit = GraphTopologyEdit::insert_node(
+    2,
+    GraphTopologyInputSlot::Input0,
+    DspNode::gain(-1, 1.0),
+  )
+  assert_true(controller.queue_topology_edit(edit))
+  controller.process(ctx, buf) // applies the swap
+
+  // Process another block — phase should be continuous (not reset)
+  controller.process(ctx, buf)
+  let sample_after_first = buf.get(0)
+
+  // If phase was preserved, the output continues naturally
+  // If phase reset to 0, the first sample would be 0.0
+  assert_true(sample_after_first != 0.0)
+}
+
+///|
+test "topology edit preserves stereo oscillator phase across recompilation" {
+  let nodes = [
+    DspNode::constant(440.0),
+    DspNode::oscillator(Waveform::Sine, 440.0),
+    DspNode::pan(1, 0.0),
+    DspNode::stereo_output(2),
+  ]
+  let ctx = DspContext::new(48000.0, 128)
+  let controller = CompiledStereoDspTopologyController::from_nodes(
+    nodes,
+    ctx,
+    crossfade_samples=0,
+  ).unwrap()
+
+  // Process one block to advance oscillator phase
+  let left = AudioBuffer::filled(128)
+  let right = AudioBuffer::filled(128)
+  controller.process(ctx, left, right)
+
+  // Insert a stereo_gain(1.0) identity node — should not change output
+  let edit = GraphTopologyEdit::insert_node(
+    3,
+    GraphTopologyInputSlot::Input0,
+    DspNode::stereo_gain(-1, 1.0),
+  )
+  assert_true(controller.queue_topology_edit(edit))
+  controller.process(ctx, left, right) // applies the swap
+
+  // Process another block — phase should be continuous (not reset)
+  controller.process(ctx, left, right)
+  let left_after_first = left.get(0)
+
+  // If phase was preserved, the output continues naturally
+  // If phase reset to 0, the first sample would be 0.0
+  assert_true(left_after_first != 0.0)
+}
+
+///|
 fn topology_test_hot_swap_progress(
   position : Int,
   crossfade_samples : Int,

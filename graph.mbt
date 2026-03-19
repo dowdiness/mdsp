@@ -162,6 +162,9 @@ struct CompiledDsp {
   feedback_next_by_source : FixedArray[Int]
   feedback_values : FixedArray[Double]
   sample_values : FixedArray[Double]
+  self_values : FixedArray[Double]
+  self_enabled : FixedArray[Bool]
+  back_edge_source : FixedArray[Int]
 }
 
 ///|
@@ -191,6 +194,11 @@ struct CompiledStereoDsp {
   sample_values : FixedArray[Double]
   left_sample_values : FixedArray[Double]
   right_sample_values : FixedArray[Double]
+  self_values : FixedArray[Double]
+  self_left_values : FixedArray[Double]
+  self_right_values : FixedArray[Double]
+  self_enabled : FixedArray[Bool]
+  back_edge_source : FixedArray[Int]
 }
 
 ///|
@@ -712,6 +720,16 @@ pub fn CompiledDsp::compile(
   })
   let feedback_values = FixedArray::make(feedback_edges.length(), 0.0)
   let sample_values = FixedArray::make(node_count, 0.0)
+  let self_values = FixedArray::make(node_count, 0.0)
+  let self_enabled = FixedArray::make(node_count, false)
+  let back_edge_source = FixedArray::make(node_count, -1)
+  for i = 0; i < feedback_edges.length(); i = i + 1 {
+    let edge = feedback_edges[i]
+    let source_idx = edge.0
+    let target_idx = edge.1
+    back_edge_source[target_idx] = source_idx
+    self_enabled[source_idx] = true
+  }
   Some({
     compile_sample_rate,
     nodes: fixed_nodes,
@@ -735,6 +753,9 @@ pub fn CompiledDsp::compile(
     feedback_next_by_source,
     feedback_values,
     sample_values,
+    self_values,
+    self_enabled,
+    back_edge_source,
   })
 }
 
@@ -1067,6 +1088,18 @@ pub fn CompiledStereoDsp::compile(
   let sample_values = FixedArray::make(node_count, 0.0)
   let left_sample_values = FixedArray::make(node_count, 0.0)
   let right_sample_values = FixedArray::make(node_count, 0.0)
+  let self_values = FixedArray::make(node_count, 0.0)
+  let self_left_values = FixedArray::make(node_count, 0.0)
+  let self_right_values = FixedArray::make(node_count, 0.0)
+  let self_enabled = FixedArray::make(node_count, false)
+  let back_edge_source = FixedArray::make(node_count, -1)
+  for i = 0; i < remapped_feedback.length(); i = i + 1 {
+    let edge = remapped_feedback[i]
+    let source_idx = edge.0
+    let target_idx = edge.1
+    back_edge_source[target_idx] = source_idx
+    self_enabled[source_idx] = true
+  }
   Some({
     compile_sample_rate,
     nodes: fixed_nodes,
@@ -1092,6 +1125,11 @@ pub fn CompiledStereoDsp::compile(
     sample_values,
     left_sample_values,
     right_sample_values,
+    self_values,
+    self_left_values,
+    self_right_values,
+    self_enabled,
+    back_edge_source,
   })
 }
 

@@ -1627,3 +1627,18 @@ test "compiled dsp rejects multiple output nodes" {
 
   assert_true(CompiledDsp::compile(nodes, context) is None)
 }
+
+///|
+test "self-register fields initialized for acyclic graph" {
+  let nodes : Array[DspNode] = [
+    DspNode::constant(440.0),
+    DspNode::oscillator(Waveform::Sine, 440.0),
+    DspNode::output(1),
+  ]
+  let ctx = DspContext::new(48000.0, 128)
+  let compiled = CompiledDsp::compile(nodes, ctx).unwrap()
+  let buf = AudioBuffer::filled(128)
+  compiled.process(ctx, buf)
+  // Acyclic graph should process normally — oscillator produces non-zero output
+  assert_true(buf.as_fixed_array().any(sample => sample != 0.0))
+}

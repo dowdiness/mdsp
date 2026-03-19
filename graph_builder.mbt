@@ -109,22 +109,7 @@ pub impl ArithSym for GraphBuilder with clip(self, threshold) -> GraphBuilder {
 ///|
 pub impl DspSym for GraphBuilder with oscillator(freq, waveform) -> GraphBuilder {
   let idx = freq.nodes_.length()
-  freq.nodes_.push(
-    DspNode(
-      DspNodeKind::Oscillator,
-      freq.index,
-      -1,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      waveform,
-      BiquadMode::LowPass,
-      0,
-      0,
-      0U,
-    ),
-  )
+  freq.nodes_.push(DspNode::oscillator_from(freq.index, waveform))
   { nodes_: freq.nodes_, index: idx }
 }
 

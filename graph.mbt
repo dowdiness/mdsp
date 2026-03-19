@@ -631,6 +631,8 @@ pub fn CompiledDsp::compile(
   nodes : Array[DspNode],
   context : DspContext,
 ) -> CompiledDsp? {
+  let original_count = nodes.length()
+  let (nodes, opt_map) = optimize_graph(nodes)
   let plan = match mono_compile_plan(nodes, context) {
     Some(plan) => plan
     None => return None
@@ -639,15 +641,24 @@ pub fn CompiledDsp::compile(
   let node_count = nodes.length()
   let block_size = compiled_block_size(context)
   let compile_sample_rate = context.sample_rate()
-  let index_map = FixedArray::make(node_count, -1)
+  let topo_map = FixedArray::make(node_count, -1)
   for new_index = 0; new_index < order.length(); new_index = new_index + 1 {
-    index_map[order[new_index]] = new_index
+    topo_map[order[new_index]] = new_index
   }
+  // Compose: original index -> optimized index -> compiled index
+  let index_map = FixedArray::makei(original_count, fn(i) {
+    let opt_i = opt_map[i]
+    if opt_i < 0 {
+      -1
+    } else {
+      topo_map[opt_i]
+    }
+  })
 
   let fixed_nodes = FixedArray::makei(node_count, index => {
-    remap_node_inputs(nodes[order[index]], index_map)
+    remap_node_inputs(nodes[order[index]], topo_map)
   })
-  let feedback_edges = remapped_feedback_edges(plan.1, index_map)
+  let feedback_edges = remapped_feedback_edges(plan.1, topo_map)
   if feedback_edges.length() == 0 {
     if !valid_terminal_mono_shapes(fixed_nodes) {
       return None
@@ -969,6 +980,8 @@ pub fn CompiledStereoDsp::compile(
   nodes : Array[DspNode],
   context : DspContext,
 ) -> CompiledStereoDsp? {
+  let original_count = nodes.length()
+  let (nodes, opt_map) = optimize_graph(nodes)
   let plan = match stereo_compile_plan(nodes, context) {
     Some(plan) => plan
     None => return None
@@ -978,15 +991,24 @@ pub fn CompiledStereoDsp::compile(
   let node_count = nodes.length()
   let block_size = compiled_block_size(context)
   let compile_sample_rate = context.sample_rate()
-  let index_map = FixedArray::make(node_count, -1)
+  let topo_map = FixedArray::make(node_count, -1)
   for new_index = 0; new_index < order.length(); new_index = new_index + 1 {
-    index_map[order[new_index]] = new_index
+    topo_map[order[new_index]] = new_index
   }
+  // Compose: original index -> optimized index -> compiled index
+  let index_map = FixedArray::makei(original_count, fn(i) {
+    let opt_i = opt_map[i]
+    if opt_i < 0 {
+      -1
+    } else {
+      topo_map[opt_i]
+    }
+  })
 
   let fixed_nodes = FixedArray::makei(node_count, index => {
-    remap_node_inputs(nodes[order[index]], index_map)
+    remap_node_inputs(nodes[order[index]], topo_map)
   })
-  let remapped_feedback = remapped_feedback_edges(feedback_edges, index_map)
+  let remapped_feedback = remapped_feedback_edges(feedback_edges, topo_map)
   if remapped_feedback.length() == 0 {
     if !valid_terminal_stereo_shapes(fixed_nodes) {
       return None

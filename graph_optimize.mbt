@@ -6,6 +6,14 @@ fn fold_constants(
   nodes : Array[DspNode],
 ) -> (Array[DspNode], FixedArray[Int], Bool) {
   let n = nodes.length()
+  // Bail out if nodes are not in topological order (forward references present)
+  for i = 0; i < n; i = i + 1 {
+    let node = nodes[i]
+    if (node.input0 >= 0 && node.input0 > i) ||
+      (node.input1 >= 0 && node.input1 > i) {
+      return (nodes, FixedArray::makei(n, fn(i) { i }), false)
+    }
+  }
   let folded : Array[DspNode] = []
   let index_map = FixedArray::make(n, -1)
   let mut changed = false

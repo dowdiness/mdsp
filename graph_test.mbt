@@ -1597,6 +1597,26 @@ test "compiled dsp rejects graphs without a final output node" {
 }
 
 ///|
+test "compiled dsp optimizes constant subgraph during compilation" {
+  // Build: Constant(3) * Constant(4) -> Output
+  // After optimization: Constant(12) -> Output (only 2 nodes to compile)
+  let nodes : Array[DspNode] = [
+    DspNode::constant(3.0),
+    DspNode::constant(4.0),
+    DspNode::mul(0, 1),
+    DspNode::output(2),
+  ]
+  let ctx = DspContext::new(48000.0, 128)
+  let compiled = CompiledDsp::compile(nodes, ctx)
+  assert_true(compiled is Some(_))
+  // Process and verify output = 12.0 (constant)
+  let compiled = compiled.unwrap()
+  let buf = AudioBuffer::filled(128)
+  compiled.process(ctx, buf)
+  assert_eq(buf.get(0), 12.0)
+}
+
+///|
 test "compiled dsp rejects multiple output nodes" {
   let context = DspContext::new(STANDARD_SAMPLE_RATE, SMALL_BLOCK_SIZE)
   let nodes = [

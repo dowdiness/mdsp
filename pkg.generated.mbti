@@ -223,6 +223,20 @@ pub struct Gain {
 pub fn Gain::new() -> Self
 pub fn Gain::process(Self, DspContext, AudioBuffer, Double) -> Unit
 
+pub struct GraphBuilder {
+  nodes_ : Array[DspNode]
+  index : Int
+}
+pub fn GraphBuilder::new() -> Self
+pub fn GraphBuilder::nodes(Self) -> Array[DspNode]
+pub impl ArithSym for GraphBuilder
+pub impl DelaySym for GraphBuilder
+pub impl DspSym for GraphBuilder
+pub impl FilterSym for GraphBuilder
+pub impl StereoDelaySym for GraphBuilder
+pub impl StereoFilterSym for GraphBuilder
+pub impl StereoSym for GraphBuilder
+
 pub struct GraphControl {
   kind : GraphControlKind
   node_index : Int

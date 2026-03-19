@@ -336,4 +336,10 @@ pub(all) enum Waveform {
 // Type aliases
 
 // Traits
+pub(open) trait ArithSym {
+  constant(Double) -> Self
+  mul(Self, Self) -> Self
+  mix(Self, Self) -> Self
+  clip(Self, Double) -> Self
+}
 

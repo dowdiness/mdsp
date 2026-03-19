@@ -10,6 +10,8 @@ pub fn demo_tick_source(Int, Double, Double) -> Double
 
 pub fn[T : ArithSym] lin_map(T, Double, Double, Double, Double) -> T
 
+pub fn mono_shape() -> Int
+
 pub fn optimize_graph(Array[DspNode]) -> (Array[DspNode], FixedArray[Int])
 
 pub fn[T : ArithSym] range(T, Double, Double) -> T
@@ -17,6 +19,8 @@ pub fn[T : ArithSym] range(T, Double, Double) -> T
 pub fn[T : ArithSym + DspSym + FilterSym + DelaySym + StereoSym + StereoFilterSym + StereoDelaySym] replay(Array[DspNode]) -> T
 
 pub fn reset_phase() -> Unit
+
+pub fn stereo_shape() -> Int
 
 pub fn tick(Double, Double) -> Double
 
@@ -317,6 +321,11 @@ pub struct Mix {
 pub fn Mix::new() -> Self
 pub fn Mix::process(Self, DspContext, AudioBuffer, AudioBuffer) -> Unit
 
+pub struct Mono {
+}
+pub fn Mono::new() -> Self
+pub impl ChannelSpec for Mono
+
 pub struct Noise {
   mut state : UInt
 }
@@ -360,6 +369,11 @@ pub fn ParamSmoother::set_target(Self, Double) -> Unit
 pub fn ParamSmoother::target(Self) -> Double
 pub fn ParamSmoother::tick(Self) -> Double
 
+pub struct Stereo {
+}
+pub fn Stereo::new() -> Self
+pub impl ChannelSpec for Stereo
+
 pub(all) enum Waveform {
   Sine
   Saw
@@ -375,6 +389,10 @@ pub(open) trait ArithSym {
   mul(Self, Self) -> Self
   mix(Self, Self) -> Self
   clip(Self, Double) -> Self
+}
+
+pub(open) trait ChannelSpec {
+  channel_count(Self) -> Int
 }
 
 pub(open) trait DelaySym : DspSym {

@@ -10,6 +10,8 @@ pub fn demo_tick_source(Int, Double, Double) -> Double
 
 pub fn[T : ArithSym] lin_map(T, Double, Double, Double, Double) -> T
 
+pub fn optimize_graph(Array[DspNode]) -> (Array[DspNode], FixedArray[Int])
+
 pub fn[T : ArithSym] range(T, Double, Double) -> T
 
 pub fn reset_phase() -> Unit

@@ -37,27 +37,32 @@ fn fold_constants(
         true
       }
       if input0_is_const && input1_is_const {
-        // Get input values
-        let v0 = if has_input0 {
-          folded[index_map[node.input0]].value0
+        // Skip folding Clip with invalid threshold — let validation reject it
+        if node.kind is DspNodeKind::Clip && !(node.value0 > 0.0) {
+          // Invalid Clip threshold — fall through to keep as-is
         } else {
-          0.0
-        }
-        let v1 = if has_input1 {
-          folded[index_map[node.input1]].value0
-        } else {
-          0.0
-        }
-        let result = node.fold_value(v0, v1)
-        // Skip folding if result is non-finite
-        if result.is_nan() || result.is_inf() {
-          // Fall through to keep node as-is
-        } else {
-          let new_index = folded.length()
-          folded.push(DspNode::constant(result))
-          index_map[i] = new_index
-          changed = true
-          continue
+          // Get input values
+          let v0 = if has_input0 {
+            folded[index_map[node.input0]].value0
+          } else {
+            0.0
+          }
+          let v1 = if has_input1 {
+            folded[index_map[node.input1]].value0
+          } else {
+            0.0
+          }
+          let result = node.fold_value(v0, v1)
+          // Skip folding if result is non-finite
+          if result.is_nan() || result.is_inf() {
+            // Fall through to keep node as-is
+          } else {
+            let new_index = folded.length()
+            folded.push(DspNode::constant(result))
+            index_map[i] = new_index
+            changed = true
+            continue
+          }
         }
       }
     }

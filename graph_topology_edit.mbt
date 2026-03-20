@@ -318,7 +318,18 @@ pub fn CompiledDspTopologyController::queue_topology_edits(
     Some(replacement) => replacement
     None => return false
   }
-  copy_compiled_dsp_state(self.hot_swap.active, replacement)
+  // Skip state copy after delete operations — authoring indices shift,
+  // so position-based matching may copy state from the wrong node.
+  // The crossfade smooths the transition with fresh state.
+  let has_delete = edits
+    .iter()
+    .any(fn(e) {
+      e.kind is GraphTopologyEditKind::DeleteNode ||
+      e.kind is GraphTopologyEditKind::DeleteChain
+    })
+  if !has_delete {
+    copy_compiled_dsp_state(self.hot_swap.active, replacement)
+  }
   if !self.hot_swap.queue_swap(replacement) {
     return false
   }
@@ -1033,7 +1044,18 @@ pub fn CompiledStereoDspTopologyController::queue_topology_edits(
     Some(replacement) => replacement
     None => return false
   }
-  copy_compiled_stereo_dsp_state(self.hot_swap.active, replacement)
+  // Skip state copy after delete operations — authoring indices shift,
+  // so position-based matching may copy state from the wrong node.
+  // The crossfade smooths the transition with fresh state.
+  let has_delete = edits
+    .iter()
+    .any(fn(e) {
+      e.kind is GraphTopologyEditKind::DeleteNode ||
+      e.kind is GraphTopologyEditKind::DeleteChain
+    })
+  if !has_delete {
+    copy_compiled_stereo_dsp_state(self.hot_swap.active, replacement)
+  }
   if !self.hot_swap.queue_swap(replacement) {
     return false
   }

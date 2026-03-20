@@ -352,7 +352,7 @@
     const delaySlider = document.getElementById("delaySlider");
     const gainSlider = document.getElementById("gainSlider");
     const panSlider = document.getElementById("panSlider");
-    const freqValue = document.getElementById("freqValue");
+    let freqValue = document.getElementById("freqValue");
     const cutoffValue = document.getElementById("cutoffValue");
     const delayValue = document.getElementById("delayValue");
     const gainValue = document.getElementById("gainValue");
@@ -389,6 +389,8 @@
       if (freqLabel) freqLabel.textContent = "LFO Rate";
       const freqSuffix = freqSlider.closest(".slider-card").querySelector(".slider-row span:last-child");
       if (freqSuffix) freqSuffix.innerHTML = '<span id="freqValue">2</span> Hz';
+      // Re-acquire freqValue reference after innerHTML replacement
+      freqValue = document.getElementById("freqValue");
       freqSlider.min = "0";
       freqSlider.max = "20";
       freqSlider.value = "2";

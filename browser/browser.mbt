@@ -661,12 +661,64 @@ let exit_deliverable_sample_rate : @ref.Ref[Double] = @ref.new(0.0)
 let exit_deliverable_block_size : @ref.Ref[Int] = @ref.new(0)
 
 ///|
+// Node indices in the exit deliverable graph (after GraphBuilder construction):
+// [0] Constant(2.0)       — LFO rate
+// [1] Oscillator(Sine)    — LFO
+// [2] Constant(1.0)       — range offset
+// [3] Mix(1,2)            — lfo + 1
+// [4] Constant(100.0)     — range scale = 0.5*(hi-lo)
+// [5] Mul(3,4)            — (lfo+1)*scale
+// [6] Constant(200.0)     — range lo
+// [7] Mix(5,6)            — modulated freq
+// [8] Oscillator(Sine)    — carrier
+// [9] Biquad(LowPass)     — filter
+// [10] Gain               — master gain (added by browser wrapper)
+// [11] Output
+const EXIT_LFO_RATE_NODE : Int = 0
+
+///|
+const EXIT_BIQUAD_NODE : Int = 9
+
+///|
+const EXIT_GAIN_NODE : Int = 10
+
+///|
+let exit_lfo_rate : @ref.Ref[Double] = @ref.new(2.0)
+
+///|
+let exit_cutoff : @ref.Ref[Double] = @ref.new(800.0)
+
+///|
+let exit_gain : @ref.Ref[Double] = @ref.new(0.3)
+
+///|
 /// Initialize the exit deliverable graph: FM synthesis via tagless composition.
 pub fn init_exit_deliverable_graph(
   sample_rate : Double,
   block_size : Int,
 ) -> Bool {
   ensure_exit_deliverable_graph(sample_rate, block_size)
+}
+
+///|
+/// Set the LFO rate (Hz) for the exit deliverable.
+pub fn set_exit_deliverable_lfo_rate(rate : Double) -> Bool {
+  exit_lfo_rate.val = rate
+  true
+}
+
+///|
+/// Set the filter cutoff (Hz) for the exit deliverable.
+pub fn set_exit_deliverable_cutoff(cutoff : Double) -> Bool {
+  exit_cutoff.val = cutoff
+  true
+}
+
+///|
+/// Set the master gain for the exit deliverable.
+pub fn set_exit_deliverable_gain(gain : Double) -> Bool {
+  exit_gain.val = gain
+  true
 }
 
 ///|
@@ -679,6 +731,24 @@ pub fn process_exit_deliverable_block(
     return false
   }
   let graph = exit_deliverable_graph.val.unwrap()
+  let controls = [
+    @lib.GraphControl::set_param(
+      EXIT_LFO_RATE_NODE,
+      @lib.GraphParamSlot::Value0,
+      exit_lfo_rate.val,
+    ),
+    @lib.GraphControl::set_param(
+      EXIT_BIQUAD_NODE,
+      @lib.GraphParamSlot::Value0,
+      exit_cutoff.val,
+    ),
+    @lib.GraphControl::set_param(
+      EXIT_GAIN_NODE,
+      @lib.GraphParamSlot::Value0,
+      exit_gain.val,
+    ),
+  ]
+  ignore(graph.apply_controls(controls))
   graph.process(
     exit_deliverable_context.val.unwrap(),
     exit_deliverable_output.val.unwrap(),
@@ -717,8 +787,27 @@ fn ensure_exit_deliverable_graph(
 
   let context = @lib.DspContext::new(sample_rate, block_size)
   let output = @lib.AudioBuffer::filled(block_size)
+  // Build exit deliverable via tagless, then append a Gain node for master volume
   let builder : @lib.GraphBuilder = @lib.exit_deliverable()
-  match @lib.CompiledDsp::compile(builder.nodes(), context) {
+  let nodes = builder.nodes()
+  // The last node is Output(biquad). Insert Gain before Output.
+  // Output is at nodes.length()-1, its input is biquad at builder.index
+  let output_node = nodes[nodes.length() - 1]
+  let biquad_index = output_node.input0
+  // Replace Output's input with a new Gain node
+  let gain_index = nodes.length()
+  nodes.push(@lib.DspNode::gain(biquad_index, exit_gain.val))
+  nodes[nodes.length() - 2] = @lib.DspNode::output(gain_index)
+  // Wait — Output was the last node. After push, Gain is last. Fix: swap.
+  // Actually: nodes = [..., Output(biquad), Gain(biquad, 0.3)]
+  // Output needs to reference Gain, and Output should be last for compile.
+  // Let's just rebuild: remove the Output, add Gain, add new Output.
+  let len = nodes.length()
+  // nodes[len-2] was Output(biquad_index), nodes[len-1] is the new Gain
+  // Rewrite: nodes[len-2] = Gain(biquad_index, gain), nodes[len-1] = Output(len-2)
+  nodes[len - 2] = @lib.DspNode::gain(biquad_index, exit_gain.val)
+  nodes[len - 1] = @lib.DspNode::output(len - 2)
+  match @lib.CompiledDsp::compile(nodes, context) {
     Some(graph) => {
       exit_deliverable_graph.val = Some(graph)
       exit_deliverable_context.val = Some(context)

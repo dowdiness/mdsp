@@ -232,8 +232,8 @@
 </head>
 <body>
   <main>
-    <h1>MoonBit DSP<br>Phase 2 Stereo Feedback</h1>
-    <p>
+    <h1 id="pageTitle">MoonBit DSP<br>Phase 2 Stereo Feedback</h1>
+    <p id="pageDesc">
       This page proves the browser pipeline now runs the compiled graph runtime
       itself. The AudioWorklet calls a fixed MoonBit
       <code>CompiledStereoDsp</code> graph that contains a mono
@@ -377,6 +377,27 @@
     const useCompiledStereoHotSwap = urlParams.get("hotSwapStereo") === "1";
     const useCompiledStereoTopologyEdit = urlParams.get("topologyEditStereo") === "1";
     const useExitDeliverable = urlParams.get("exitDeliverable") === "1";
+
+    if (useExitDeliverable) {
+      document.getElementById("pageTitle").innerHTML = "MoonBit DSP<br>FM Synthesis";
+      document.getElementById("pageDesc").textContent =
+        "Phase 2 exit deliverable: sine(2).range(200,400).sine().lpf(800,1).out() — " +
+        "a 2 Hz LFO modulates a carrier oscillator between 200–400 Hz through a low-pass filter. " +
+        "Use the sliders to control LFO rate, filter cutoff, and master gain.";
+      document.querySelector('[for="freqSlider"], .slider-card:nth-of-type(1) strong')
+      // Relabel the freq slider
+      const freqLabel = freqSlider.closest(".slider-card").querySelector("strong");
+      if (freqLabel) freqLabel.textContent = "LFO Rate";
+      freqSlider.min = "0";
+      freqSlider.max = "20";
+      freqSlider.value = "2";
+      freqSlider.step = "0.1";
+      // Set gain slider to 30%
+      gainSlider.value = "30";
+      // Hide delay and pan sliders (not used in exit deliverable)
+      delaySlider.closest(".slider-card").style.display = "none";
+      panSlider.closest(".slider-card").style.display = "none";
+    }
 
     let audioContext = null;
     let node = null;

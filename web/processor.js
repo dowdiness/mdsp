@@ -464,6 +464,15 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     }
 
     if (this.usesExitDeliverable) {
+      if (typeof this.wasm.set_exit_deliverable_lfo_rate === "function") {
+        this.wasm.set_exit_deliverable_lfo_rate(this.freq);
+      }
+      if (typeof this.wasm.set_exit_deliverable_cutoff === "function") {
+        this.wasm.set_exit_deliverable_cutoff(this.cutoff);
+      }
+      if (typeof this.wasm.set_exit_deliverable_gain === "function") {
+        this.wasm.set_exit_deliverable_gain(this.gain);
+      }
       const processed = this.wasm.process_exit_deliverable_block(
         sampleRate,
         left.length,

@@ -534,6 +534,8 @@ fn apply_topology_delete_node(
   if consumer_index != retarget_node_index {
     return false
   }
+  // If the caller specified the deleted node itself as the replacement source,
+  // substitute its upstream input instead — the deleted node won't exist.
   let expected_replacement = if replacement_source_index == delete_node_index {
     unary_input
   } else {
@@ -738,11 +740,15 @@ fn topology_chain_compacted_input(
 }
 
 ///|
+/// Encode the retarget node index inside a DspNode for delete operations.
+/// Uses DspNode::output because its input0 field stores a node index,
+/// which we recover via topology_delete_retarget_node_index.
 fn topology_delete_marker(retarget_node_index : Int) -> DspNode {
   DspNode::output(retarget_node_index)
 }
 
 ///|
+/// Decode the retarget node index from a delete edit's replacement marker.
 fn topology_delete_retarget_node_index(edit : GraphTopologyEdit) -> Int {
   edit.replacement.input0
 }

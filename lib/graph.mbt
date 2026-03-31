@@ -153,11 +153,18 @@ fn DspNode::new(
 ///|
 /// Shared internal graph state for both mono and stereo compiled DSP graphs.
 /// Both CompiledDsp and CompiledStereoDsp wrap this struct as newtypes.
+///
+/// All three buffer families (buffers, left_buffers, right_buffers) are allocated
+/// for every node regardless of mono/stereo variant. Mono nodes write only to
+/// `buffers`; stereo nodes write only to `left_buffers`/`right_buffers`. This
+/// uniform layout enables hot-swap state copy without knowing the variant.
 priv struct CompiledGraph {
   compile_sample_rate : Double
   nodes : FixedArray[DspNode]
   index_map : FixedArray[Int]
+  // Mono signal path buffers — one per node
   buffers : FixedArray[AudioBuffer]
+  // Stereo signal path buffers — one pair per node (populated only for stereo-aware nodes)
   left_buffers : FixedArray[AudioBuffer]
   right_buffers : FixedArray[AudioBuffer]
   osc_states : FixedArray[Oscillator?]
@@ -170,15 +177,18 @@ priv struct CompiledGraph {
   stereo_delay_left_states : FixedArray[DelayLine?]
   stereo_delay_right_states : FixedArray[DelayLine?]
   feedback_edges : FixedArray[(Int, Int, Int)]
+  // Feedback graph per-sample self-registers — one value per node, updated each sample
   self_values : FixedArray[Double]
   self_left_values : FixedArray[Double]
   self_right_values : FixedArray[Double]
   self_enabled : FixedArray[Bool]
   back_edge_input0_source : FixedArray[Int]
   back_edge_input1_source : FixedArray[Int]
+  // Pre-allocated scratch arrays for feedback processing (avoid hot-path alloc)
   sample_values : FixedArray[Double]
   left_sample_values : FixedArray[Double]
   right_sample_values : FixedArray[Double]
+  // Pre-computed pan gains — trig is done once per block, not per sample
   pan_left_gains : FixedArray[Double]
   pan_right_gains : FixedArray[Double]
 }
@@ -964,7 +974,7 @@ fn CompiledDsp::process_feedback_graph(
   clear_compiled_buffers(self.0.buffers)
   clear_compiled_buffers(self.0.left_buffers)
   clear_compiled_buffers(self.0.right_buffers)
-  prepare_feedback_graph_biquads(self, context)
+  self.0.prepare_feedback_biquads(context)
   // Use pre-allocated scratch arrays instead of allocating per call
   let sample_values = self.0.sample_values
   let left_sv = self.0.left_sample_values
@@ -1614,7 +1624,7 @@ fn CompiledStereoDsp::process_feedback_graph(
   clear_compiled_buffers(self.0.buffers)
   clear_compiled_buffers(self.0.left_buffers)
   clear_compiled_buffers(self.0.right_buffers)
-  prepare_feedback_stereo_graph_biquads(self, context)
+  self.0.prepare_feedback_biquads(context)
   // Use pre-allocated scratch arrays instead of allocating per call
   let sample_values = self.0.sample_values
   let left_sv = self.0.left_sample_values
@@ -3248,58 +3258,30 @@ fn process_graph_biquad(
 }
 
 ///|
-fn prepare_feedback_graph_biquads(
-  compiled : CompiledDsp,
+/// Re-derive biquad coefficients for all filter nodes before feedback processing.
+/// Called once per block — coefficients depend on sample rate and cutoff/Q which
+/// may have changed via runtime parameter control.
+fn CompiledGraph::prepare_feedback_biquads(
+  self : CompiledGraph,
   context : DspContext,
 ) -> Unit {
-  for index = 0; index < compiled.0.nodes.length(); index = index + 1 {
-    let node = compiled.0.nodes[index]
+  for index = 0; index < self.nodes.length(); index = index + 1 {
+    let node = self.nodes[index]
     match node.kind {
       Biquad =>
         ignore(
-          compiled.0.biquad_states[index]
+          self.biquad_states[index]
           .unwrap()
           .update(context, node.filter_mode, node.value0, node.value1),
         )
       StereoBiquad => {
         ignore(
-          compiled.0.stereo_biquad_left_states[index]
+          self.stereo_biquad_left_states[index]
           .unwrap()
           .update(context, node.filter_mode, node.value0, node.value1),
         )
         ignore(
-          compiled.0.stereo_biquad_right_states[index]
-          .unwrap()
-          .update(context, node.filter_mode, node.value0, node.value1),
-        )
-      }
-      _ => ()
-    }
-  }
-}
-
-///|
-fn prepare_feedback_stereo_graph_biquads(
-  compiled : CompiledStereoDsp,
-  context : DspContext,
-) -> Unit {
-  for index = 0; index < compiled.0.nodes.length(); index = index + 1 {
-    let node = compiled.0.nodes[index]
-    match node.kind {
-      Biquad =>
-        ignore(
-          compiled.0.biquad_states[index]
-          .unwrap()
-          .update(context, node.filter_mode, node.value0, node.value1),
-        )
-      StereoBiquad => {
-        ignore(
-          compiled.0.stereo_biquad_left_states[index]
-          .unwrap()
-          .update(context, node.filter_mode, node.value0, node.value1),
-        )
-        ignore(
-          compiled.0.stereo_biquad_right_states[index]
+          self.stereo_biquad_right_states[index]
           .unwrap()
           .update(context, node.filter_mode, node.value0, node.value1),
         )

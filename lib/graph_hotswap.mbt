@@ -3,7 +3,8 @@
 ///
 /// Mono uses `old_output`/`new_output` (stereo buffers are zero-length).
 /// Stereo uses `old_left`/`old_right`/`new_left`/`new_right` (mono buffers
-/// are zero-length).
+/// are zero-length). Zero-length rather than Option so crossfade code can
+/// call buffer methods unconditionally without branching per sample.
 priv struct HotSwapGraph {
   mut active : CompiledGraph
   mut pending : CompiledGraph?

@@ -37,9 +37,15 @@ You can browse and install extra skills here:
 
 ## Package Map
 
-- `/` (root package): core DSP library
+- `lib/`: core DSP library (oscillators, filters, graph, tagless algebra)
+
+- `/` (root package): demo entrypoint for wasm/js browser prototype
 
 - `cmd/main`: executable entry point
+
+- `browser/`: browser/AudioWorklet export wrapper
+
+- `browser_test/`: browser integration test wrapper
 
 ## Architecture
 

@@ -1,19 +1,7 @@
 ///|
-/// Global demo oscillator used by the browser prototype wrappers.
-let demo_oscillator : @ref.Ref[Oscillator] = @ref.new(Oscillator::new())
-
-///|
-/// Global demo noise source used by the browser prototype wrappers.
-let demo_noise : @ref.Ref[Noise] = @ref.new(Noise::new(DEMO_NOISE_SEED))
-
-///|
-const DEMO_NOISE_SEED : UInt = 0x6D2B79F5U
-
-///|
 /// Reset oscillator state to the start of the waveform.
 pub fn demo_reset_phase() -> Unit {
-  demo_oscillator.val.reset()
-  demo_noise.val.reset(DEMO_NOISE_SEED)
+  @lib.reset_phase()
 }
 
 ///|
@@ -46,19 +34,7 @@ pub fn tick_source(
   freq : Double,
   sample_rate : Double,
 ) -> Double {
-  match source_id {
-    1 => demo_oscillator.val.tick_waveform(Waveform::Saw, freq, sample_rate)
-    2 => demo_oscillator.val.tick_waveform(Waveform::Square, freq, sample_rate)
-    3 =>
-      demo_oscillator.val.tick_waveform(Waveform::Triangle, freq, sample_rate)
-    4 =>
-      if !is_valid_osc_param(sample_rate) || sample_rate <= 0.0 {
-        0.0
-      } else {
-        demo_noise.val.tick()
-      }
-    _ => demo_oscillator.val.tick_waveform(Waveform::Sine, freq, sample_rate)
-  }
+  @lib.tick_source(source_id, freq, sample_rate)
 }
 
 ///|

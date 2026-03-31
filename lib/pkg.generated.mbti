@@ -379,6 +379,8 @@ pub struct Stereo {
 pub fn Stereo::new() -> Self
 pub impl ChannelSpec for Stereo
 
+type TopologyGraph
+
 pub(all) enum Waveform {
   Sine
   Saw

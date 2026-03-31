@@ -316,6 +316,8 @@ pub(all) enum GraphTopologyInputSlot {
   Input1
 } derive(Eq)
 
+type HotSwapGraph
+
 pub struct Mix {
   unit : Unit
 

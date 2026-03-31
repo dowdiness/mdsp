@@ -189,4 +189,3 @@ fn normalize_sustain(value : Double) -> Double {
   }
 }
 
-

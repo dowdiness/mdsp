@@ -72,4 +72,3 @@ fn sample_from_state(state : UInt) -> Double {
   state.to_double() / 2147483648.0 - 1.0
 }
 
-

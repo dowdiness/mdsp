@@ -189,4 +189,3 @@ fn max_feedback_amount() -> Double {
   0.99
 }
 
-

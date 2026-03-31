@@ -4,7 +4,7 @@ pub(all) enum BiquadMode {
   LowPass
   HighPass
   BandPass
-}
+} derive(Eq)
 
 ///|
 /// Stateful biquad filter using Direct Form II Transposed processing.

@@ -19,7 +19,7 @@ pub(all) enum DspNodeKind {
   StereoDelay
   StereoMixDown
   StereoOutput
-}
+} derive(Eq)
 
 ///|
 /// Runtime-updatable numeric graph parameter slots.
@@ -29,7 +29,7 @@ pub(all) enum GraphParamSlot {
   Value2
   Value3
   DelaySamples
-}
+} derive(Eq)
 
 ///|
 /// Unified runtime control kinds for compiled graphs.
@@ -37,7 +37,7 @@ pub(all) enum GraphControlKind {
   GateOn
   GateOff
   SetParam
-}
+} derive(Eq)
 
 ///|
 const NYQUIST_RATIO : Double = 0.5
@@ -3029,7 +3029,7 @@ fn find_single_output_index_of_kind(
 ) -> Int? {
   let mut output_index = -1
   for index = 0; index < nodes.length(); index = index + 1 {
-    if node_kind_matches(nodes[index].kind, kind) {
+    if nodes[index].kind == kind {
       if output_index >= 0 {
         return None
       }
@@ -3620,30 +3620,6 @@ fn reset_graph_env_states(env_states : FixedArray[Adsr?]) -> Unit {
 fn clear_compiled_buffers(buffers : FixedArray[AudioBuffer]) -> Unit {
   for index = 0; index < buffers.length(); index = index + 1 {
     buffers[index].fill(0.0)
-  }
-}
-
-///|
-fn node_kind_matches(left : DspNodeKind, right : DspNodeKind) -> Bool {
-  match left {
-    Constant => right is Constant
-    Oscillator => right is Oscillator
-    Noise => right is Noise
-    Adsr => right is Adsr
-    Biquad => right is Biquad
-    Delay => right is Delay
-    Gain => right is Gain
-    Mul => right is Mul
-    Mix => right is Mix
-    Clip => right is Clip
-    Output => right is Output
-    Pan => right is Pan
-    StereoGain => right is StereoGain
-    StereoClip => right is StereoClip
-    StereoBiquad => right is StereoBiquad
-    StereoDelay => right is StereoDelay
-    StereoMixDown => right is StereoMixDown
-    StereoOutput => right is StereoOutput
   }
 }
 

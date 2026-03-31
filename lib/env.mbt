@@ -6,7 +6,7 @@ pub(all) enum EnvStage {
   Decay
   Sustain
   Release
-}
+} derive(Eq)
 
 ///|
 /// Stateful ADSR envelope generator.

@@ -5,7 +5,7 @@ pub(all) enum Waveform {
   Saw
   Square
   Triangle
-}
+} derive(Eq)
 
 ///|
 /// Stateful oscillator for the first reusable Phase 1 DSP primitive.

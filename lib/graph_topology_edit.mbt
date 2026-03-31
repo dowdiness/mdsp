@@ -7,14 +7,14 @@ pub(all) enum GraphTopologyEditKind {
   DeleteNode
   InsertChain
   DeleteChain
-}
+} derive(Eq)
 
 ///|
 /// Input slot selector for fixed-length topology rewiring.
 pub(all) enum GraphTopologyInputSlot {
   Input0
   Input1
-}
+} derive(Eq)
 
 ///|
 /// Declarative topology edit applied in authoring order before recompilation.
@@ -1163,10 +1163,7 @@ fn copy_compiled_dsp_state(
       new_compiled >= 0 &&
       old_compiled < old_graph.nodes.length() &&
       new_compiled < new_graph.nodes.length() &&
-      node_kind_matches(
-        old_graph.nodes[old_compiled].kind,
-        new_graph.nodes[new_compiled].kind,
-      ) {
+      old_graph.nodes[old_compiled].kind == new_graph.nodes[new_compiled].kind {
       new_graph.osc_states[new_compiled] = old_graph.osc_states[old_compiled]
       new_graph.noise_states[new_compiled] = old_graph.noise_states[old_compiled]
       new_graph.env_states[new_compiled] = old_graph.env_states[old_compiled]
@@ -1235,10 +1232,7 @@ fn copy_compiled_stereo_dsp_state(
       new_compiled >= 0 &&
       old_compiled < old_graph.nodes.length() &&
       new_compiled < new_graph.nodes.length() &&
-      node_kind_matches(
-        old_graph.nodes[old_compiled].kind,
-        new_graph.nodes[new_compiled].kind,
-      ) {
+      old_graph.nodes[old_compiled].kind == new_graph.nodes[new_compiled].kind {
       new_graph.osc_states[new_compiled] = old_graph.osc_states[old_compiled]
       new_graph.noise_states[new_compiled] = old_graph.noise_states[old_compiled]
       new_graph.env_states[new_compiled] = old_graph.env_states[old_compiled]

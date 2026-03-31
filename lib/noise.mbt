@@ -37,9 +37,9 @@ pub fn Noise::process(
   output : AudioBuffer,
 ) -> Unit {
   let sample_rate = context.sample_rate()
-  let sample_count = noise_sample_count(context, output)
+  let sample_count = effective_sample_count(context, output)
 
-  if !is_valid_noise_sample_rate(sample_rate) || sample_count <= 0 {
+  if !is_finite_positive(sample_rate) || sample_count <= 0 {
     output.fill(0.0)
     return
   }
@@ -72,16 +72,4 @@ fn sample_from_state(state : UInt) -> Double {
   state.to_double() / 2147483648.0 - 1.0
 }
 
-///|
-fn is_valid_noise_sample_rate(sample_rate : Double) -> Bool {
-  sample_rate > 0.0 && !sample_rate.is_nan() && !sample_rate.is_inf()
-}
 
-///|
-fn noise_sample_count(context : DspContext, output : AudioBuffer) -> Int {
-  if output.length() < context.block_size() {
-    output.length()
-  } else {
-    context.block_size()
-  }
-}

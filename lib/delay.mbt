@@ -100,8 +100,8 @@ pub fn DelayLine::process(
   buffer : AudioBuffer,
 ) -> Unit {
   let sample_rate = context.sample_rate()
-  let sample_count = delay_sample_count(context, buffer)
-  if !is_valid_delay_sample_rate(sample_rate) {
+  let sample_count = effective_sample_count(context, buffer)
+  if !is_finite_positive(sample_rate) {
     buffer.fill(0.0)
     return
   }
@@ -189,16 +189,4 @@ fn max_feedback_amount() -> Double {
   0.99
 }
 
-///|
-fn is_valid_delay_sample_rate(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf() && value > 0.0
-}
 
-///|
-fn delay_sample_count(context : DspContext, buffer : AudioBuffer) -> Int {
-  if buffer.length() < context.block_size() {
-    buffer.length()
-  } else {
-    context.block_size()
-  }
-}

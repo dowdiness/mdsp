@@ -29,8 +29,8 @@ pub fn Pan::process(
   ignore(self)
   let sample_rate = context.sample_rate()
   let sample_count = pan_sample_count(context, input, left_output, right_output)
-  if !is_valid_pan_sample_rate(sample_rate) ||
-    !is_valid_pan_position(position) ||
+  if !is_finite_positive(sample_rate) ||
+    !is_finite(position) ||
     sample_count <= 0 {
     left_output.fill(0.0)
     right_output.fill(0.0)
@@ -70,15 +70,7 @@ pub fn Pan::process(
   }
 }
 
-///|
-fn is_valid_pan_sample_rate(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf() && value > 0.0
-}
 
-///|
-fn is_valid_pan_position(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf()
-}
 
 ///|
 fn pan_sample_count(

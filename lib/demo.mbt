@@ -43,7 +43,7 @@ pub fn tick_source(
     3 =>
       demo_oscillator.val.tick_waveform(Waveform::Triangle, freq, sample_rate)
     4 =>
-      if !is_valid_osc_param(sample_rate) || sample_rate <= 0.0 {
+      if !is_finite(sample_rate) || sample_rate <= 0.0 {
         0.0
       } else {
         demo_noise.val.tick()

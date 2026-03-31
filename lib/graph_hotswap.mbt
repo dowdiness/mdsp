@@ -168,7 +168,7 @@ fn compiled_hot_swap_sample_count(
   old_output : AudioBuffer,
   new_output : AudioBuffer,
 ) -> Int {
-  let bounded = compiled_sample_count(context, output)
+  let bounded = effective_sample_count(context, output)
   if bounded < old_output.length() {
     if bounded < new_output.length() {
       bounded

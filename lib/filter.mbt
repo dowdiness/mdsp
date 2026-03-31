@@ -128,7 +128,7 @@ pub fn Biquad::process(
   buffer : AudioBuffer,
 ) -> Unit {
   let sample_rate = context.sample_rate()
-  let sample_count = biquad_sample_count(context, buffer)
+  let sample_count = effective_sample_count(context, buffer)
   if sample_rate <= 0.0 || sample_count <= 0 || !self.configured {
     buffer.fill(0.0)
     return
@@ -159,14 +159,6 @@ fn valid_biquad_params(
   is_finite(q)
 }
 
-///|
-fn biquad_sample_count(context : DspContext, buffer : AudioBuffer) -> Int {
-  if buffer.length() < context.block_size() {
-    buffer.length()
-  } else {
-    context.block_size()
-  }
-}
 
 ///|
 fn Biquad::invalidate(self : Biquad) -> Unit {
@@ -189,7 +181,3 @@ fn Biquad::finite_coefficients(self : Biquad) -> Bool {
   is_finite(self.a2)
 }
 
-///|
-fn is_finite(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf()
-}

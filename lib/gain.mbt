@@ -22,7 +22,7 @@ pub fn Gain::process(
 ) -> Unit {
   ignore(self)
   let sample_rate = context.sample_rate()
-  let sample_count = sample_count(context, buffer)
+  let sample_count = effective_sample_count(context, buffer)
   if sample_rate <= 0.0 ||
     sample_count <= 0 ||
     amount.is_nan() ||
@@ -40,11 +40,3 @@ pub fn Gain::process(
   }
 }
 
-///|
-fn sample_count(context : DspContext, buffer : AudioBuffer) -> Int {
-  if buffer.length() < context.block_size() {
-    buffer.length()
-  } else {
-    context.block_size()
-  }
-}

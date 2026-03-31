@@ -22,7 +22,7 @@ pub fn Clip::process(
 ) -> Unit {
   ignore(self)
   let sample_rate = context.sample_rate()
-  let sample_count = clip_sample_count(context, buffer)
+  let sample_count = effective_sample_count(context, buffer)
   if sample_rate <= 0.0 ||
     sample_count <= 0 ||
     threshold <= 0.0 ||
@@ -53,11 +53,3 @@ fn clip_sample(sample : Double, threshold : Double) -> Double {
   }
 }
 
-///|
-fn clip_sample_count(context : DspContext, buffer : AudioBuffer) -> Int {
-  if buffer.length() < context.block_size() {
-    buffer.length()
-  } else {
-    context.block_size()
-  }
-}

@@ -93,7 +93,7 @@ pub fn Adsr::tick(self : Adsr, context : DspContext) -> Double {
 
 ///|
 fn Adsr::tick_with_sample_rate(self : Adsr, sample_rate : Double) -> Double {
-  if !is_valid_sample_rate(sample_rate) {
+  if !is_finite_positive(sample_rate) {
     self.reset()
     return 0.0
   }
@@ -152,8 +152,8 @@ pub fn Adsr::process(
   output : AudioBuffer,
 ) -> Unit {
   let sample_rate = context.sample_rate()
-  let sample_count = adsr_sample_count(context, output)
-  if !is_valid_sample_rate(sample_rate) {
+  let sample_count = effective_sample_count(context, output)
+  if !is_finite_positive(sample_rate) {
     output.fill(0.0)
     self.reset()
     return
@@ -189,16 +189,4 @@ fn normalize_sustain(value : Double) -> Double {
   }
 }
 
-///|
-fn is_valid_sample_rate(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf() && value > 0.0
-}
 
-///|
-fn adsr_sample_count(context : DspContext, output : AudioBuffer) -> Int {
-  if output.length() < context.block_size() {
-    output.length()
-  } else {
-    context.block_size()
-  }
-}

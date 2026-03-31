@@ -76,7 +76,7 @@ pub fn ParamSmoother::set_smoothing_time_from_context(
 /// Set a new target value. Invalid inputs are ignored to keep the state
 /// deterministic inside the audio path.
 pub fn ParamSmoother::set_target(self : ParamSmoother, value : Double) -> Unit {
-  if is_valid_param_value(value) {
+  if is_finite(value) {
     self.target = value
   }
 }
@@ -94,8 +94,8 @@ pub fn ParamSmoother::tick(self : ParamSmoother) -> Double {
 
 ///|
 fn smoothing_coeff(smoothing_ms : Double, sample_rate : Double) -> Double {
-  if !is_valid_param_value(smoothing_ms) ||
-    !is_valid_param_value(sample_rate) ||
+  if !is_finite(smoothing_ms) ||
+    !is_finite(sample_rate) ||
     smoothing_ms <= 0.0 ||
     sample_rate <= 0.0 {
     0.0
@@ -106,14 +106,10 @@ fn smoothing_coeff(smoothing_ms : Double, sample_rate : Double) -> Double {
 
 ///|
 fn normalize_param_value(value : Double) -> Double {
-  if is_valid_param_value(value) {
+  if is_finite(value) {
     value
   } else {
     0.0
   }
 }
 
-///|
-fn is_valid_param_value(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf()
-}

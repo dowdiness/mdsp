@@ -798,8 +798,8 @@ pub fn CompiledDsp::process(
   output : AudioBuffer,
 ) -> Unit {
   let sample_rate = context.sample_rate()
-  let sample_count = compiled_sample_count(context, output)
-  if !valid_compiled_context(sample_rate) {
+  let sample_count = effective_sample_count(context, output)
+  if !is_finite_positive(sample_rate) {
     clear_compiled_buffers(self.buffers)
     clear_compiled_buffers(self.left_buffers)
     clear_compiled_buffers(self.right_buffers)
@@ -1423,7 +1423,7 @@ pub fn CompiledStereoDsp::process(
   let sample_count = compiled_stereo_sample_count(
     context, left_output, right_output,
   )
-  if !valid_compiled_context(sample_rate) {
+  if !is_finite_positive(sample_rate) {
     clear_compiled_buffers(self.buffers)
     clear_compiled_buffers(self.left_buffers)
     clear_compiled_buffers(self.right_buffers)
@@ -2269,7 +2269,7 @@ fn stereo_compile_plan(
   context : DspContext,
 ) -> (Array[Int], Array[(Int, Int, Int)])? {
   let sample_rate = context.sample_rate()
-  if !valid_compiled_context(sample_rate) {
+  if !is_finite_positive(sample_rate) {
     return None
   }
   let output_index = match
@@ -2308,19 +2308,19 @@ fn valid_node_inputs(
   sample_rate : Double,
 ) -> Bool {
   match node.kind {
-    Constant => valid_finite_value(node.value0)
+    Constant => is_finite(node.value0)
     Oscillator =>
       if node.input0 >= 0 {
         valid_reference(node.input0, node_count)
       } else {
-        valid_finite_value(node.value0)
+        is_finite(node.value0)
       }
     Noise => true
     Adsr =>
-      valid_finite_value(node.value0) &&
-      valid_finite_value(node.value1) &&
-      valid_finite_value(node.value2) &&
-      valid_finite_value(node.value3)
+      is_finite(node.value0) &&
+      is_finite(node.value1) &&
+      is_finite(node.value2) &&
+      is_finite(node.value3)
     Biquad =>
       valid_reference(node.input0, node_count) &&
       valid_biquad_graph_params(sample_rate, node.value0, node.value1)
@@ -2329,7 +2329,7 @@ fn valid_node_inputs(
       valid_delay_feedback(node.value0)
     Gain =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0)
+      is_finite(node.value0)
     Mul =>
       valid_reference(node.input0, node_count) &&
       valid_reference(node.input1, node_count)
@@ -2338,18 +2338,18 @@ fn valid_node_inputs(
       valid_reference(node.input1, node_count)
     Clip =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0) &&
+      is_finite(node.value0) &&
       node.value0 > 0.0
     Output => valid_reference(node.input0, node_count)
     Pan =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0)
+      is_finite(node.value0)
     StereoGain =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0)
+      is_finite(node.value0)
     StereoClip =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0) &&
+      is_finite(node.value0) &&
       node.value0 > 0.0
     StereoBiquad =>
       valid_reference(node.input0, node_count) &&
@@ -2369,19 +2369,19 @@ fn valid_stereo_node_inputs(
   sample_rate : Double,
 ) -> Bool {
   match node.kind {
-    Constant => valid_finite_value(node.value0)
+    Constant => is_finite(node.value0)
     Oscillator =>
       if node.input0 >= 0 {
         valid_reference(node.input0, node_count)
       } else {
-        valid_finite_value(node.value0)
+        is_finite(node.value0)
       }
     Noise => true
     Adsr =>
-      valid_finite_value(node.value0) &&
-      valid_finite_value(node.value1) &&
-      valid_finite_value(node.value2) &&
-      valid_finite_value(node.value3)
+      is_finite(node.value0) &&
+      is_finite(node.value1) &&
+      is_finite(node.value2) &&
+      is_finite(node.value3)
     Biquad =>
       valid_reference(node.input0, node_count) &&
       valid_biquad_graph_params(sample_rate, node.value0, node.value1)
@@ -2390,7 +2390,7 @@ fn valid_stereo_node_inputs(
       valid_delay_feedback(node.value0)
     Gain =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0)
+      is_finite(node.value0)
     Mul =>
       valid_reference(node.input0, node_count) &&
       valid_reference(node.input1, node_count)
@@ -2399,18 +2399,18 @@ fn valid_stereo_node_inputs(
       valid_reference(node.input1, node_count)
     Clip =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0) &&
+      is_finite(node.value0) &&
       node.value0 > 0.0
     Output => false
     Pan =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0)
+      is_finite(node.value0)
     StereoGain =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0)
+      is_finite(node.value0)
     StereoClip =>
       valid_reference(node.input0, node_count) &&
-      valid_finite_value(node.value0) &&
+      is_finite(node.value0) &&
       node.value0 > 0.0
     StereoBiquad =>
       valid_reference(node.input0, node_count) &&
@@ -2480,10 +2480,6 @@ fn CompiledStereoDsp::compiled_index_for(
   }
 }
 
-///|
-fn valid_finite_value(value : Double) -> Bool {
-  !value.is_nan() && !value.is_inf()
-}
 
 ///|
 fn updated_node_param(
@@ -2495,7 +2491,7 @@ fn updated_node_param(
   match node.kind {
     Constant =>
       match slot {
-        Value0 if valid_finite_value(value) =>
+        Value0 if is_finite(value) =>
           Some(node_with_value0(node, value))
         _ => None
       }
@@ -2506,7 +2502,7 @@ fn updated_node_param(
         None
       } else {
         match slot {
-          Value0 if valid_finite_value(value) =>
+          Value0 if is_finite(value) =>
             Some(node_with_value0(node, value))
           _ => None
         }
@@ -2535,7 +2531,7 @@ fn updated_node_param(
       }
     Gain =>
       match slot {
-        Value0 if valid_finite_value(value) =>
+        Value0 if is_finite(value) =>
           Some(node_with_value0(node, value))
         _ => None
       }
@@ -2543,26 +2539,26 @@ fn updated_node_param(
     Mix => None
     Clip =>
       match slot {
-        Value0 if valid_finite_value(value) && value > 0.0 =>
+        Value0 if is_finite(value) && value > 0.0 =>
           Some(node_with_value0(node, value))
         _ => None
       }
     Output => None
     Pan =>
       match slot {
-        Value0 if valid_finite_value(value) =>
+        Value0 if is_finite(value) =>
           Some(node_with_value0(node, value))
         _ => None
       }
     StereoGain =>
       match slot {
-        Value0 if valid_finite_value(value) =>
+        Value0 if is_finite(value) =>
           Some(node_with_value0(node, value))
         _ => None
       }
     StereoClip =>
       match slot {
-        Value0 if valid_finite_value(value) && value > 0.0 =>
+        Value0 if is_finite(value) && value > 0.0 =>
           Some(node_with_value0(node, value))
         _ => None
       }
@@ -2721,7 +2717,7 @@ fn apply_runtime_param_side_effect_stereo(
 
 ///|
 fn exact_int_value(value : Double) -> Int? {
-  if !valid_finite_value(value) || value.trunc() != value {
+  if !is_finite(value) || value.trunc() != value {
     return None
   }
   let int_value = value.to_int()
@@ -2739,12 +2735,12 @@ fn valid_biquad_graph_params(
   q : Double,
 ) -> Bool {
   let nyquist = sample_rate * NYQUIST_RATIO
-  valid_finite_value(sample_rate) &&
+  is_finite(sample_rate) &&
   sample_rate > 0.0 &&
-  valid_finite_value(cutoff) &&
+  is_finite(cutoff) &&
   cutoff > 0.0 &&
   cutoff < nyquist &&
-  valid_finite_value(q) &&
+  is_finite(q) &&
   q > 0.0
 }
 
@@ -2759,7 +2755,7 @@ fn graph_default_delay_samples(value : Int) -> Int {
 
 ///|
 fn valid_delay_feedback(value : Double) -> Bool {
-  valid_finite_value(value) &&
+  is_finite(value) &&
   value >= -max_feedback_amount() &&
   value <= max_feedback_amount()
 }
@@ -2770,7 +2766,7 @@ fn mono_compile_plan(
   context : DspContext,
 ) -> (Array[Int], Array[(Int, Int, Int)])? {
   let sample_rate = context.sample_rate()
-  if !valid_compiled_context(sample_rate) {
+  if !is_finite_positive(sample_rate) {
     return None
   }
   let output_index = match find_single_output_index(nodes) {
@@ -3149,15 +3145,6 @@ fn compiled_block_size(context : DspContext) -> Int {
 }
 
 ///|
-fn compiled_sample_count(context : DspContext, output : AudioBuffer) -> Int {
-  if output.length() < context.block_size() {
-    output.length()
-  } else {
-    context.block_size()
-  }
-}
-
-///|
 fn compiled_stereo_sample_count(
   context : DspContext,
   left_output : AudioBuffer,
@@ -3175,10 +3162,6 @@ fn compiled_stereo_sample_count(
   }
 }
 
-///|
-fn valid_compiled_context(sample_rate : Double) -> Bool {
-  !sample_rate.is_nan() && !sample_rate.is_inf() && sample_rate > 0.0
-}
 
 ///|
 fn copy_buffer(
@@ -3580,7 +3563,7 @@ fn self_register_stereo_input_right(
 
 ///|
 fn feedback_pan_left_gain(position : Double) -> Double {
-  if !valid_finite_value(position) {
+  if !is_finite(position) {
     0.0
   } else {
     let clamped = position.clamp(min=-1.0, max=1.0)
@@ -3597,7 +3580,7 @@ fn feedback_pan_left_gain(position : Double) -> Double {
 
 ///|
 fn feedback_pan_right_gain(position : Double) -> Double {
-  if !valid_finite_value(position) {
+  if !is_finite(position) {
     0.0
   } else {
     let clamped = position.clamp(min=-1.0, max=1.0)

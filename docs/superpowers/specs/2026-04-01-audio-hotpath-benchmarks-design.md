@@ -22,16 +22,16 @@ These benchmarks enable regression detection and informed optimization decisions
 
 Five realistic graph configurations built via the public tagless `GraphBuilder` API, plus one minimal baseline (6 total).
 
-| Name | ~Nodes | Description | Feedback? | Stereo? |
-|------|--------|-------------|-----------|---------|
+| Name | Nodes | Description | Feedback? | Stereo? |
+|------|-------|-------------|-----------|---------|
 | **Passthrough** | 2 | constant → output (baseline for graph traversal overhead) | No | No |
-| **Minimal voice** | ~6 | osc → gain → output | No | No |
-| **FM voice** | ~12 | LFO → range → carrier → LPF → gain → output (`exit_deliverable`) | No | No |
-| **Full voice** | TBD | osc → ADSR → filter → gain → delay → clip → output, noise bus mixed in | No | No |
-| **Feedback voice** | TBD | osc → filter → delay(feedback) → gain → output, with `z^-1` back-edge | Yes | No |
-| **Stereo chain** | TBD | Full voice → pan → stereo filter → stereo delay → stereo gain → stereo clip → stereo output | No | Yes |
+| **Minimal voice** | 4 | osc → gain → output | No | No |
+| **FM voice** | 12 | LFO → range → carrier → LPF → gain → output (`exit_deliverable`) | No | No |
+| **Full voice** | 12 | osc → ADSR → filter → gain → delay → clip → output, noise bus mixed in | No | No |
+| **Feedback voice** | 7 | osc → filter → delay(feedback) → gain → output, with `z^-1` back-edge | Yes | No |
+| **Stereo chain** | 15 | Full voice → pan → stereo filter → stereo delay → stereo gain → stereo clip → stereo output | No | Yes |
 
-Node counts marked TBD will be filled in during implementation by counting `GraphBuilder::nodes().length()` on the constructed graph.
+Node counts measured from implemented graph builders.
 
 Each graph is constructed by a `fn build_bench_*() -> GraphBuilder` function using the same tagless API that real users would use. Graph parameters (frequencies, cutoffs, gains) use production-realistic values.
 
@@ -105,19 +105,18 @@ Hot-swap latency matters during live performance when the user edits the graph.
 
 ### 4. Topology edit (live node manipulation)
 
-**Count:** 3 edit types x 3 block sizes = 9 benchmarks
+**Count:** 2 edit types x 3 block sizes = 6 benchmarks
 
 - Uses `CompiledDspTopologyController` on the FM voice graph
-- Three edit types benchmarked:
-  - `replace_node` — replace a node in-place (e.g., swap oscillator waveform)
-  - `insert_node` — insert a new node into the chain
-  - `delete_node` — remove a node from the chain
+- Two edit types benchmarked:
+  - `replace_node` — replace a node in-place (stable graph size across iterations)
+  - `insert_delete_roundtrip` — insert a node then delete it, keeping the graph at constant size (a bare insert would grow the authoring_nodes array unboundedly, and a bare delete would be a no-op after the first iteration)
 - Each iteration calls `queue_topology_edit()` then `process()` (which triggers internal recompilation + crossfade)
 - `crossfade_samples` is set equal to the block size
 
 Topology edits trigger internal recompilation, making them more expensive than hot-swap. This category isolates that cost.
 
-### Total: 45 benchmarks
+### Total: 42 benchmarks
 
 ---
 
@@ -132,7 +131,7 @@ Single file: `lib/graph_benchmark.mbt`
 4. Process benchmarks — 18 benchmark functions using @bench.T
 5. Compile benchmarks — 6 benchmark functions
 6. Hot-swap benchmarks — 12 benchmark functions
-7. Topology edit benchmarks — 9 benchmark functions
+7. Topology edit benchmarks — 6 benchmark functions
 ```
 
 Note: `moon bench` discovers benchmark tests in `*_benchmark.mbt` files (verified via smoke test). The `@bench` package must be imported in `lib/moon.pkg`.
@@ -220,7 +219,7 @@ moon bench --release -p lib
 
 ## Success Criteria
 
-1. All 45 benchmarks compile and run under `moon bench --release -p lib`
+1. All 42 benchmarks compile and run under `moon bench --release -p lib`
 2. All 7 graph builder validation tests pass under `moon test -p lib`
 3. Process benchmarks for 128-sample blocks complete well under the 2.67 ms real-time budget
 4. Results are reproducible across runs (low variance)

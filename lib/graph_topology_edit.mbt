@@ -226,25 +226,42 @@ priv struct TopologyGraph {
 struct CompiledDspTopologyController(TopologyGraph)
 
 ///|
+/// Build a `TopologyGraph` from a compile+wrap callback.
+///
+/// The callback receives `(nodes, context, crossfade_samples)` and returns the
+/// inner `HotSwapGraph` on success, or `None` if compilation fails.
+fn build_topology_graph(
+  nodes : Array[DspNode],
+  context : DspContext,
+  crossfade_samples : Int,
+  compile_and_wrap : (Array[DspNode], DspContext, Int) -> HotSwapGraph?,
+) -> TopologyGraph? {
+  let hot_swap = match compile_and_wrap(nodes, context, crossfade_samples) {
+    Some(hs) => hs
+    None => return None
+  }
+  Some({
+    authoring_nodes: nodes.copy(),
+    compile_sample_rate: context.sample_rate(),
+    compile_block_size: context.block_size(),
+    hot_swap,
+  })
+}
+
+///|
 /// Build a topology-edit wrapper from authoring-order mono nodes.
 pub fn CompiledDspTopologyController::from_nodes(
   nodes : Array[DspNode],
   context : DspContext,
   crossfade_samples? : Int = 0,
 ) -> CompiledDspTopologyController? {
-  let compiled = match CompiledDsp::compile_raw(nodes, context) {
-    Some(compiled) => compiled
-    None => return None
-  }
-  let hot_swap = CompiledDspHotSwap::from_graph(compiled, crossfade_samples~)
-  Some(
-    CompiledDspTopologyController({
-      authoring_nodes: nodes.copy(),
-      compile_sample_rate: context.sample_rate(),
-      compile_block_size: context.block_size(),
-      hot_swap: hot_swap.0,
-    }),
-  )
+  build_topology_graph(nodes, context, crossfade_samples, fn(ns, ctx, xf) {
+    match CompiledDsp::compile_raw(ns, ctx) {
+      Some(compiled) =>
+        Some(CompiledDspHotSwap::from_graph(compiled, crossfade_samples=xf).0)
+      None => None
+    }
+  }).map(fn(tg) { CompiledDspTopologyController(tg) })
 }
 
 ///|
@@ -987,22 +1004,15 @@ pub fn CompiledStereoDspTopologyController::from_nodes(
   context : DspContext,
   crossfade_samples? : Int = 0,
 ) -> CompiledStereoDspTopologyController? {
-  let compiled = match CompiledStereoDsp::compile_raw(nodes, context) {
-    Some(compiled) => compiled
-    None => return None
-  }
-  let hot_swap = CompiledStereoDspHotSwap::from_graph(
-    compiled,
-    crossfade_samples~,
-  )
-  Some(
-    CompiledStereoDspTopologyController({
-      authoring_nodes: nodes.copy(),
-      compile_sample_rate: context.sample_rate(),
-      compile_block_size: context.block_size(),
-      hot_swap: hot_swap.0,
-    }),
-  )
+  build_topology_graph(nodes, context, crossfade_samples, fn(ns, ctx, xf) {
+    match CompiledStereoDsp::compile_raw(ns, ctx) {
+      Some(compiled) =>
+        Some(
+          CompiledStereoDspHotSwap::from_graph(compiled, crossfade_samples=xf).0,
+        )
+      None => None
+    }
+  }).map(fn(tg) { CompiledStereoDspTopologyController(tg) })
 }
 
 ///|

@@ -205,8 +205,12 @@ fn CompiledDspHotSwap::mix_hot_swap_outputs(
     let new_gain = equal_power_new_gain(progress)
     output.set(
       index,
-      self.0.old_output.get(index) * old_gain +
-      self.0.new_output.get(index) * new_gain,
+      apply_crossfade_sample(
+        self.0.old_output.get(index),
+        self.0.new_output.get(index),
+        old_gain,
+        new_gain,
+      ),
     )
     self.0.crossfade_position = self.0.crossfade_position + 1
   }
@@ -346,13 +350,21 @@ fn CompiledStereoDspHotSwap::mix_hot_swap_outputs(
     let new_gain = equal_power_new_gain(progress)
     left_output.set(
       index,
-      self.0.old_left.get(index) * old_gain +
-      self.0.new_left.get(index) * new_gain,
+      apply_crossfade_sample(
+        self.0.old_left.get(index),
+        self.0.new_left.get(index),
+        old_gain,
+        new_gain,
+      ),
     )
     right_output.set(
       index,
-      self.0.old_right.get(index) * old_gain +
-      self.0.new_right.get(index) * new_gain,
+      apply_crossfade_sample(
+        self.0.old_right.get(index),
+        self.0.new_right.get(index),
+        old_gain,
+        new_gain,
+      ),
     )
     self.0.crossfade_position = self.0.crossfade_position + 1
   }
@@ -363,6 +375,16 @@ fn CompiledStereoDspHotSwap::mix_hot_swap_outputs(
   for index = sample_count; index < right_output.length(); index = index + 1 {
     right_output.set(index, 0.0)
   }
+}
+
+///|
+fn apply_crossfade_sample(
+  old_val : Double,
+  new_val : Double,
+  old_gain : Double,
+  new_gain : Double,
+) -> Double {
+  old_val * old_gain + new_val * new_gain
 }
 
 ///|

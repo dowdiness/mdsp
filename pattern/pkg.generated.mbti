@@ -4,6 +4,18 @@ package "dowdiness/mdsp/pattern"
 // Values
 pub fn[A] every(Int, (Pat[A]) -> Pat[A], Pat[A]) -> Pat[A]
 
+pub fn merge_control(Pat[ControlMap], Pat[ControlMap]) -> Pat[ControlMap]
+
+pub fn note(Double) -> Pat[ControlMap]
+
+pub fn note_name(String) -> Pat[ControlMap]
+
+pub fn s_cutoff(Double) -> Pat[ControlMap]
+
+pub fn s_gain(Double) -> Pat[ControlMap]
+
+pub fn s_pan(Double) -> Pat[ControlMap]
+
 pub fn[A] sequence(Array[Pat[A]]) -> Pat[A]
 
 pub fn[A] stack(Array[Pat[A]]) -> Pat[A]
@@ -11,6 +23,10 @@ pub fn[A] stack(Array[Pat[A]]) -> Pat[A]
 // Errors
 
 // Types and methods
+pub struct ControlMap(Map[String, Double]) derive(Show)
+#deprecated
+pub fn ControlMap::inner(Self) -> Map[String, Double]
+
 pub struct Event[A] {
   whole : TimeSpan?
   part : TimeSpan

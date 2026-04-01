@@ -1121,10 +1121,7 @@ fn compile_mono_graph(
   nodes : Array[DspNode],
   context : DspContext,
 ) -> CompiledGraph? {
-  match CompiledDsp::compile_raw(nodes, context) {
-    Some(compiled) => Some(compiled.0)
-    None => None
-  }
+  CompiledDsp::compile_raw(nodes, context).map(fn(c) { c.0 })
 }
 
 ///|
@@ -1133,10 +1130,7 @@ fn compile_stereo_graph(
   nodes : Array[DspNode],
   context : DspContext,
 ) -> CompiledGraph? {
-  match CompiledStereoDsp::compile_raw(nodes, context) {
-    Some(compiled) => Some(compiled.0)
-    None => None
-  }
+  CompiledStereoDsp::compile_raw(nodes, context).map(fn(c) { c.0 })
 }
 
 ///|

@@ -659,9 +659,11 @@ fn CompiledDsp::compile_raw(
 ///|
 /// Shared compilation logic for both mono and stereo graphs.
 ///
-/// Takes two callbacks to handle the variant-specific parts:
-/// - `compile_plan`: runs the mono or stereo topological sort + feedback detection
-/// - `validate`: checks terminal-node shapes (simple or feedback variant)
+/// WHY callbacks instead of an enum: the validation logic differs not just by
+/// mono/stereo but also by presence of feedback edges (simple vs feedback
+/// variant). A `validate` callback lets the caller compose both checks in
+/// one closure without adding a separate parameter for feedback mode.
+/// `compile_plan` selects the mono or stereo topological sort + feedback detection.
 fn compile_graph_impl(
   nodes : Array[DspNode],
   context : DspContext,
@@ -1000,7 +1002,10 @@ pub fn CompiledDsp::process(
 /// at compile time guarantees a mono graph never contains `StereoOutput` and
 /// vice-versa, so the "wrong" arm is a no-op that never fires at runtime.
 ///
-/// The `is_stereo` flag controls only the final output copy:
+/// WHY `is_stereo` flag instead of inspecting the last node's kind: the flag
+/// is precomputed and branch-predictable (constant for a given graph type),
+/// avoiding an index lookup on the hot path. It controls only the final
+/// output copy (once per block, not per sample):
 /// - mono:   copies last mono buffer to `output`
 /// - stereo: copies last stereo buffers to `left_output` / `right_output`
 fn CompiledGraph::process_feedback_graph_impl(

@@ -379,6 +379,10 @@ fn clamp_crossfade_samples(crossfade_samples : Int) -> Int {
 }
 
 ///|
+/// WHY a named function for a one-liner: the equal-power crossfade blend
+/// formula is used in both mono and stereo mix_hot_swap_outputs. Naming it
+/// makes the intent legible at both call sites and keeps the crossfade
+/// math in one place if the blend curve ever changes.
 fn apply_crossfade_sample(
   old_val : Double,
   new_val : Double,

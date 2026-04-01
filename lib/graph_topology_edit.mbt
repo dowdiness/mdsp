@@ -228,8 +228,12 @@ struct CompiledDspTopologyController(TopologyGraph)
 ///|
 /// Build a `TopologyGraph` from a compile+wrap callback.
 ///
-/// The callback receives `(nodes, context, crossfade_samples)` and returns the
-/// inner `HotSwapGraph` on success, or `None` if compilation fails.
+/// WHY a callback instead of an enum: the mono and stereo paths produce
+/// different concrete wrappers (`CompiledDspHotSwap` vs `CompiledStereoDspHotSwap`)
+/// that allocate different buffer layouts (mono: old_output/new_output at
+/// capacity; stereo: old_left/old_right/new_left/new_right). A callback lets
+/// each `from_nodes` caller supply its variant-specific compile+unwrap logic
+/// without a `GraphKind` enum and a match inside this function.
 fn build_topology_graph(
   nodes : Array[DspNode],
   context : DspContext,

@@ -193,3 +193,69 @@ test "fast(0) returns silence (no events)" {
   let events = p.query(span(0, 1, 1, 1))
   inspect(events.length(), content="0")
 }
+
+///|
+test "sequence([pure(1), pure(2), pure(3)]) produces 3 events at thirds" {
+  let p = sequence([Pat::pure(1), Pat::pure(2), Pat::pure(3)])
+  let events = p.query(span(0, 1, 1, 1))
+  inspect(events.length(), content="3")
+  // Event 0: value=1, part=[0, 1/3)
+  inspect(events[0].value, content="1")
+  inspect(
+    events[0].part,
+    content=(
+      #|{begin: {num: 0, den: 1}, end_: {num: 1, den: 3}}
+    ),
+  )
+  // Event 1: value=2, part=[1/3, 2/3)
+  inspect(events[1].value, content="2")
+  inspect(
+    events[1].part,
+    content=(
+      #|{begin: {num: 1, den: 3}, end_: {num: 2, den: 3}}
+    ),
+  )
+  // Event 2: value=3, part=[2/3, 1)
+  inspect(events[2].value, content="3")
+  inspect(
+    events[2].part,
+    content=(
+      #|{begin: {num: 2, den: 3}, end_: {num: 1, den: 1}}
+    ),
+  )
+}
+
+///|
+test "sequence with silence creates rest (2 events from 3 slots)" {
+  let p = sequence([Pat::pure(1), Pat::silence(), Pat::pure(3)])
+  let events = p.query(span(0, 1, 1, 1))
+  inspect(events.length(), content="2")
+  inspect(events[0].value, content="1")
+  inspect(events[1].value, content="3")
+}
+
+///|
+test "stack merges events from all patterns" {
+  let p = stack([Pat::pure(1), Pat::pure(2)])
+  let events = p.query(span(0, 1, 1, 1))
+  inspect(events.length(), content="2")
+}
+
+///|
+test "every(2, fast(2), pat): cycle 0 gets 2 events, cycle 1 gets 1" {
+  let pat = Pat::pure(42)
+  let p = every(2, fn(x) { x.fast(r(2, 1)) }, pat)
+  // Cycle 0: every fires, so fast(2) applied → 2 events
+  let events0 = p.query(span(0, 1, 1, 1))
+  inspect(events0.length(), content="2")
+  // Cycle 1: every does not fire, so plain pat → 1 event
+  let events1 = p.query(span(1, 1, 2, 1))
+  inspect(events1.length(), content="1")
+}
+
+///|
+test "empty sequence produces 0 events" {
+  let p : Pat[Int] = sequence([])
+  let events = p.query(span(0, 1, 1, 1))
+  inspect(events.length(), content="0")
+}

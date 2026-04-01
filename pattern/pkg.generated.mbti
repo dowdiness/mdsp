@@ -2,6 +2,11 @@
 package "dowdiness/mdsp/pattern"
 
 // Values
+pub fn[A] every(Int, (Pat[A]) -> Pat[A], Pat[A]) -> Pat[A]
+
+pub fn[A] sequence(Array[Pat[A]]) -> Pat[A]
+
+pub fn[A] stack(Array[Pat[A]]) -> Pat[A]
 
 // Errors
 

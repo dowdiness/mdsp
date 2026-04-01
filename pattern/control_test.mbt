@@ -52,6 +52,34 @@ test "merge_control right-biased on conflict" {
 }
 
 ///|
+test "note_name bf4 = 70 (B-flat)" {
+  let pat = note_name("bf4")
+  let events = pat.query(span(0, 1, 1, 1))
+  assert_eq(events[0].value.0.get("note"), Some(70.0))
+}
+
+///|
+test "note_name ef3 = 51 (E-flat)" {
+  let pat = note_name("ef3")
+  let events = pat.query(span(0, 1, 1, 1))
+  assert_eq(events[0].value.0.get("note"), Some(51.0))
+}
+
+///|
+test "note_name f4 = 65 (F natural, not flat)" {
+  let pat = note_name("f4")
+  let events = pat.query(span(0, 1, 1, 1))
+  assert_eq(events[0].value.0.get("note"), Some(65.0))
+}
+
+///|
+test "note_name cs3 = 49 (C-sharp)" {
+  let pat = note_name("cs3")
+  let events = pat.query(span(0, 1, 1, 1))
+  assert_eq(events[0].value.0.get("note"), Some(49.0))
+}
+
+///|
 test "deliverable: sequence c3 e3 g3 fast 2 produces 6 events" {
   let pat = sequence([note_name("c3"), note_name("e3"), note_name("g3")]).fast(
     Rational::from_int(2),

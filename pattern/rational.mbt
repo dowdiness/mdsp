@@ -79,8 +79,10 @@ pub impl Div for Rational with div(self : Rational, other : Rational) -> Rationa
 
 ///|
 pub impl Compare for Rational with compare(self : Rational, other : Rational) -> Int {
-  // cross-multiply: self.num/self.den vs other.num/other.den
-  // => self.num * other.den vs other.num * self.den (den always positive)
+  // WHY cross-multiply: avoids float conversion. Safe because den > 0.
+  // NOTE: can overflow Int64 for very large numerators/denominators.
+  // Musical patterns use small values (cycle counts, subdivisions) so this
+  // is not a practical concern, but adversarial inputs could trigger it.
   let lhs = self.num * other.den
   let rhs = other.num * self.den
   if lhs < rhs {

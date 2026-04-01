@@ -95,6 +95,7 @@ pub fn CompiledDsp::apply_controls(Self, Array[GraphControl]) -> Bool
 pub fn CompiledDsp::compile(Array[DspNode], DspContext) -> Self?
 pub fn CompiledDsp::gate_off(Self, Int) -> Bool
 pub fn CompiledDsp::gate_on(Self, Int) -> Bool
+pub fn CompiledDsp::is_voice_finished(Self) -> Bool
 pub fn CompiledDsp::process(Self, DspContext, AudioBuffer) -> Unit
 pub fn CompiledDsp::set_param(Self, Int, GraphParamSlot, Double) -> Bool
 

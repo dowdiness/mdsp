@@ -245,9 +245,7 @@ test "process mixes multiple voices" {
   ignore(pool2.note_on([]))
   pool2.process(ctx, one_voice_left, one_voice_right)
   for i = 0; i < 4; i = i + 1 {
-    assert_true(
-      (left.get(i) - 2.0 * one_voice_left.get(i)).abs() < 0.001,
-    )
+    assert_true((left.get(i) - 2.0 * one_voice_left.get(i)).abs() < 0.001)
   }
 }
 

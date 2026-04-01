@@ -1,7 +1,7 @@
 # Phase 4: Pattern Engine — Design Spec
 
 > **Date:** 2026-04-01
-> **Scope:** Strudel-inspired pattern algebra in a standalone `pattern/` package with rational time, 6 combinators, and ControlMap output.
+> **Scope:** Strudel-inspired pattern algebra in a standalone `pattern/` package with rational time, 8 combinators, and ControlMap output.
 
 ---
 
@@ -42,15 +42,17 @@ The `pattern/` package has zero dependency on the DSP engine (`lib/`). It knows 
 Exact fraction arithmetic for musical time. Always simplified (GCD), denominator always positive.
 
 ```
-struct Rational { num: Int, den: Int }
+struct Rational { num: Int64, den: Int64 }
 
 Arithmetic: add, sub, mul, div
 Comparison: Eq, Compare (cross-multiply to avoid float)
 Conversion: to_double(), from_int()
-Construction: new(num, den) — simplifies and normalizes sign
+Construction: new(num, den) — simplifies via GCD and normalizes sign (den > 0)
 ```
 
 WHY rational: musical subdivisions like 1/3, 1/5, 1/7 cannot be represented exactly in floating point. Over long-running patterns (live performance), the accumulated drift causes events to shift relative to the beat grid. Strudel and TidalCycles both use rationals for this reason.
+
+WHY Int64 not Int: MoonBit `Int` is 32-bit. Cross-multiplication for comparison (`a.num * b.den` vs `b.num * a.den`) and deeply nested `fast`/`slow` transforms (e.g., `fast(7, fast(13, pat))` produces denominators of 7×13=91) quickly overflow 32-bit range in long-running live sessions. `Int64` gives ~9.2×10¹⁸ headroom — sufficient for any practical musical pattern.
 
 ### TimeSpan (Arc)
 
@@ -92,7 +94,13 @@ struct Pat[A] { query: (TimeSpan) -> Array[Event[A]] }
 
 ---
 
-## Combinators (6)
+## Combinators (8)
+
+### `silence() -> Pat[A]`
+
+Empty pattern — produces no events for any query arc. Essential for expressing rests in sequences: `sequence([note_name("c3"), silence(), note_name("g3")])` plays C, rest, G.
+
+Implementation: `Pat { query: fn(_) { [] } }`
 
 ### `pure(value: A) -> Pat[A]`
 
@@ -102,7 +110,7 @@ Constant pattern — one event per cycle spanning the full cycle `[n, n+1)`. The
 
 Divide each cycle equally among the patterns. `sequence([a, b, c])` gives each pattern 1/3 of a cycle. Each sub-pattern is queried over its compressed time window and events are shifted to the correct position.
 
-Implementation: for N patterns, each occupies `[i/N, (i+1)/N)` within a cycle. Scale each sub-pattern's time by N (like `fast`) and offset.
+Implementation: for N patterns, each occupies `[i/N, (i+1)/N)` within a cycle. Scale each sub-pattern's time by N (like `fast`) and offset. Both `whole` and `part` of returned events are transformed: scaled by `1/N` and offset by `i/N`.
 
 ### `stack(pats: Array[Pat[A]]) -> Pat[A]`
 
@@ -114,7 +122,7 @@ Implementation: query all patterns with the same arc, concatenate results.
 
 Speed up by compressing time. `fast(2, pat)` plays the pattern twice per cycle.
 
-Implementation: scale the query arc by `factor`, query the inner pattern, then scale event times back by `1/factor`. The inner pattern sees compressed time, but the events are reported in the caller's time frame.
+Implementation: scale the query arc by `factor`, query the inner pattern, then scale event times back by `1/factor`. **Both `whole` and `part`** of each returned event are scaled independently — `whole` preserves the event's ideal duration (for gate timing), `part` preserves the query intersection. The inner pattern sees compressed time, but the events are reported in the caller's time frame.
 
 ### `slow(factor: Rational, pat: Pat[A]) -> Pat[A]`
 
@@ -130,13 +138,13 @@ Implementation: for each queried cycle, check `floor(cycle_begin) % n == 0`. If 
 
 Reverse event order within each cycle. Mirror event times around the cycle midpoint.
 
-Implementation: for each event, `new_begin = 1 - old_end`, `new_end = 1 - old_begin` (within the cycle).
+Implementation: query per-cycle, then for each event mirror **both `whole` and `part`** within the cycle: `new_begin = cycle_start + (cycle_end - old_end)`, `new_end = cycle_start + (cycle_end - old_begin)`. WHY per-cycle reversal: `rev` reverses within each cycle independently, not across the entire query arc. A 2-cycle query reverses each cycle separately.
 
 ---
 
 ## ControlMap
 
-The contract between the Pattern Engine and the DSP Engine (consumed in Phase 5).
+The contract between the Pattern Engine and the DSP Engine (consumed in Phase 5). Phase 4 uses numeric-only values (`Double`). Richer value types (strings for sample names, arrays for chords) can be added via a `ControlValue` enum in a future phase if needed.
 
 ```
 type ControlMap = Map[String, Double]
@@ -164,7 +172,7 @@ Standard MIDI mapping: `c0` = 12, each octave = 12 semitones, each letter maps t
 
 ### ControlMap Merging
 
-When patterns of `ControlMap` are stacked, events at the same time should merge their maps (union, right-biased). A dedicated `merge_control` combinator:
+`merge_control` combines two `ControlMap` patterns by aligning events at onset boundaries and merging their maps (union, right-biased for conflicts).
 
 ```
 fn merge_control(
@@ -173,7 +181,11 @@ fn merge_control(
 ) -> Pat[ControlMap]
 ```
 
-This enables `merge_control(note(60), s_cutoff(800))` → events with `{ "note": 60, "cutoff": 800 }`.
+**Semantics:** For each event onset in pattern `a`, sample all active events from pattern `b` whose `part` overlaps that onset. Merge the sampled `b` values into the `a` event's ControlMap (right-biased: `b` wins on key conflicts). This produces one merged event per `a`-onset.
+
+WHY onset-aligned: Phase 5 converts each onset event into a `VoicePool::note_on(Array[GraphControl])` call. The voice pool expects one complete control frame per onset, not loose overlapping maps. Onset-aligned merging ensures that a `note` pattern combined with a slower `cutoff` pattern produces one merged frame per note onset.
+
+Example: `merge_control(sequence([note(60), note(64)]), s_cutoff(800))` → two events per cycle, each with `{ "note": 60/64, "cutoff": 800 }`.
 
 ---
 
@@ -185,8 +197,8 @@ pattern/
 ├── rational.mbt          — Rational struct + arithmetic + comparison
 ├── time.mbt              — TimeSpan struct + duration/contains/intersect/whole_cycles
 ├── event.mbt             — Event[A] struct
-├── pattern.mbt           — Pat[A] struct + pure + fast + slow + rev
-├── combinators.mbt       — sequence + stack + every
+├── pattern.mbt           — Pat[A] struct + silence + pure + fast + slow + rev
+├── combinators.mbt       — sequence + stack + every + merge_control
 ├── control.mbt           — ControlMap type, note/note_name/s_cutoff/s_gain/s_pan helpers, merge_control
 ├── rational_test.mbt     — Rational arithmetic, simplification, edge cases
 ├── time_test.mbt         — Arc overlap, intersection, whole_cycles splitting
@@ -205,7 +217,7 @@ Also modify:
 |------|-----------|
 | `rational_test.mbt` | `2/4 simplifies to 1/2`, `1/3 + 1/3 = 2/3`, `negative denominator normalizes`, `division by zero` |
 | `time_test.mbt` | `[0,1) intersect [0.5,1.5) = [0.5,1)`, `disjoint arcs → None`, `whole_cycles([0, 2.5)) = 3 arcs` |
-| `pattern_test.mbt` | `pure(x) over [0,1) → 1 event`, `sequence([a,b]) over [0,1) → 2 events at [0,1/2) and [1/2,1)`, `fast(2, pat) over [0,1) → 2x events`, `rev mirrors within cycle`, `every(2, rev, pat)` applies rev on even cycles only |
+| `pattern_test.mbt` | `silence over [0,1) → 0 events`, `pure(x) over [0,1) → 1 event`, `sequence([a, silence(), b]) → 2 events with rest in middle`, `sequence([a,b]) over [0,1) → 2 events at [0,1/2) and [1/2,1)`, `fast(2, pat) over [0,1) → 2x events with correct whole/part`, `rev mirrors both whole and part within cycle`, `every(2, rev, pat)` applies rev on even cycles only |
 | `control_test.mbt` | `note_name("c3") → 48.0`, `note_name("fs4") → 66.0`, deliverable end-to-end: `sequence([note_name("c3"), note_name("e3"), note_name("g3")]).fast(2)` over `[0,1)` → 6 events |
 
 ---
@@ -222,8 +234,9 @@ Also modify:
 
 ## What Is NOT in Scope (Phase 5+)
 
-- DSP integration (`event_to_dsp`, voice allocation from events)
-- `PatternSym` trait / concrete `PatternNode` AST (Phase 6, `incr` integration)
-- Real-time scheduling (clock, audio callback timing)
-- Text parsing / REPL
-- Browser UI
+- **DSP integration** — `event_to_dsp` conversion, onset-to-`GraphControl` mapping, `whole`-based gate-off scheduling, voice allocation. The `ControlMap` and `merge_control` semantics are designed to feed cleanly into `VoicePool::note_on(Array[GraphControl])`, but the actual wiring is Phase 5.
+- **`ControlValue` enum** — richer value types (strings for sample names, arrays for chords). `Map[String, Double]` is sufficient for numeric synth control in Phase 4-5.
+- **`PatternSym` trait / concrete `PatternNode` AST** (Phase 6, `incr` integration)
+- **Real-time scheduling** (clock, audio callback timing)
+- **Text parsing / REPL**
+- **Browser UI**

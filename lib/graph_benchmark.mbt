@@ -231,3 +231,63 @@ test "bench/process/stereo_chain" (b : @bench.T) {
     })
   }
 }
+
+///|
+test "bench/compile/passthrough" (b : @bench.T) {
+  let nodes = build_bench_passthrough().nodes()
+  let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
+  b.bench(name="passthrough", fn() {
+    let compiled = CompiledDsp::compile(nodes, ctx)
+    b.keep(compiled)
+  })
+}
+
+///|
+test "bench/compile/minimal_voice" (b : @bench.T) {
+  let nodes = build_bench_minimal_voice().nodes()
+  let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
+  b.bench(name="minimal_voice", fn() {
+    let compiled = CompiledDsp::compile(nodes, ctx)
+    b.keep(compiled)
+  })
+}
+
+///|
+test "bench/compile/fm_voice" (b : @bench.T) {
+  let nodes = build_bench_fm_voice().nodes()
+  let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
+  b.bench(name="fm_voice", fn() {
+    let compiled = CompiledDsp::compile(nodes, ctx)
+    b.keep(compiled)
+  })
+}
+
+///|
+test "bench/compile/full_voice" (b : @bench.T) {
+  let nodes = build_bench_full_voice().nodes()
+  let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
+  b.bench(name="full_voice", fn() {
+    let compiled = CompiledDsp::compile(nodes, ctx)
+    b.keep(compiled)
+  })
+}
+
+///|
+test "bench/compile/feedback_voice" (b : @bench.T) {
+  let nodes = build_bench_feedback_voice_nodes()
+  let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
+  b.bench(name="feedback_voice", fn() {
+    let compiled = CompiledDsp::compile(nodes, ctx)
+    b.keep(compiled)
+  })
+}
+
+///|
+test "bench/compile/stereo_chain" (b : @bench.T) {
+  let nodes = build_bench_stereo_chain().nodes()
+  let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
+  b.bench(name="stereo_chain", fn() {
+    let compiled = CompiledStereoDsp::compile(nodes, ctx)
+    b.keep(compiled)
+  })
+}

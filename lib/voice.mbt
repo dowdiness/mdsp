@@ -235,3 +235,43 @@ pub fn VoicePool::voice_state(
   }
   slot.state
 }
+
+///|
+pub fn VoicePool::process(
+  self : VoicePool,
+  context : DspContext,
+  left_output : AudioBuffer,
+  right_output : AudioBuffer,
+) -> Unit {
+  for i = 0; i < self.max_voices; i = i + 1 {
+    let slot = self.slots[i]
+    if slot.state is VoiceState::Idle {
+      continue i + 1
+    }
+    match slot.compiled {
+      None => {
+        slot.state = VoiceState::Idle
+        continue i + 1
+      }
+      Some(compiled) => {
+        compiled.process(context, slot.mono_buffer)
+        let left_gain = feedback_pan_left_gain(slot.pan)
+        let right_gain = feedback_pan_right_gain(slot.pan)
+        let sample_count = if context.block_size() < left_output.length() {
+          context.block_size()
+        } else {
+          left_output.length()
+        }
+        for s = 0; s < sample_count; s = s + 1 {
+          let mono = slot.mono_buffer.get(s)
+          left_output.set(s, left_output.get(s) + mono * left_gain)
+          right_output.set(s, right_output.get(s) + mono * right_gain)
+        }
+        if slot.state is VoiceState::Releasing && compiled.is_voice_finished() {
+          slot.state = VoiceState::Idle
+          slot.compiled = None
+        }
+      }
+    }
+  }
+}

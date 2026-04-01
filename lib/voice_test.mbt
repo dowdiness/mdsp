@@ -175,3 +175,78 @@ test "set_voice_pan with stale handle returns false" {
   ignore(pool.note_on([]))
   assert_true(!pool.set_voice_pan(h1, 0.5))
 }
+
+///|
+test "process produces stereo output from mono voices" {
+  let ctx = DspContext::new(48000.0, 4)
+  let nodes = [DspNode::constant(1.0), DspNode::output(0)]
+  let pool = VoicePool::new(nodes, ctx, max_voices=4).unwrap()
+  ignore(pool.note_on([]))
+  let left = AudioBuffer::filled(4)
+  let right = AudioBuffer::filled(4)
+  pool.process(ctx, left, right)
+  for i = 0; i < 4; i = i + 1 {
+    assert_true(left.get(i) > 0.0)
+    assert_true(right.get(i) > 0.0)
+    assert_true((left.get(i) - right.get(i)).abs() < 0.0001)
+  }
+}
+
+///|
+test "process pans hard left" {
+  let ctx = DspContext::new(48000.0, 4)
+  let nodes = [DspNode::constant(1.0), DspNode::output(0)]
+  let pool = VoicePool::new(nodes, ctx, max_voices=4).unwrap()
+  let handle = pool.note_on([]).unwrap()
+  ignore(pool.set_voice_pan(handle, -1.0))
+  let left = AudioBuffer::filled(4)
+  let right = AudioBuffer::filled(4)
+  pool.process(ctx, left, right)
+  for i = 0; i < 4; i = i + 1 {
+    assert_true(left.get(i) > 0.9)
+    assert_true(right.get(i).abs() < 0.0001)
+  }
+}
+
+///|
+test "process reclaims finished releasing voices" {
+  let ctx = DspContext::new(1000.0, 8)
+  let nodes = [
+    DspNode::constant(0.0),
+    DspNode::adsr(0.0, 0.0, 1.0, 0.0),
+    DspNode::output(1),
+  ]
+  let pool = VoicePool::new(nodes, ctx, max_voices=4).unwrap()
+  let handle = pool.note_on([]).unwrap()
+  let left = AudioBuffer::filled(8)
+  let right = AudioBuffer::filled(8)
+  pool.process(ctx, left, right)
+  assert_true(pool.active_voice_count() == 1)
+  assert_true(pool.note_off(handle))
+  left.fill(0.0)
+  right.fill(0.0)
+  pool.process(ctx, left, right)
+  assert_true(pool.active_voice_count() == 0)
+}
+
+///|
+test "process mixes multiple voices" {
+  let ctx = DspContext::new(48000.0, 4)
+  let nodes = [DspNode::constant(1.0), DspNode::output(0)]
+  let pool = VoicePool::new(nodes, ctx, max_voices=4).unwrap()
+  ignore(pool.note_on([]))
+  ignore(pool.note_on([]))
+  let left = AudioBuffer::filled(4)
+  let right = AudioBuffer::filled(4)
+  pool.process(ctx, left, right)
+  let one_voice_left = AudioBuffer::filled(4)
+  let one_voice_right = AudioBuffer::filled(4)
+  let pool2 = VoicePool::new(nodes, ctx, max_voices=4).unwrap()
+  ignore(pool2.note_on([]))
+  pool2.process(ctx, one_voice_left, one_voice_right)
+  for i = 0; i < 4; i = i + 1 {
+    assert_true(
+      (left.get(i) - 2.0 * one_voice_left.get(i)).abs() < 0.001,
+    )
+  }
+}

@@ -1684,6 +1684,40 @@ pub fn CompiledDsp::set_param(
 }
 
 ///|
+/// Returns true when a voice using this compiled graph can be safely reclaimed.
+///
+/// Two-stage check:
+/// 1. All ADSR nodes must be in Idle stage (envelope has finished)
+/// 2. The last output buffer must be silent (all samples below threshold)
+///
+/// WHY two stages: ADSR-only detection would cut voices with downstream delay
+/// or feedback tails that are still audible. Energy-only detection would keep
+/// voices alive during sustain (where output is non-zero but expected).
+pub fn CompiledDsp::is_voice_finished(self : CompiledDsp) -> Bool {
+  let nodes = self.0.nodes
+  let env_states = self.0.env_states
+  for i = 0; i < nodes.length(); i = i + 1 {
+    if nodes[i].kind is Adsr {
+      match env_states[i] {
+        Some(adsr) => if !(adsr.stage() is EnvStage::Idle) { return false }
+        None => ()
+      }
+    }
+  }
+  let last_index = nodes.length() - 1
+  if last_index < 0 {
+    return true
+  }
+  let output_buf = self.0.buffers[last_index]
+  for i = 0; i < output_buf.length(); i = i + 1 {
+    if output_buf.get(i).abs() > 0.0001 {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Trigger `gate_on()` on a stereo-graph ADSR node using its original
 /// authoring index.
 pub fn CompiledStereoDsp::gate_on(

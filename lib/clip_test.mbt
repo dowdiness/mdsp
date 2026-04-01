@@ -36,7 +36,10 @@ test "prop: clip output within threshold" {
   @qc.quick_check_fn(
     fn(pair : (Double, Double)) {
       let (input, raw_threshold) = pair
-      if input.is_nan() || input.is_inf() || raw_threshold.is_nan() || raw_threshold.is_inf() {
+      if input.is_nan() ||
+        input.is_inf() ||
+        raw_threshold.is_nan() ||
+        raw_threshold.is_inf() {
         return true
       }
       let threshold = raw_threshold.abs()

@@ -47,7 +47,10 @@ test "prop: gain is exact multiplication" {
   @qc.quick_check_fn(
     fn(pair : (Double, Double)) {
       let (input, gain_val) = pair
-      if input.is_nan() || input.is_inf() || gain_val.is_nan() || gain_val.is_inf() {
+      if input.is_nan() ||
+        input.is_inf() ||
+        gain_val.is_nan() ||
+        gain_val.is_inf() {
         return true
       }
       let gain = Gain::new()

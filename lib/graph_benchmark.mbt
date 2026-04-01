@@ -145,3 +145,89 @@ test "bench graph: stereo chain hotswap compiles" {
   hs.process(ctx, left, right)
   assert_true(true)
 }
+
+///|
+test "bench/process/passthrough" (b : @bench.T) {
+  let nodes = build_bench_passthrough().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled = CompiledDsp::compile(nodes, ctx).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="passthrough/\{block_size}", fn() {
+      compiled.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/process/minimal_voice" (b : @bench.T) {
+  let nodes = build_bench_minimal_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled = CompiledDsp::compile(nodes, ctx).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="minimal_voice/\{block_size}", fn() {
+      compiled.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/process/fm_voice" (b : @bench.T) {
+  let nodes = build_bench_fm_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled = CompiledDsp::compile(nodes, ctx).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="fm_voice/\{block_size}", fn() {
+      compiled.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/process/full_voice" (b : @bench.T) {
+  let nodes = build_bench_full_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled = CompiledDsp::compile(nodes, ctx).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="full_voice/\{block_size}", fn() {
+      compiled.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/process/feedback_voice" (b : @bench.T) {
+  let nodes = build_bench_feedback_voice_nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled = CompiledDsp::compile(nodes, ctx).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="feedback_voice/\{block_size}", fn() {
+      compiled.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/process/stereo_chain" (b : @bench.T) {
+  let nodes = build_bench_stereo_chain().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled = CompiledStereoDsp::compile(nodes, ctx).unwrap()
+    let left = AudioBuffer::filled(block_size)
+    let right = AudioBuffer::filled(block_size)
+    b.bench(name="stereo_chain/\{block_size}", fn() {
+      compiled.process(ctx, left, right)
+      b.keep(left)
+      b.keep(right)
+    })
+  }
+}

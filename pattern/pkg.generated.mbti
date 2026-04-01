@@ -20,6 +20,16 @@ pub impl Div for Rational
 pub impl Mul for Rational
 pub impl Sub for Rational
 
+pub struct TimeSpan {
+  begin : Rational
+  end_ : Rational
+} derive(Eq, Show)
+pub fn TimeSpan::contains(Self, Rational) -> Bool
+pub fn TimeSpan::duration(Self) -> Rational
+pub fn TimeSpan::intersect(Self, Self) -> Self?
+pub fn TimeSpan::new(Rational, Rational) -> Self
+pub fn TimeSpan::whole_cycles(Self) -> Array[Self]
+
 // Type aliases
 
 // Traits

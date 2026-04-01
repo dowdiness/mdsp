@@ -24,7 +24,9 @@ fn build_bench_minimal_voice() -> GraphBuilder {
 /// FM voice: LFO → range → carrier → LPF → gain → output (~12 nodes).
 /// Same topology as exit_deliverable().
 fn build_bench_fm_voice() -> GraphBuilder {
-  let lfo : GraphBuilder = GraphBuilder::constant(2.0).oscillator(Waveform::Sine)
+  let lfo : GraphBuilder = GraphBuilder::constant(2.0).oscillator(
+    Waveform::Sine,
+  )
   let freq = range(lfo, 200.0, 400.0)
   let carrier = freq.oscillator(Waveform::Sine)
   let filtered = carrier.biquad(BiquadMode::LowPass, 800.0, 1.0)
@@ -55,13 +57,13 @@ fn build_bench_full_voice() -> GraphBuilder {
 /// Uses raw DspNode array because GraphBuilder cannot express feedback cycles.
 fn build_bench_feedback_voice_nodes() -> Array[DspNode] {
   [
-    DspNode::constant(440.0),          // 0: freq
+    DspNode::constant(440.0), // 0: freq
     DspNode::oscillator(Waveform::Saw, 440.0), // 1: osc (fixed freq)
     DspNode::biquad(1, BiquadMode::LowPass, 1000.0, 0.707), // 2: filter
-    DspNode::mix(2, 5),                // 3: mix (filter + feedback from gain) — back-edge
+    DspNode::mix(2, 5), // 3: mix (filter + feedback from gain) — back-edge
     DspNode::delay(3, 4800, delay_samples=2400, feedback=0.0), // 4: delay
-    DspNode::gain(4, 0.5),            // 5: gain (feedback source)
-    DspNode::output(5),               // 6: output
+    DspNode::gain(4, 0.5), // 5: gain (feedback source)
+    DspNode::output(5), // 6: output
   ]
 }
 
@@ -125,7 +127,8 @@ test "bench graph: feedback voice compiles" {
 test "bench graph: stereo chain compiles" {
   let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
   let compiled = CompiledStereoDsp::compile(
-    build_bench_stereo_chain().nodes(), ctx,
+    build_bench_stereo_chain().nodes(),
+    ctx,
   )
   assert_true(compiled is Some(_))
 }
@@ -134,11 +137,13 @@ test "bench graph: stereo chain compiles" {
 test "bench graph: stereo chain hotswap compiles" {
   let ctx = DspContext::new(BENCH_SAMPLE_RATE, 128)
   let compiled = CompiledStereoDsp::compile(
-    build_bench_stereo_chain().nodes(), ctx,
+    build_bench_stereo_chain().nodes(),
+    ctx,
   )
   assert_true(compiled is Some(_))
   let hs = CompiledStereoDspHotSwap::from_graph(
-    compiled.unwrap(), crossfade_samples=128,
+    compiled.unwrap(),
+    crossfade_samples=128,
   )
   let left = AudioBuffer::filled(128)
   let right = AudioBuffer::filled(128)
@@ -290,4 +295,189 @@ test "bench/compile/stereo_chain" (b : @bench.T) {
     let compiled = CompiledStereoDsp::compile(nodes, ctx)
     b.keep(compiled)
   })
+}
+
+///|
+/// Alternate minimal voice for hot-swap benchmarks (different freq/gain).
+fn build_bench_minimal_voice_alt() -> GraphBuilder {
+  let freq : GraphBuilder = GraphBuilder::constant(880.0)
+  let osc = freq.oscillator(Waveform::Sine)
+  let gained = osc.gain(0.3)
+  GraphBuilder::output(gained)
+}
+
+///|
+/// Alternate stereo chain for hot-swap benchmarks (different freq).
+fn build_bench_stereo_chain_alt() -> GraphBuilder {
+  let freq : GraphBuilder = GraphBuilder::constant(330.0)
+  let osc = freq.oscillator(Waveform::Sine)
+  let gained = osc.gain(0.5)
+  let panned = gained.pan(0.3)
+  let stereo_gained = panned.stereo_gain(0.7)
+  GraphBuilder::stereo_output(stereo_gained)
+}
+
+///|
+test "bench/hotswap/minimal_voice" (b : @bench.T) {
+  let nodes_a = build_bench_minimal_voice().nodes()
+  let nodes_b = build_bench_minimal_voice_alt().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled_a = CompiledDsp::compile(nodes_a, ctx).unwrap()
+    let compiled_b = CompiledDsp::compile(nodes_b, ctx).unwrap()
+    let hs = CompiledDspHotSwap::from_graph(
+      compiled_a,
+      crossfade_samples=block_size,
+    )
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="minimal_voice/\{block_size}", fn() {
+      ignore(hs.queue_swap(compiled_b))
+      hs.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/hotswap/fm_voice" (b : @bench.T) {
+  let nodes_a = build_bench_fm_voice().nodes()
+  let nodes_b = build_bench_minimal_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled_a = CompiledDsp::compile(nodes_a, ctx).unwrap()
+    let compiled_b = CompiledDsp::compile(nodes_b, ctx).unwrap()
+    let hs = CompiledDspHotSwap::from_graph(
+      compiled_a,
+      crossfade_samples=block_size,
+    )
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="fm_voice/\{block_size}", fn() {
+      ignore(hs.queue_swap(compiled_b))
+      hs.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/hotswap/full_voice" (b : @bench.T) {
+  let nodes_a = build_bench_full_voice().nodes()
+  let nodes_b = build_bench_fm_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled_a = CompiledDsp::compile(nodes_a, ctx).unwrap()
+    let compiled_b = CompiledDsp::compile(nodes_b, ctx).unwrap()
+    let hs = CompiledDspHotSwap::from_graph(
+      compiled_a,
+      crossfade_samples=block_size,
+    )
+    let output = AudioBuffer::filled(block_size)
+    b.bench(name="full_voice/\{block_size}", fn() {
+      ignore(hs.queue_swap(compiled_b))
+      hs.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/hotswap/stereo_chain" (b : @bench.T) {
+  let nodes_a = build_bench_stereo_chain().nodes()
+  let nodes_b = build_bench_stereo_chain_alt().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let compiled_a = CompiledStereoDsp::compile(nodes_a, ctx).unwrap()
+    let compiled_b = CompiledStereoDsp::compile(nodes_b, ctx).unwrap()
+    let hs = CompiledStereoDspHotSwap::from_graph(
+      compiled_a,
+      crossfade_samples=block_size,
+    )
+    let left = AudioBuffer::filled(block_size)
+    let right = AudioBuffer::filled(block_size)
+    b.bench(name="stereo_chain/\{block_size}", fn() {
+      ignore(hs.queue_swap(compiled_b))
+      hs.process(ctx, left, right)
+      b.keep(left)
+      b.keep(right)
+    })
+  }
+}
+
+///|
+test "bench/topology/replace_node" (b : @bench.T) {
+  let nodes = build_bench_fm_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let tc = CompiledDspTopologyController::from_nodes(
+      nodes,
+      ctx,
+      crossfade_samples=block_size,
+    ).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    let edit = GraphTopologyEdit::replace_node(0, DspNode::constant(3.0))
+    b.bench(name="replace_node/\{block_size}", fn() {
+      ignore(tc.queue_topology_edit(edit))
+      tc.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/topology/insert_node" (b : @bench.T) {
+  let nodes = build_bench_fm_voice().nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let tc = CompiledDspTopologyController::from_nodes(
+      nodes,
+      ctx,
+      crossfade_samples=block_size,
+    ).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    let last_index = nodes.length() - 1
+    let insert_edit = GraphTopologyEdit::insert_node(
+      last_index,
+      GraphTopologyInputSlot::Input0,
+      DspNode::gain(-1, 0.9),
+    )
+    b.bench(name="insert_node/\{block_size}", fn() {
+      ignore(tc.queue_topology_edit(insert_edit))
+      tc.process(ctx, output)
+      b.keep(output)
+    })
+  }
+}
+
+///|
+test "bench/topology/delete_node" (b : @bench.T) {
+  let fm : GraphBuilder = build_bench_fm_voice()
+  let nodes = fm.nodes()
+  for block_size in bench_block_sizes {
+    let ctx = DspContext::new(BENCH_SAMPLE_RATE, block_size)
+    let tc = CompiledDspTopologyController::from_nodes(
+      nodes,
+      ctx,
+      crossfade_samples=block_size,
+    ).unwrap()
+    let output = AudioBuffer::filled(block_size)
+    let last_index = nodes.length() - 1
+    let insert_edit = GraphTopologyEdit::insert_node(
+      last_index,
+      GraphTopologyInputSlot::Input0,
+      DspNode::gain(-1, 0.9),
+    )
+    ignore(tc.queue_topology_edit(insert_edit))
+    tc.process(ctx, output)
+    let delete_edit = GraphTopologyEdit::delete_node(
+      last_index,
+      last_index + 1,
+      GraphTopologyInputSlot::Input0,
+      last_index,
+    )
+    b.bench(name="delete_node/\{block_size}", fn() {
+      ignore(tc.queue_topology_edit(delete_edit))
+      tc.process(ctx, output)
+      b.keep(output)
+    })
+  }
 }

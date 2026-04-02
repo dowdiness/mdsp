@@ -23,3 +23,25 @@ pub fn effective_sample_count(
     context.block_size()
   }
 }
+
+///|
+/// Replace non-finite samples (NaN, Inf) with 0.0 in-place.
+/// Returns the number of samples replaced. This is the output firewall —
+/// the last line of defense before samples leave the DSP engine.
+pub fn sanitize_buffer(buffer : AudioBuffer, sample_count : Int) -> Int {
+  let count = if sample_count > buffer.length() {
+    buffer.length()
+  } else if sample_count < 0 {
+    0
+  } else {
+    sample_count
+  }
+  let mut sanitized = 0
+  for i = 0; i < count; i = i + 1 {
+    if !is_finite(buffer.get(i)) {
+      buffer.set(i, 0.0)
+      sanitized = sanitized + 1
+    }
+  }
+  sanitized
+}

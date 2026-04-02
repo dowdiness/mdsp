@@ -35,7 +35,7 @@ pub struct ControlBindingBuilder {
 } derive(Show)
 
 ///|
-fn ControlBindingBuilder::new() -> ControlBindingBuilder {
+pub fn ControlBindingBuilder::new() -> ControlBindingBuilder {
   { bindings: [] }
 }
 
@@ -49,4 +49,43 @@ pub fn ControlBindingBuilder::bind(
 ) -> ControlBindingBuilder {
   self.bindings.push(ControlBinding(key~, node_index~, slot~))
   self
+}
+
+///|
+/// No public constructor — only reachable through ControlBindingBuilder::build().
+pub struct ControlBindingMap {
+  bindings : Array[ControlBinding]
+} derive(Show, Eq)
+
+///|
+/// Validate all bindings against the graph template and transition to
+/// the proven-valid ControlBindingMap. Checks node index bounds, slot
+/// compatibility, and key uniqueness. Returns the first error found.
+pub fn ControlBindingBuilder::build(
+  self : ControlBindingBuilder,
+  template : Array[DspNode],
+) -> Result[ControlBindingMap, ControlBindingError] {
+  let seen_keys : Map[String, Bool] = {}
+  for i = 0; i < self.bindings.length(); i = i + 1 {
+    let binding = self.bindings[i]
+    // 1. Node index bounds
+    if binding.node_index < 0 || binding.node_index >= template.length() {
+      return Err(ControlBindingError::InvalidNodeIndex(binding.node_index))
+    }
+    // 2. Slot compatibility (structural, not value-domain)
+    if !node_accepts_slot(template[binding.node_index], binding.slot) {
+      return Err(
+        ControlBindingError::InvalidSlotForNode(
+          binding.node_index,
+          binding.slot,
+        ),
+      )
+    }
+    // 3. No duplicate keys
+    if seen_keys.contains(binding.key) {
+      return Err(ControlBindingError::DuplicateKey(binding.key))
+    }
+    seen_keys[binding.key] = true
+  }
+  Ok({ bindings: self.bindings })
 }

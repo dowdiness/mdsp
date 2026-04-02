@@ -154,11 +154,17 @@ pub struct ControlBindingBuilder {
   fn new() -> ControlBindingBuilder
 } derive(Show)
 pub fn ControlBindingBuilder::bind(Self, key~ : String, node_index~ : Int, slot~ : GraphParamSlot) -> Self
+pub fn ControlBindingBuilder::build(Self, Array[DspNode]) -> Result[ControlBindingMap, ControlBindingError]
+pub fn ControlBindingBuilder::new() -> Self
 
 pub(all) enum ControlBindingError {
   InvalidNodeIndex(Int)
   InvalidSlotForNode(Int, GraphParamSlot)
   DuplicateKey(String)
+} derive(Eq, Show)
+
+pub struct ControlBindingMap {
+  bindings : Array[ControlBinding]
 } derive(Eq, Show)
 
 pub struct DelayLine {

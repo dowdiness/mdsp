@@ -166,6 +166,7 @@ pub(all) enum ControlBindingError {
 pub struct ControlBindingMap {
   bindings : Array[ControlBinding]
 } derive(Eq, Show)
+pub fn ControlBindingMap::resolve_controls(Self, Map[String, Double]) -> Array[GraphControl]
 
 pub struct DelayLine {
   buffer : FixedArray[Double]

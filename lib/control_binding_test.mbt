@@ -75,3 +75,79 @@ test "build: empty builder produces Ok with empty map" {
   let result = ControlBindingBuilder::new().build(template)
   assert_true(result is Ok(_))
 }
+
+///|
+test "resolve: full map converts all bound keys in insertion order" {
+  let template = [
+    DspNode::oscillator(Waveform::Sine, 440.0),
+    DspNode::gain(0, 0.3),
+    DspNode::output(1),
+  ]
+  let map = ControlBindingBuilder::new()
+    .bind(key="note", node_index=0, slot=GraphParamSlot::Value0)
+    .bind(key="gain", node_index=1, slot=GraphParamSlot::Value0)
+    .build(template)
+    .unwrap()
+  let controls : Map[String, Double] = { "note": 60.0, "gain": 0.5 }
+  let result = map.resolve_controls(controls)
+  assert_eq(result.length(), 2)
+  assert_eq(result[0].node_index, 0)
+  assert_eq(result[0].slot, GraphParamSlot::Value0)
+  assert_eq(result[0].value, 60.0)
+  assert_eq(result[1].node_index, 1)
+  assert_eq(result[1].slot, GraphParamSlot::Value0)
+  assert_eq(result[1].value, 0.5)
+}
+
+///|
+test "resolve: partial map skips missing keys" {
+  let template = [
+    DspNode::oscillator(Waveform::Sine, 440.0),
+    DspNode::gain(0, 0.3),
+    DspNode::output(1),
+  ]
+  let map = ControlBindingBuilder::new()
+    .bind(key="note", node_index=0, slot=GraphParamSlot::Value0)
+    .bind(key="gain", node_index=1, slot=GraphParamSlot::Value0)
+    .build(template)
+    .unwrap()
+  let controls : Map[String, Double] = { "gain": 0.8 }
+  let result = map.resolve_controls(controls)
+  assert_eq(result.length(), 1)
+  assert_eq(result[0].node_index, 1)
+  assert_eq(result[0].value, 0.8)
+}
+
+///|
+test "resolve: extra keys in map are ignored" {
+  let template = [DspNode::constant(1.0), DspNode::output(0)]
+  let map = ControlBindingBuilder::new()
+    .bind(key="freq", node_index=0, slot=GraphParamSlot::Value0)
+    .build(template)
+    .unwrap()
+  let controls : Map[String, Double] = { "freq": 220.0, "unknown": 99.0 }
+  let result = map.resolve_controls(controls)
+  assert_eq(result.length(), 1)
+  assert_eq(result[0].value, 220.0)
+}
+
+///|
+test "resolve: empty map produces empty controls" {
+  let template = [DspNode::constant(1.0), DspNode::output(0)]
+  let map = ControlBindingBuilder::new()
+    .bind(key="freq", node_index=0, slot=GraphParamSlot::Value0)
+    .build(template)
+    .unwrap()
+  let controls : Map[String, Double] = {}
+  let result = map.resolve_controls(controls)
+  assert_eq(result.length(), 0)
+}
+
+///|
+test "resolve: empty binding map produces empty controls" {
+  let template = [DspNode::constant(1.0), DspNode::output(0)]
+  let map = ControlBindingBuilder::new().build(template).unwrap()
+  let controls : Map[String, Double] = { "freq": 440.0 }
+  let result = map.resolve_controls(controls)
+  assert_eq(result.length(), 0)
+}

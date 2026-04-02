@@ -89,3 +89,26 @@ pub fn ControlBindingBuilder::build(
   }
   Ok({ bindings: self.bindings })
 }
+
+///|
+/// Convert pattern controls to graph controls using the validated bindings.
+/// Emits GraphControl::set_param for each bound key found in the input map,
+/// in binding insertion order. Missing keys are skipped; unrecognized keys
+/// are ignored. Values are passed through without domain validation.
+pub fn ControlBindingMap::resolve_controls(
+  self : ControlBindingMap,
+  controls : Map[String, Double],
+) -> Array[GraphControl] {
+  let result = Array::new(capacity=self.bindings.length())
+  for i = 0; i < self.bindings.length(); i = i + 1 {
+    let binding = self.bindings[i]
+    match controls.get(binding.key) {
+      Some(value) =>
+        result.push(
+          GraphControl::set_param(binding.node_index, binding.slot, value),
+        )
+      None => ()
+    }
+  }
+  result
+}

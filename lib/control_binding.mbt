@@ -54,8 +54,14 @@ pub fn ControlBindingBuilder::bind(
 ///|
 /// No public constructor — only reachable through ControlBindingBuilder::build().
 pub struct ControlBindingMap {
-  bindings : Array[ControlBinding]
+  priv bindings : Array[ControlBinding]
 } derive(Show, Eq)
+
+///|
+/// Number of validated bindings in this map.
+pub fn ControlBindingMap::length(self : ControlBindingMap) -> Int {
+  self.bindings.length()
+}
 
 ///|
 /// Validate all bindings against the graph template and transition to
@@ -68,11 +74,9 @@ pub fn ControlBindingBuilder::build(
   let seen_keys : Map[String, Bool] = {}
   for i = 0; i < self.bindings.length(); i = i + 1 {
     let binding = self.bindings[i]
-    // 1. Node index bounds
     if binding.node_index < 0 || binding.node_index >= template.length() {
       return Err(ControlBindingError::InvalidNodeIndex(binding.node_index))
     }
-    // 2. Slot compatibility (structural, not value-domain)
     if !node_accepts_slot(template[binding.node_index], binding.slot) {
       return Err(
         ControlBindingError::InvalidSlotForNode(
@@ -81,7 +85,6 @@ pub fn ControlBindingBuilder::build(
         ),
       )
     }
-    // 3. No duplicate keys
     if seen_keys.contains(binding.key) {
       return Err(ControlBindingError::DuplicateKey(binding.key))
     }

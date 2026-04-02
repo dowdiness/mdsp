@@ -57,7 +57,7 @@ test "build: duplicate keys returns DuplicateKey" {
 }
 
 ///|
-test "build: duplicate targets allowed" {
+test "build: multiple keys mapping to same node and slot are allowed" {
   let template = [
     DspNode::oscillator(Waveform::Sine, 440.0),
     DspNode::output(0),
@@ -77,7 +77,7 @@ test "build: empty builder produces Ok with empty map" {
 }
 
 ///|
-test "resolve: full map converts all bound keys in insertion order" {
+test "resolve: all present keys converted in binding insertion order" {
   let template = [
     DspNode::oscillator(Waveform::Sine, 440.0),
     DspNode::gain(0, 0.3),
@@ -184,5 +184,5 @@ test "build: post-build bind does not mutate validated map" {
   let map = builder.build(template).unwrap()
   // Mutate the builder after build — must not affect the validated map
   ignore(builder.bind(key="extra", node_index=0, slot=GraphParamSlot::Value0))
-  assert_eq(map.bindings.length(), 1)
+  assert_eq(map.length(), 1)
 }

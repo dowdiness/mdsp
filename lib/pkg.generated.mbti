@@ -164,8 +164,9 @@ pub(all) enum ControlBindingError {
 } derive(Eq, Show)
 
 pub struct ControlBindingMap {
-  bindings : Array[ControlBinding]
+  // private fields
 } derive(Eq, Show)
+pub fn ControlBindingMap::length(Self) -> Int
 pub fn ControlBindingMap::resolve_controls(Self, Map[String, Double]) -> Array[GraphControl]
 
 pub struct DelayLine {

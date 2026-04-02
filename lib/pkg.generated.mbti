@@ -14,6 +14,8 @@ pub fn[T : ArithSym] lin_map(T, Double, Double, Double, Double) -> T
 
 pub fn mono_shape() -> Int
 
+pub fn node_accepts_slot(DspNode, GraphParamSlot) -> Bool
+
 pub fn optimize_graph(Array[DspNode]) -> (Array[DspNode], FixedArray[Int])
 
 pub fn[T : ArithSym] range(T, Double, Double) -> T

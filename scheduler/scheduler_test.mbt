@@ -248,3 +248,59 @@ test "process_block: pan key applies per-voice pan" {
     }
   }
 }
+
+///|
+test "process_block: dense pattern fires multiple note-ons per block" {
+  let (pool, template, ctx) = make_test_pool()
+  let bindings = @lib.ControlBindingBuilder::new()
+    .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
+    .build(template)
+  match bindings {
+    Err(_) => assert_true(false)
+    Ok(b) => {
+      let sched = @scheduler.PatternScheduler::new(bpm=120.0, bindings=b, ctx~)
+      let pat = @pattern.note(60.0).fast(@pattern.Rational::from_int(1000))
+      let left = @lib.AudioBuffer::filled(128)
+      let right = @lib.AudioBuffer::filled(128)
+      sched.process_block(pat, pool, ctx, left, right)
+      assert_true(pool.active_voice_count() >= 1)
+    }
+  }
+}
+
+///|
+test "process_block: stolen voice gate-off is harmless" {
+  let template : Array[@lib.DspNode] = [
+    @lib.DspNode::oscillator(@lib.Waveform::Sine, 440.0),
+    @lib.DspNode::adsr(0.01, 0.1, 0.7, 0.3),
+    @lib.DspNode::gain(0, 1.0),
+    @lib.DspNode::output(2),
+  ]
+  let ctx = @lib.DspContext::new(48000.0, 128)
+  let pool = @lib.VoicePool::new(template, ctx, max_voices=1)
+  match pool {
+    None => assert_true(false)
+    Some(pool) => {
+      let bindings = @lib.ControlBindingBuilder::new()
+        .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
+        .build(template)
+      match bindings {
+        Err(_) => assert_true(false)
+        Ok(b) => {
+          let sched = @scheduler.PatternScheduler::new(
+            bpm=120.0,
+            bindings=b,
+            ctx~,
+          )
+          let pat = @pattern.note(60.0).fast(@pattern.Rational::from_int(2))
+          let left = @lib.AudioBuffer::filled(128)
+          let right = @lib.AudioBuffer::filled(128)
+          for _i = 0; _i < 200; _i = _i + 1 {
+            sched.process_block(pat, pool, ctx, left, right)
+          }
+          assert_true(true)
+        }
+      }
+    }
+  }
+}

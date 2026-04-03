@@ -53,6 +53,35 @@ pub fn midi_to_hz(midi : Double) -> Double {
 }
 
 ///|
+/// Test helper: inject an active note for testing gate-off logic.
+pub fn PatternScheduler::push_active_note(
+  self : PatternScheduler,
+  handle : @lib.VoiceHandle,
+  end_time : @pattern.Rational,
+) -> Unit {
+  self.active_notes.push({ handle, end_time })
+}
+
+///|
+/// Gate-off all notes whose end_time <= arc.begin, then remove them.
+/// Block-quantized: notes ending mid-block stay active until the next block.
+pub fn PatternScheduler::expire_notes(
+  self : PatternScheduler,
+  pool : @lib.VoicePool,
+  arc : @pattern.TimeSpan,
+) -> Unit {
+  let mut i = 0
+  while i < self.active_notes.length() {
+    if self.active_notes[i].end_time <= arc.begin {
+      ignore(pool.note_off(self.active_notes[i].handle))
+      ignore(self.active_notes.remove(i))
+    } else {
+      i = i + 1
+    }
+  }
+}
+
+///|
 /// Derive the cycle-time arc for a block from the integer sample counter.
 /// Denominators are bounded by sample_rate * 60 — no overflow risk for
 /// practical session lengths with Int64 numerators.

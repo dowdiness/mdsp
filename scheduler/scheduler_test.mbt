@@ -61,3 +61,52 @@ test "compute_arc: second block at 120 BPM" {
   assert_true(arc.begin == expected_start)
   assert_true(arc.end_ == expected_end)
 }
+
+///|
+/// Helper: build a VoicePool with a minimal osc+adsr+output template.
+fn make_test_pool() -> (@lib.VoicePool, Array[@lib.DspNode], @lib.DspContext) {
+  let template : Array[@lib.DspNode] = [
+    @lib.DspNode::oscillator(@lib.Waveform::Sine, 440.0),
+    @lib.DspNode::adsr(0.01, 0.1, 0.7, 0.3),
+    @lib.DspNode::gain(0, 1.0),
+    @lib.DspNode::output(2),
+  ]
+  let ctx = @lib.DspContext::new(48000.0, 128)
+  let pool = @lib.VoicePool::new(template, ctx, max_voices=4)
+  match pool {
+    Some(p) => (p, template, ctx)
+    None => abort("test pool creation failed")
+  }
+}
+
+///|
+test "expire_notes: removes notes past their end_time" {
+  let (pool, template, ctx) = make_test_pool()
+  let bindings = @lib.ControlBindingBuilder::new()
+    .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
+    .build(template)
+  match bindings {
+    Err(_) => assert_true(false)
+    Ok(b) => {
+      let sched = @scheduler.PatternScheduler::new(bpm=120.0, bindings=b, ctx~)
+      // Trigger a voice manually
+      let controls = b.resolve_controls({ "note": 440.0 })
+      let handle = pool.note_on(controls)
+      match handle {
+        None => assert_true(false)
+        Some(h) => {
+          // Inject an ActiveNote that expires at cycle 0 (already past)
+          sched.push_active_note(h, @pattern.Rational::from_int(0))
+          inspect(sched.active_note_count(), content="1")
+          // Expire with arc starting at cycle 1
+          let arc = @pattern.TimeSpan::new(
+            @pattern.Rational::from_int(1),
+            @pattern.Rational::from_int(2),
+          )
+          sched.expire_notes(pool, arc)
+          inspect(sched.active_note_count(), content="0")
+        }
+      }
+    }
+  }
+}

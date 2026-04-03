@@ -147,6 +147,13 @@ pub fn set_scheduler_bpm(bpm : Double) -> Unit {
   match sched_scheduler.val {
     None => ()
     Some(old) => {
+      // WHY note_off_all: the old scheduler's active_notes list is about to be
+      // discarded. Without gating off those voices first, they'd sustain forever
+      // in the pool (no one holds their VoiceHandles anymore).
+      match sched_pool.val {
+        Some(pool) => pool.note_off_all()
+        None => ()
+      }
       let new_sched = @scheduler.PatternScheduler::new(
         bpm~,
         bindings=old.bindings,

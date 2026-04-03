@@ -82,6 +82,64 @@ pub fn PatternScheduler::expire_notes(
 }
 
 ///|
+/// Process pattern events: sort by onset, trigger note-ons, handle pan.
+/// Events with no `whole` or whose onset is outside the arc are skipped.
+pub fn PatternScheduler::process_events(
+  self : PatternScheduler,
+  events : Array[@pattern.Event[@pattern.ControlMap]],
+  arc : @pattern.TimeSpan,
+  pool : @lib.VoicePool,
+) -> Unit {
+  // Sort by onset time for deterministic voice allocation
+  events.sort_by(fn(a, b) {
+    match (a.whole, b.whole) {
+      (Some(wa), Some(wb)) => wa.begin.compare(wb.begin)
+      (Some(_), None) => -1
+      (None, Some(_)) => 1
+      (None, None) => 0
+    }
+  })
+  for i = 0; i < events.length(); i = i + 1 {
+    let event = events[i]
+    match event.whole {
+      None => continue i + 1
+      Some(whole) => {
+        if !arc.contains(whole.begin) {
+          continue i + 1
+        }
+        // Extract inner map from ControlMap newtype
+        let map = event.value.0
+        // Convert MIDI note to Hz if present
+        match map.get("note") {
+          Some(midi) => map["note"] = midi_to_hz(midi)
+          None => ()
+        }
+        // Extract and remove pan before resolve_controls
+        let pan_value = map.get("pan")
+        match pan_value {
+          Some(_) => map.remove("pan")
+          None => ()
+        }
+        // Resolve remaining controls through bindings
+        let controls = self.bindings.resolve_controls(map)
+        // Trigger voice
+        match pool.note_on(controls) {
+          None => () // silent skip
+          Some(handle) => {
+            self.active_notes.push({ handle, end_time: whole.end_ })
+            // Apply per-voice pan if present
+            match pan_value {
+              Some(pan) => ignore(pool.set_voice_pan(handle, pan))
+              None => ()
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+///|
 /// Derive the cycle-time arc for a block from the integer sample counter.
 /// Denominators are bounded by sample_rate * 60 — no overflow risk for
 /// practical session lengths with Int64 numerators.

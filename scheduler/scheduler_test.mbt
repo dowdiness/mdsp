@@ -110,3 +110,26 @@ test "expire_notes: removes notes past their end_time" {
     }
   }
 }
+
+///|
+test "process_events: single note-on creates active voice" {
+  let (pool, template, ctx) = make_test_pool()
+  let bindings = @lib.ControlBindingBuilder::new()
+    .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
+    .build(template)
+  match bindings {
+    Err(_) => assert_true(false)
+    Ok(b) => {
+      let sched = @scheduler.PatternScheduler::new(bpm=120.0, bindings=b, ctx~)
+      // Use the pattern API to generate events — Event is not directly constructible
+      let arc = @pattern.TimeSpan::new(
+        @pattern.Rational::from_int(0),
+        @pattern.Rational::new(1L, 100L),
+      )
+      let events = @pattern.note(60.0).query(arc)
+      sched.process_events(events, arc, pool)
+      inspect(sched.active_note_count(), content="1")
+      inspect(pool.active_voice_count(), content="1")
+    }
+  }
+}

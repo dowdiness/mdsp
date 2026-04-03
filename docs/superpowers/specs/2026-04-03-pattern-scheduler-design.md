@@ -35,16 +35,24 @@ struct ActiveNote {
 ```moonbit
 pub struct PatternScheduler {
   bpm : Double
-  position : Rational            // current playback position in cycles (exact)
-  block_advance : Rational       // cycles per block — precomputed from bpm + sample_rate + block_size
+  sample_counter : Int64         // total samples elapsed — monotonic, drift-free
+  sample_rate : Int              // integer Hz (e.g. 48000)
+  block_size : Int
   active_notes : Array[ActiveNote]
   bindings : ControlBindingMap
 }
 ```
 
-Constructor: `PatternScheduler::new(bpm~ : Double, bindings~ : ControlBindingMap, sample_rate~ : Int, block_size~ : Int) -> PatternScheduler`
+Constructor: `PatternScheduler::new(bpm~ : Double, bindings~ : ControlBindingMap, ctx~ : DspContext) -> PatternScheduler`
 
-`block_advance` is precomputed as `Rational::new(block_size * bpm_num, sample_rate * 60 * bpm_den)` where `bpm_num/bpm_den` is the rational approximation of BPM. This keeps all timing in exact rational arithmetic — no floating-point drift.
+Takes `sample_rate` and `block_size` from the `DspContext`. BPM stays as `Double` — it is only used to compute the cycle-time arc each block, not accumulated.
+
+**Timing model:** Position is derived each block from an integer `sample_counter`, not accumulated as `Rational`. The arc is computed as:
+```
+arc_start = Rational::new(sample_counter * bpm_int, sample_rate * 60)
+arc_end   = Rational::new((sample_counter + block_size) * bpm_int, sample_rate * 60)
+```
+where `bpm_int` is BPM truncated to integer (e.g. 120). This avoids cumulative drift and keeps `Rational` denominators bounded. The sample counter is `Int64`, supporting ~6 million hours at 48kHz before overflow.
 
 ### midi_to_hz
 
@@ -60,15 +68,16 @@ Called once per audio block (128 samples at 48kHz). Six steps:
 
 ### Step 1: Compute block arc
 
-Convert the current position to a cycle-time arc `[start, end)` using exact rational arithmetic.
+Derive the cycle-time arc `[start, end)` from the integer sample counter each block.
 
 ```
-arc_start = position                          // Rational, in cycles
-arc_end = position + block_advance            // Rational, precomputed
+bpm_int = bpm.to_int()  // truncated integer BPM
+arc_start = Rational::new(sample_counter * bpm_int, sample_rate * 60)
+arc_end   = Rational::new((sample_counter + block_size) * bpm_int, sample_rate * 60)
 arc = TimeSpan::new(arc_start, arc_end)
 ```
 
-No floating-point conversion — position and arc boundaries are exact `Rational` values throughout.
+Position is derived, not accumulated — no floating-point drift. `Rational` denominators are bounded by `sample_rate * 60` (e.g. 2,880,000 for 48kHz).
 
 ### Step 2: Gate-off expired notes
 
@@ -88,30 +97,40 @@ Returns `Array[Event[ControlMap]]` — all events overlapping the current block 
 
 ### Step 4: Process note-ons
 
+Sort events by onset time (`whole.begin`) to ensure deterministic voice allocation order — `Pat::query` does not guarantee sorted output.
+
 For each event where `whole` is `Some` and `arc.contains(whole.begin)` (onset detection):
 
 1. Extract the inner `Map[String, Double]` from the event's `ControlMap`
 2. If a `"note"` key exists, convert its value via `midi_to_hz` and write the Hz value back
 3. Call `bindings.resolve_controls(map)` to produce `Array[GraphControl]`
 4. Call `pool.note_on(controls)`
-5. If `Some(handle)`, push `ActiveNote { handle, end_time: whole.end_ }` to `active_notes`
+5. If `Some(handle)`:
+   - Push `ActiveNote { handle, end_time: whole.end_ }` to `active_notes`
+   - If a `"pan"` key exists in the map, call `pool.set_voice_pan(handle, pan_value)` to use the engine's per-voice equal-power pan (bypasses graph controls)
 6. If `None`, silent skip — pattern continues
 
 Each event onset fires a new voice (stacking). No pitch deduplication.
 
-### Step 5: Advance position
+**Pan handling:** The `"pan"` key is special-cased because `VoicePool` has dedicated per-voice pan with cached equal-power gains (`set_voice_pan`). Routing pan through graph controls would bypass this and duplicate the panning logic. The `"pan"` key is consumed by the scheduler and not passed to `resolve_controls`.
+
+### Step 5: Advance sample counter
 
 ```
-position = position + block_advance
+sample_counter = sample_counter + block_size.to_int64()
 ```
 
-Position grows monotonically as exact `Rational`. No floating-point drift. The pattern engine's `whole_cycles` handles arbitrary cycle numbers.
+Integer counter — no drift, no overflow concern for practical session lengths.
 
 ### Step 6: Render audio
 
-```
-pool.process(ctx, left, right)
-```
+Zero `left` and `right` output buffers, then call `pool.process(ctx, left, right)`.
+
+`VoicePool::process` mixes (adds) into output buffers — it does not zero them. The scheduler is responsible for clearing buffers each block before mixdown.
+
+## Timing Resolution
+
+Gate-off is **block-quantized**: a note ending mid-block stays active until the start of the next block. At 128 samples / 48kHz this is ~2.7ms of latency — inaudible for musical purposes. Sub-block sample-accurate scheduling is out of scope for Phase 5.
 
 ## Error Handling & Edge Cases
 
@@ -123,7 +142,7 @@ pool.process(ctx, left, right)
 | `note_on` returns `None` | Silent skip. Pattern continues, next event may succeed. |
 | Event with no `"note"` key | Binding resolves whatever keys exist. No frequency change — voice uses oscillator default. |
 | Event with `whole = None` | Skipped — continuous signal, no onset, no gate-off to schedule. |
-| Multiple onsets per block | All processed in order. Dense patterns fire multiple `note_on` calls per block. |
+| Multiple onsets per block | Sorted by onset time, then processed in order. Dense patterns fire multiple `note_on` calls per block. |
 | Gate-off after voice stolen | `VoiceHandle` generation mismatch -> `note_off` returns false, harmless no-op. |
 
 ## Testing Plan
@@ -139,8 +158,9 @@ All tests use real `VoicePool` with a minimal template (single oscillator + ADSR
 ### Integration tests
 
 - `note(60)` into PatternScheduler + VoicePool -> 1 active voice after `process_block`
-- `fast(2, note(60))` -> 2 note-ons per cycle, verify voice count after enough blocks
+- `note(60).fast(Rational::from_int(2))` -> 2 note-ons per cycle, verify voice count after enough blocks
 - Enough `process_block` iterations to cross a gate-off boundary -> voice transitions to Releasing then Idle
+- `s_pan(-1.0)` merged with `note(60)` -> voice pan set to -1.0 via `set_voice_pan`
 
 ### Edge case tests
 
@@ -161,5 +181,6 @@ scheduler/
 
 - Browser/AudioWorklet integration (separate spec)
 - Dynamic BPM changes (fixed BPM for now)
+- Sub-block sample-accurate gate-off (~2.7ms block quantization is acceptable)
 - Per-event velocity or dynamics (future enhancement)
 - Pattern editor or live-coding interface

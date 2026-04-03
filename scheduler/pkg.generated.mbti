@@ -3,9 +3,12 @@ package "dowdiness/mdsp/scheduler"
 
 import {
   "dowdiness/mdsp/lib",
+  "dowdiness/mdsp/pattern",
 }
 
 // Values
+pub fn compute_arc(Int64, Double, Int, Int) -> @pattern.TimeSpan
+
 pub fn midi_to_hz(Double) -> Double
 
 // Errors

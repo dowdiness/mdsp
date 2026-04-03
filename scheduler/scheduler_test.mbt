@@ -43,3 +43,21 @@ test "PatternScheduler::new initializes with zero position" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "compute_arc: first block at 120 BPM" {
+  let arc = @scheduler.compute_arc(0L, 120.0, 48000, 128)
+  let zero = @pattern.Rational::from_int(0)
+  assert_true(arc.begin == zero)
+  let expected_end = @pattern.Rational::new(15360L, 2880000L)
+  assert_true(arc.end_ == expected_end)
+}
+
+///|
+test "compute_arc: second block at 120 BPM" {
+  let arc = @scheduler.compute_arc(128L, 120.0, 48000, 128)
+  let expected_start = @pattern.Rational::new(15360L, 2880000L)
+  let expected_end = @pattern.Rational::new(30720L, 2880000L)
+  assert_true(arc.begin == expected_start)
+  assert_true(arc.end_ == expected_end)
+}

@@ -49,11 +49,13 @@ pub fn PatternScheduler::active_note_count(self : PatternScheduler) -> Int {
 
 ///|
 pub fn midi_to_hz(midi : Double) -> Double {
-  440.0 * Double::pow(2.0, (midi - 69.0) / 12.0)
+  440.0 * @math.pow(2.0, (midi - 69.0) / 12.0)
 }
 
 ///|
 /// Test helper: inject an active note for testing gate-off logic.
+/// The caller must ensure the VoiceHandle is currently active in the pool,
+/// or gate-off at expiry will silently no-op (note_off returns false).
 pub fn PatternScheduler::push_active_note(
   self : PatternScheduler,
   handle : @lib.VoiceHandle,
@@ -90,7 +92,8 @@ pub fn PatternScheduler::process_events(
   arc : @pattern.TimeSpan,
   pool : @lib.VoicePool,
 ) -> Unit {
-  // Sort by onset time for deterministic voice allocation
+  // Sort by onset time for deterministic voice allocation.
+  // None-whole events sort last but are skipped in the loop body.
   events.sort_by(fn(a, b) {
     match (a.whole, b.whole) {
       (Some(wa), Some(wb)) => wa.begin.compare(wb.begin)
@@ -107,19 +110,21 @@ pub fn PatternScheduler::process_events(
         if !arc.contains(whole.begin) {
           continue i + 1
         }
-        // Extract inner map from ControlMap newtype
-        let map = event.value.0
-        // Convert MIDI note to Hz if present
-        match map.get("note") {
-          Some(midi) => map["note"] = midi_to_hz(midi)
-          None => ()
-        }
-        // Extract and remove pan before resolve_controls
-        let pan_value = map.get("pan")
-        match pan_value {
-          Some(_) => map.remove("pan")
-          None => ()
-        }
+        // Copy the map to avoid mutating the original event data.
+        // pat.query() returns fresh events each call, but process_events
+        // takes Array[Event] so callers may reuse event arrays.
+        let source = event.value.0
+        let map : Map[String, Double] = {}
+        let mut pan_value : Double? = None
+        source.each(fn(k, v) {
+          if k == "pan" {
+            pan_value = Some(v)
+          } else if k == "note" {
+            map[k] = midi_to_hz(v)
+          } else {
+            map[k] = v
+          }
+        })
         // Resolve remaining controls through bindings
         let controls = self.bindings.resolve_controls(map)
         // Trigger voice
@@ -186,6 +191,10 @@ pub fn compute_arc(
   sample_rate : Int,
   block_size : Int,
 ) -> @pattern.TimeSpan {
+  // WHY truncate: BPM is stored as Double for API convenience, but
+  // converted to Int64 for exact rational arithmetic. Fractional BPM
+  // (e.g. 120.5) is truncated — acceptable for Phase 5, revisit if
+  // fractional BPM support is needed.
   let bpm_int = bpm.to_int().to_int64()
   let sr60 = sample_rate.to_int64() * 60L
   let arc_start = @pattern.Rational::new(sample_counter * bpm_int, sr60)

@@ -252,7 +252,28 @@
 
     <div class="buttons">
       <button id="startBtn">Start Audio</button>
+      <button id="btnScheduler" onclick="startScheduler()">Scheduler</button>
       <button id="stopBtn" class="secondary" disabled>Stop</button>
+    </div>
+
+    <div id="schedulerControls" style="display: none; margin-top: 10px;">
+      <div style="margin-bottom: 8px;">
+        <label>Pattern: </label>
+        <button onclick="setSchedulerPattern(0)">Single Note</button>
+        <button onclick="setSchedulerPattern(1)">Arpeggio</button>
+        <button onclick="setSchedulerPattern(2)">Chord</button>
+        <button onclick="setSchedulerPattern(3)">Fast</button>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label>BPM: <span id="bpmValue">120</span></label>
+        <input type="range" id="bpmSlider" min="60" max="240" value="120"
+               oninput="setSchedulerBpm(this.value)">
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label>Gain: <span id="schedulerGainValue">0.30</span></label>
+        <input type="range" id="schedulerGainSlider" min="0" max="100" value="30"
+               oninput="setSchedulerGain(this.value / 100)">
+      </div>
     </div>
 
     <section class="controls">
@@ -544,7 +565,7 @@
       draw();
     }
 
-    async function start() {
+    async function start(extraOptions = {}) {
       window.__mdspTelemetry = {
         sequence: 0,
         overallPeak: 0,
@@ -591,6 +612,7 @@
             useCompiledStereoHotSwap,
             useCompiledStereoTopologyEdit,
             useExitDeliverable,
+            ...extraOptions,
           },
           numberOfInputs: 0,
           numberOfOutputs: 1,
@@ -727,6 +749,33 @@
       window.__mdspStereoHotSwapQueued = null;
       window.__mdspStereoTopologyEditQueued = null;
       setStatus("Stopped.");
+    }
+
+    function startScheduler() {
+      if (!audioContext) {
+        document.getElementById('schedulerControls').style.display = 'block';
+        start({ useScheduler: true });
+      }
+    }
+
+    function setSchedulerPattern(index) {
+      if (node) {
+        node.port.postMessage({ type: 'set-scheduler-pattern', index: index });
+      }
+    }
+
+    function setSchedulerBpm(bpm) {
+      document.getElementById('bpmValue').textContent = bpm;
+      if (node) {
+        node.port.postMessage({ type: 'set-scheduler-bpm', bpm: Number(bpm) });
+      }
+    }
+
+    function setSchedulerGain(gain) {
+      document.getElementById('schedulerGainValue').textContent = gain.toFixed(2);
+      if (node) {
+        node.port.postMessage({ type: 'set-scheduler-gain', gain: gain });
+      }
     }
 
     startBtn.addEventListener("click", () => {

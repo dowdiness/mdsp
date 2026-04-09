@@ -144,13 +144,47 @@ fn process_debug_loop(
 }
 
 ///|
+/// Validate all nodes once (inputs in bounds, required state present).
+/// Resets `last_validation_errors` and returns true when every node passes.
+fn validate_all_nodes(graph : CompiledGraph) -> Bool {
+  graph.last_validation_errors = []
+  let buffer_count = graph.buffers.length()
+  for index = 0; index < graph.nodes.length(); index = index + 1 {
+    let node = graph.nodes[index]
+    ignore(
+      validate_node_inputs(
+        node,
+        index,
+        buffer_count,
+        graph.last_validation_errors,
+      ),
+    )
+    ignore(
+      validate_node_state(graph, node, index, graph.last_validation_errors),
+    )
+  }
+  graph.last_validation_errors.length() == 0
+}
+
+///|
 /// Debug variant of mono process. Validates each node before processing.
+/// For feedback graphs, validates once per block then delegates to the
+/// production per-sample feedback path for bit-identical output.
 fn CompiledDsp::process_mono_debug(
   self : CompiledDsp,
   context : DspContext,
   output : AudioBuffer,
   sample_count : Int,
 ) -> Unit {
+  if self.0.feedback_edges.length() > 0 {
+    if validate_all_nodes(self.0) {
+      self.process_feedback_graph(context, output, sample_count)
+    } else {
+      output.fill(0.0)
+    }
+    self.0.last_sanitized_count = sanitize_buffer(output, sample_count)
+    return
+  }
   process_debug_loop(self.0, context, sample_count)
   copy_buffer(self.0.buffers[self.0.buffers.length() - 1], output, sample_count)
   self.0.last_sanitized_count = sanitize_buffer(output, sample_count)
@@ -158,6 +192,8 @@ fn CompiledDsp::process_mono_debug(
 
 ///|
 /// Debug variant of stereo process. Validates each node before processing.
+/// For feedback graphs, validates once per block then delegates to the
+/// production per-sample feedback path for bit-identical output.
 fn CompiledStereoDsp::process_stereo_debug(
   self : CompiledStereoDsp,
   context : DspContext,
@@ -165,6 +201,19 @@ fn CompiledStereoDsp::process_stereo_debug(
   right_output : AudioBuffer,
   sample_count : Int,
 ) -> Unit {
+  if self.0.feedback_edges.length() > 0 {
+    if validate_all_nodes(self.0) {
+      self.process_feedback_graph(
+        context, left_output, right_output, sample_count,
+      )
+    } else {
+      left_output.fill(0.0)
+      right_output.fill(0.0)
+    }
+    self.0.last_sanitized_count = sanitize_buffer(left_output, sample_count) +
+      sanitize_buffer(right_output, sample_count)
+    return
+  }
   process_debug_loop(self.0, context, sample_count)
   copy_stereo_buffers(
     self.0.left_buffers[self.0.left_buffers.length() - 1],

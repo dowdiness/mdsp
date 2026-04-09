@@ -65,6 +65,18 @@ pub fn CompiledStereoDsp::last_sanitized_count(self : CompiledStereoDsp) -> Int 
 }
 
 ///|
+/// True when the compiled graph contains feedback (back) edges that require
+/// per-sample processing with self-registers.
+pub fn CompiledDsp::has_feedback_edges(self : CompiledDsp) -> Bool {
+  self.0.feedback_edges.length() > 0
+}
+
+///|
+pub fn CompiledStereoDsp::has_feedback_edges(self : CompiledStereoDsp) -> Bool {
+  self.0.feedback_edges.length() > 0
+}
+
+///|
 /// Compile a declarative mono graph into an executable buffer graph.
 ///
 /// This first Phase 2 slice accepts nodes in authoring order, requires exactly

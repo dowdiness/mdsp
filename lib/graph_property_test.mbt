@@ -779,27 +779,25 @@ test "prop: stereo debug mode produces same output as normal mode (acyclic)" {
 }
 
 ///|
-/// Known divergence: debug mode uses block-at-a-time processing even for
-/// feedback graphs, while production mode uses per-sample processing with
-/// self-registers. This means debug output differs from production output
-/// for graphs with feedback edges. The test below verifies that debug mode
-/// is at least internally deterministic for feedback graphs.
-test "prop: debug mode is deterministic for mono feedback graphs" {
+/// Debug mode produces bit-identical output to production for mono feedback
+/// graphs. Debug validates once per block, then delegates to the same
+/// per-sample feedback path as production.
+test "prop: debug mode equals production for mono feedback graphs" {
   @qc.quick_check_fn(
     fn(seed : Int) {
       let nodes = gen_mono_feedback_graph(seed)
-      let compiled_a = compile_mono(nodes)
-      let compiled_b = compile_mono(nodes)
-      compiled_a.enable_debug_validation()
-      compiled_b.enable_debug_validation()
-      let out_a = AudioBuffer::filled(PROP_BLOCK_SIZE)
-      let out_b = AudioBuffer::filled(PROP_BLOCK_SIZE)
+      let compiled_debug = compile_mono(nodes)
+      let compiled_prod = compile_mono(nodes)
+      guard compiled_debug.has_feedback_edges() else { return true }
+      compiled_debug.enable_debug_validation()
+      let out_debug = AudioBuffer::filled(PROP_BLOCK_SIZE)
+      let out_prod = AudioBuffer::filled(PROP_BLOCK_SIZE)
       let context = DspContext::new(PROP_SAMPLE_RATE, PROP_BLOCK_SIZE)
       let mut identical = true
       for _block = 0; _block < PROP_NUM_BLOCKS; _block = _block + 1 {
-        compiled_a.process(context, out_a)
-        compiled_b.process(context, out_b)
-        if !buffers_identical(out_a, out_b, PROP_BLOCK_SIZE) {
+        compiled_debug.process(context, out_debug)
+        compiled_prod.process(context, out_prod)
+        if !buffers_identical(out_debug, out_prod, PROP_BLOCK_SIZE) {
           identical = false
         }
       }
@@ -810,28 +808,28 @@ test "prop: debug mode is deterministic for mono feedback graphs" {
 }
 
 ///|
-/// Same known divergence as mono: debug mode for stereo feedback graphs
-/// uses block-at-a-time, production uses per-sample. This test verifies
-/// debug-mode determinism only.
-test "prop: debug mode is deterministic for stereo feedback graphs" {
+/// Debug mode produces bit-identical output to production for stereo feedback
+/// graphs. Debug validates once per block, then delegates to the same
+/// per-sample feedback path as production.
+test "prop: debug mode equals production for stereo feedback graphs" {
   @qc.quick_check_fn(
     fn(seed : Int) {
       let nodes = gen_stereo_feedback_graph(seed)
-      let compiled_a = compile_stereo(nodes)
-      let compiled_b = compile_stereo(nodes)
-      compiled_a.enable_debug_validation()
-      compiled_b.enable_debug_validation()
-      let left_a = AudioBuffer::filled(PROP_BLOCK_SIZE)
-      let right_a = AudioBuffer::filled(PROP_BLOCK_SIZE)
-      let left_b = AudioBuffer::filled(PROP_BLOCK_SIZE)
-      let right_b = AudioBuffer::filled(PROP_BLOCK_SIZE)
+      let compiled_debug = compile_stereo(nodes)
+      let compiled_prod = compile_stereo(nodes)
+      guard compiled_debug.has_feedback_edges() else { return true }
+      compiled_debug.enable_debug_validation()
+      let left_debug = AudioBuffer::filled(PROP_BLOCK_SIZE)
+      let right_debug = AudioBuffer::filled(PROP_BLOCK_SIZE)
+      let left_prod = AudioBuffer::filled(PROP_BLOCK_SIZE)
+      let right_prod = AudioBuffer::filled(PROP_BLOCK_SIZE)
       let context = DspContext::new(PROP_SAMPLE_RATE, PROP_BLOCK_SIZE)
       let mut identical = true
       for _block = 0; _block < PROP_NUM_BLOCKS; _block = _block + 1 {
-        compiled_a.process(context, left_a, right_a)
-        compiled_b.process(context, left_b, right_b)
-        if !buffers_identical(left_a, left_b, PROP_BLOCK_SIZE) ||
-          !buffers_identical(right_a, right_b, PROP_BLOCK_SIZE) {
+        compiled_debug.process(context, left_debug, right_debug)
+        compiled_prod.process(context, left_prod, right_prod)
+        if !buffers_identical(left_debug, left_prod, PROP_BLOCK_SIZE) ||
+          !buffers_identical(right_debug, right_prod, PROP_BLOCK_SIZE) {
           identical = false
         }
       }

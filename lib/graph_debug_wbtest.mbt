@@ -86,6 +86,34 @@ test "debug: errors reset on next process call" {
 }
 
 ///|
+test "debug: feedback graph validation failure yields silence and records errors" {
+  let context = DspContext::new(48000.0, 4)
+  // Minimal feedback graph: Constant → Mix(0,2) → Gain → Output
+  // Back-edge: node 2 feeds back to node 1
+  let nodes = [
+    DspNode::constant(0.5),
+    DspNode::mix(0, 2),
+    DspNode::gain(1, 0.3),
+    DspNode::output(2),
+  ]
+  let compiled = CompiledDsp::compile(nodes, context).unwrap()
+  assert_true(compiled.0.feedback_edges.length() > 0)
+  compiled.enable_debug_validation()
+  // Corrupt node 1 (Mix) to reference input0=99 (out of bounds)
+  corrupt_input0(compiled, 1, 99)
+  let output = AudioBuffer::filled(4)
+  compiled.process(context, output)
+  // Output should be silence
+  for i = 0; i < 4; i = i + 1 {
+    assert_eq(output.get(i), 0.0)
+  }
+  // Validation errors should be recorded
+  let errors = compiled.last_validation_errors()
+  assert_true(errors.length() >= 1)
+  assert_true(errors[0] is GraphValidationError::InvalidInput0(_, 99, _))
+}
+
+///|
 test "debug: multiple errors in one block" {
   let context = DspContext::new(48000.0, 4)
   // Use oscillators (stateful, not foldable) to prevent optimization

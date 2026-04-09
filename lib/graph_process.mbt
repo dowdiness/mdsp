@@ -155,37 +155,18 @@ fn process_node_block(
 }
 
 ///|
-/// Shared block-at-a-time process loop for both mono and stereo graphs.
+/// Run every node through `process_node_block` for one block.
 ///
-/// Runs every node through `process_node_block`, copies the final output,
-/// and sanitizes. The `is_stereo` flag controls only the final output copy
-/// (mono: last mono buffer → output; stereo: last stereo buffers → left/right).
-fn CompiledGraph::process_block_loop(
+/// Shared by both mono and stereo process paths. Callers handle the
+/// variant-specific output copy and sanitization themselves.
+fn CompiledGraph::run_node_loop(
   self : CompiledGraph,
   context : DspContext,
-  output : AudioBuffer,
-  left_output : AudioBuffer,
-  right_output : AudioBuffer,
-  is_stereo : Bool,
   sample_count : Int,
 ) -> Unit {
   let pan = Pan::new()
   for index in 0..<self.nodes.length() {
     process_node_block(self, index, context, sample_count, pan)
-  }
-  if is_stereo {
-    copy_stereo_buffers(
-      self.left_buffers[self.left_buffers.length() - 1],
-      self.right_buffers[self.right_buffers.length() - 1],
-      left_output,
-      right_output,
-      sample_count,
-    )
-    self.last_sanitized_count = sanitize_buffer(left_output, sample_count) +
-      sanitize_buffer(right_output, sample_count)
-  } else {
-    copy_buffer(self.buffers[self.buffers.length() - 1], output, sample_count)
-    self.last_sanitized_count = sanitize_buffer(output, sample_count)
   }
 }
 
@@ -225,9 +206,9 @@ pub fn CompiledDsp::process(
     self.0.last_sanitized_count = sanitize_buffer(output, sample_count)
     return
   }
-  self.0.process_block_loop(
-    context, output, output, output, false, sample_count,
-  )
+  self.0.run_node_loop(context, sample_count)
+  copy_buffer(self.0.buffers[self.0.buffers.length() - 1], output, sample_count)
+  self.0.last_sanitized_count = sanitize_buffer(output, sample_count)
 }
 
 ///|
@@ -274,9 +255,16 @@ pub fn CompiledStereoDsp::process(
       sanitize_buffer(right_output, sample_count)
     return
   }
-  self.0.process_block_loop(
-    context, left_output, left_output, right_output, true, sample_count,
+  self.0.run_node_loop(context, sample_count)
+  copy_stereo_buffers(
+    self.0.left_buffers[self.0.left_buffers.length() - 1],
+    self.0.right_buffers[self.0.right_buffers.length() - 1],
+    left_output,
+    right_output,
+    sample_count,
   )
+  self.0.last_sanitized_count = sanitize_buffer(left_output, sample_count) +
+    sanitize_buffer(right_output, sample_count)
 }
 
 ///|

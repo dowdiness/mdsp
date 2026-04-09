@@ -1,24 +1,36 @@
 # mdsp — MoonBit DSP Audio Engine
 
-Repository guidance lives in `AGENTS.md`.
-Use `AGENTS.md` as the source of truth for project structure, MoonBit
-conventions, development workflow, and review standards.
+`mdsp` is a MoonBit DSP audio engine library in the Salat Engine project.
+Phases 0–5 complete: AudioWorklet proof, DSP primitives, compiled graph
+runtime with hot-swap and stereo, voice pool with priority stealing,
+pattern engine with rational time, and pattern scheduler. The path
+remains open for native targets such as CLAP plugins.
 
 @~/.claude/moonbit-base.md
 
 ## Project Structure
 
-Single module `dowdiness/mdsp` with packages:
+**Module:** `dowdiness/mdsp`
 
-| Package | Purpose |
-|---------|---------|
-| `lib/` | Core DSP library — oscillators, filters, graph, tagless algebra, voice pool |
-| `pattern/` | Pattern engine — rational time, arcs, events, combinators, control maps |
-| `/` (root) | Demo entrypoint — wasm/js exports for browser prototype |
-| `cmd/main` | Executable entry point |
-| `browser/` | Browser/AudioWorklet integration |
-| `scheduler/` | Pattern scheduler — bridges pattern engine to DSP voice pool |
-| `browser_test/` | Browser integration tests |
+| Package | Path | Purpose |
+|---------|------|---------|
+| `dowdiness/mdsp` | `./` | Demo entrypoint (`mdsp.mbt`), delegates to `lib/` |
+| `dowdiness/mdsp/lib` | `lib/` | Core DSP library (oscillators, filters, graph compiler, voice pool) |
+| `dowdiness/mdsp/pattern` | `pattern/` | Standalone pattern engine (rational time, combinators, control maps) — zero dep on `lib/` |
+| `dowdiness/mdsp/scheduler` | `scheduler/` | Pattern scheduler — bridges pattern engine to DSP voice pool |
+| `dowdiness/mdsp/browser` | `browser/` | AudioWorklet export wrapper |
+| `dowdiness/mdsp/browser_test` | `browser_test/` | Browser integration test wrapper |
+| `dowdiness/mdsp/cmd/main` | `cmd/main/` | CLI entry point |
+
+## Architecture
+
+- **Finally Tagless two-layer:** traits for extensibility, enums for concrete ASTs
+- **Compiled graph:** compile the DSP graph, do not interpret it
+- **No audio-thread allocation:** pre-allocated buffers only
+- **Incremental computation:** memoized DSP graph updates
+- **Audio constants:** 48000 Hz sample rate, 128 samples per buffer
+
+**Source of truth:** `docs/salat-engine-technical-reference.md` is authoritative for graph runtime-control behavior. Update it first whenever these change.
 
 ## Commands
 

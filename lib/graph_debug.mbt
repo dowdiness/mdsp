@@ -150,16 +150,9 @@ fn validate_node_state(
 /// Validates each node's inputs and state before processing.
 /// On violation, fills output with silence and skips to next node.
 ///
-/// WHY duplicated from the production loops: validation checks run per-node
-/// inside the tight loop. Keeping them in a separate function preserves the
-/// production fast path's code shape unchanged (no debug branches to optimize
-/// away). If new node kinds are added, update this loop alongside the
-/// production loops in graph.mbt.
-///
-/// WHY shared between mono and stereo: compile-time validation guarantees
-/// mono graphs have Output (never StereoOutput) and stereo graphs have
-/// StereoOutput (never Output). Both arms are present but only the
-/// appropriate one fires for each graph type.
+/// Delegates per-node processing to process_node_block (graph_process.mbt),
+/// the single source of truth for block-at-a-time node dispatch. Debug mode
+/// adds validation before each node; the processing itself is identical.
 fn process_debug_loop(
   graph : CompiledGraph,
   context : DspContext,
@@ -170,7 +163,6 @@ fn process_debug_loop(
   let pan = Pan::new()
   for index = 0; index < graph.nodes.length(); index = index + 1 {
     let node = graph.nodes[index]
-    let buffer = graph.buffers[index]
     if !validate_node_inputs(
         node,
         index,
@@ -182,152 +174,12 @@ fn process_debug_loop(
       // to left_buffers/right_buffers, not the mono buffer. Without zeroing all
       // three, downstream stereo consumers would see stale data from the
       // previous block instead of silence.
-      buffer.fill(0.0)
+      graph.buffers[index].fill(0.0)
       graph.left_buffers[index].fill(0.0)
       graph.right_buffers[index].fill(0.0)
       continue index + 1
     }
-    match node.kind {
-      Constant => fill_constant_buffer(buffer, sample_count, node.value0)
-      Oscillator =>
-        if node.input0 >= 0 {
-          let osc = graph.osc_states[index].unwrap()
-          let freq_buf = graph.buffers[node.input0]
-          let sr = context.sample_rate()
-          for i = 0; i < sample_count; i = i + 1 {
-            buffer.set(i, osc.tick_waveform(node.waveform, freq_buf.get(i), sr))
-          }
-        } else {
-          graph.osc_states[index]
-          .unwrap()
-          .process_waveform(context, buffer, node.waveform, node.value0)
-        }
-      Noise => graph.noise_states[index].unwrap().process(context, buffer)
-      Adsr => graph.env_states[index].unwrap().process(context, buffer)
-      Biquad => {
-        copy_buffer(graph.buffers[node.input0], buffer, sample_count)
-        process_graph_biquad(
-          graph.biquad_states[index].unwrap(),
-          context,
-          buffer,
-          node.filter_mode,
-          node.value0,
-          node.value1,
-        )
-      }
-      Delay => {
-        copy_buffer(graph.buffers[node.input0], buffer, sample_count)
-        graph.delay_states[index].unwrap().process(context, buffer)
-      }
-      Gain => {
-        copy_buffer(graph.buffers[node.input0], buffer, sample_count)
-        apply_gain_buffer(buffer, sample_count, node.value0)
-      }
-      Mul =>
-        multiply_buffers(
-          graph.buffers[node.input0],
-          graph.buffers[node.input1],
-          buffer,
-          sample_count,
-        )
-      Mix =>
-        mix_buffers(
-          graph.buffers[node.input0],
-          graph.buffers[node.input1],
-          buffer,
-          sample_count,
-        )
-      Clip => {
-        copy_buffer(graph.buffers[node.input0], buffer, sample_count)
-        clip_buffer(buffer, sample_count, node.value0)
-      }
-      Output => copy_buffer(graph.buffers[node.input0], buffer, sample_count)
-      Pan =>
-        pan.process(
-          context,
-          graph.buffers[node.input0],
-          graph.left_buffers[index],
-          graph.right_buffers[index],
-          node.value0,
-        )
-      StereoGain => {
-        copy_stereo_buffers(
-          graph.left_buffers[node.input0],
-          graph.right_buffers[node.input0],
-          graph.left_buffers[index],
-          graph.right_buffers[index],
-          sample_count,
-        )
-        apply_gain_buffer(graph.left_buffers[index], sample_count, node.value0)
-        apply_gain_buffer(graph.right_buffers[index], sample_count, node.value0)
-      }
-      StereoClip => {
-        copy_stereo_buffers(
-          graph.left_buffers[node.input0],
-          graph.right_buffers[node.input0],
-          graph.left_buffers[index],
-          graph.right_buffers[index],
-          sample_count,
-        )
-        clip_buffer(graph.left_buffers[index], sample_count, node.value0)
-        clip_buffer(graph.right_buffers[index], sample_count, node.value0)
-      }
-      StereoBiquad => {
-        copy_stereo_buffers(
-          graph.left_buffers[node.input0],
-          graph.right_buffers[node.input0],
-          graph.left_buffers[index],
-          graph.right_buffers[index],
-          sample_count,
-        )
-        process_graph_biquad(
-          graph.stereo_biquad_left_states[index].unwrap(),
-          context,
-          graph.left_buffers[index],
-          node.filter_mode,
-          node.value0,
-          node.value1,
-        )
-        process_graph_biquad(
-          graph.stereo_biquad_right_states[index].unwrap(),
-          context,
-          graph.right_buffers[index],
-          node.filter_mode,
-          node.value0,
-          node.value1,
-        )
-      }
-      StereoDelay => {
-        copy_stereo_buffers(
-          graph.left_buffers[node.input0],
-          graph.right_buffers[node.input0],
-          graph.left_buffers[index],
-          graph.right_buffers[index],
-          sample_count,
-        )
-        graph.stereo_delay_left_states[index]
-        .unwrap()
-        .process(context, graph.left_buffers[index])
-        graph.stereo_delay_right_states[index]
-        .unwrap()
-        .process(context, graph.right_buffers[index])
-      }
-      StereoMixDown =>
-        mixdown_stereo_buffers(
-          graph.left_buffers[node.input0],
-          graph.right_buffers[node.input0],
-          buffer,
-          sample_count,
-        )
-      StereoOutput =>
-        copy_stereo_buffers(
-          graph.left_buffers[node.input0],
-          graph.right_buffers[node.input0],
-          graph.left_buffers[index],
-          graph.right_buffers[index],
-          sample_count,
-        )
-    }
+    process_node_block(graph, index, context, sample_count, pan)
   }
 }
 

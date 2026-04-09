@@ -10,17 +10,74 @@ struct ActiveNote {
 }
 
 ///|
+/// Per-voice side-effect extracted from a control map entry.
+/// The scheduler applies these after note-on, outside the control binding path.
+pub enum VoiceAction {
+  SetPan(Double)
+}
+
+///|
+/// Decouples control key routing from the scheduler's event loop.
+///
+/// `transform` maps a raw (key, value) pair to an optional (key, value) for the
+/// control binding map. Return `None` to drop the entry (e.g. "pan" is consumed
+/// as a side-effect, not a DSP control). Return `Some((key, transformed_value))`
+/// to include it.
+///
+/// `voice_action` inspects a raw (key, value) pair and optionally returns a
+/// `VoiceAction` to apply after note-on (e.g. `SetPan`).
+pub struct ControlMapper {
+  transform : (String, Double) -> (String, Double)?
+  voice_action : (String, Double) -> VoiceAction?
+
+  fn new(
+    transform~ : (String, Double) -> (String, Double)?,
+    voice_action~ : (String, Double) -> VoiceAction?,
+  ) -> ControlMapper
+}
+
+///|
+pub fn ControlMapper::new(
+  transform~ : (String, Double) -> (String, Double)?,
+  voice_action~ : (String, Double) -> VoiceAction?,
+) -> ControlMapper {
+  { transform, voice_action }
+}
+
+///|
+/// Default mapper that preserves the original hardcoded behavior:
+/// - "note" values are converted from MIDI note numbers to Hz
+/// - "pan" values are extracted as `SetPan` voice actions (not passed to controls)
+/// - All other keys pass through unchanged
+pub fn default_control_mapper() -> ControlMapper {
+  ControlMapper(
+    transform=fn(k, v) {
+      if k == "pan" {
+        None
+      } else if k == "note" {
+        Some(("note", midi_to_hz(v)))
+      } else {
+        Some((k, v))
+      }
+    },
+    voice_action=fn(k, v) { if k == "pan" { Some(SetPan(v)) } else { None } },
+  )
+}
+
+///|
 pub struct PatternScheduler {
   mut bpm : Double
   mut sample_counter : Int64
   ctx : @lib.DspContext
   active_notes : Array[ActiveNote]
   bindings : @lib.ControlBindingMap
+  mapper : ControlMapper
 
   fn new(
     bpm~ : Double,
     bindings~ : @lib.ControlBindingMap,
     ctx~ : @lib.DspContext,
+    mapper? : ControlMapper,
   ) -> PatternScheduler
 }
 
@@ -39,6 +96,7 @@ pub fn PatternScheduler::new(
   bpm~ : Double,
   bindings~ : @lib.ControlBindingMap,
   ctx~ : @lib.DspContext,
+  mapper? : ControlMapper,
 ) -> PatternScheduler {
   {
     bpm: sanitize_bpm(bpm),
@@ -46,6 +104,7 @@ pub fn PatternScheduler::new(
     ctx,
     active_notes: [],
     bindings,
+    mapper: mapper.unwrap_or(default_control_mapper()),
   }
 }
 
@@ -148,18 +207,20 @@ pub fn PatternScheduler::process_events(
         }
         // WHY fresh map: process_events takes Array[Event] so callers may
         // reuse event arrays across calls. Building a fresh map avoids
-        // mutating the original ControlMap, and lets us intercept "note"
-        // for MIDI→Hz conversion and extract "pan" for per-voice panning.
+        // mutating the original ControlMap. The ControlMapper transforms
+        // values (e.g. MIDI→Hz) and extracts per-voice actions (e.g. pan).
         let raw_controls = event.value.0
         let map : Map[String, Double] = {}
-        let mut pan_value : Double? = None
+        let actions : Array[VoiceAction] = []
+        let mapper = self.mapper
         raw_controls.each(fn(k, v) {
-          if k == "pan" {
-            pan_value = Some(v)
-          } else if k == "note" {
-            map[k] = midi_to_hz(v)
-          } else {
-            map[k] = v
+          match (mapper.voice_action)(k, v) {
+            Some(action) => actions.push(action)
+            None => ()
+          }
+          match (mapper.transform)(k, v) {
+            Some((tk, tv)) => map[tk] = tv
+            None => ()
           }
         })
         let controls = self.bindings.resolve_controls(map)
@@ -167,9 +228,10 @@ pub fn PatternScheduler::process_events(
           None => ()
           Some(handle) => {
             self.active_notes.push({ handle, end_time: whole.end_ })
-            match pan_value {
-              Some(pan) => ignore(pool.set_voice_pan(handle, pan))
-              None => ()
+            for action in actions {
+              match action {
+                SetPan(pan) => ignore(pool.set_voice_pan(handle, pan))
+              }
             }
           }
         }

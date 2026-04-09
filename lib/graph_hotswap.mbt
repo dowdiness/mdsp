@@ -129,24 +129,6 @@ pub fn CompiledDspHotSwap::queue_swap(
 }
 
 ///|
-/// Apply one runtime control message to the active graph.
-pub fn CompiledDspHotSwap::apply_control(
-  self : CompiledDspHotSwap,
-  control : GraphControl,
-) -> Bool {
-  self.0.apply_control_impl(control)
-}
-
-///|
-/// Apply a batch of runtime control messages to the active graph.
-pub fn CompiledDspHotSwap::apply_controls(
-  self : CompiledDspHotSwap,
-  controls : Array[GraphControl],
-) -> Bool {
-  self.0.apply_controls_impl(controls)
-}
-
-///|
 /// Process one block, crossfading between the active and pending graphs when a
 /// swap is in flight.
 pub fn CompiledDspHotSwap::process(
@@ -248,24 +230,6 @@ pub fn CompiledStereoDspHotSwap::queue_swap(
   next : CompiledStereoDsp,
 ) -> Bool {
   self.0.queue_swap_impl(next.0)
-}
-
-///|
-/// Apply one runtime control message to the active stereo graph.
-pub fn CompiledStereoDspHotSwap::apply_control(
-  self : CompiledStereoDspHotSwap,
-  control : GraphControl,
-) -> Bool {
-  self.0.apply_control_impl(control)
-}
-
-///|
-/// Apply a batch of runtime control messages to the active stereo graph.
-pub fn CompiledStereoDspHotSwap::apply_controls(
-  self : CompiledStereoDspHotSwap,
-  controls : Array[GraphControl],
-) -> Bool {
-  self.0.apply_controls_impl(controls)
 }
 
 ///|

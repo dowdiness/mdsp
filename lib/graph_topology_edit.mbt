@@ -367,25 +367,6 @@ fn TopologyGraph::queue_topology_edits_impl(
 }
 
 ///|
-/// Apply one runtime control message to the active or in-flight mono graph.
-pub fn CompiledDspTopologyController::apply_control(
-  self : CompiledDspTopologyController,
-  control : GraphControl,
-) -> Bool {
-  self.0.apply_control_impl(control)
-}
-
-///|
-/// Apply a batch of runtime control messages to the active or in-flight mono
-/// graph.
-pub fn CompiledDspTopologyController::apply_controls(
-  self : CompiledDspTopologyController,
-  controls : Array[GraphControl],
-) -> Bool {
-  self.0.apply_controls_impl(controls)
-}
-
-///|
 /// Queue one topology edit for the next hot-swap recompilation.
 pub fn CompiledDspTopologyController::queue_topology_edit(
   self : CompiledDspTopologyController,
@@ -1017,25 +998,6 @@ pub fn CompiledStereoDspTopologyController::from_nodes(
       None => None
     }
   }).map(fn(tg) { CompiledStereoDspTopologyController(tg) })
-}
-
-///|
-/// Apply one runtime control message to the active or in-flight stereo graph.
-pub fn CompiledStereoDspTopologyController::apply_control(
-  self : CompiledStereoDspTopologyController,
-  control : GraphControl,
-) -> Bool {
-  self.0.apply_control_impl(control)
-}
-
-///|
-/// Apply a batch of runtime control messages to the active or in-flight stereo
-/// graph.
-pub fn CompiledStereoDspTopologyController::apply_controls(
-  self : CompiledStereoDspTopologyController,
-  controls : Array[GraphControl],
-) -> Bool {
-  self.0.apply_controls_impl(controls)
 }
 
 ///|

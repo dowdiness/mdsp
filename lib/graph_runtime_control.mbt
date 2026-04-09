@@ -1,48 +1,4 @@
 ///|
-/// Apply a runtime control message to a compiled graph.
-///
-/// This is the preferred Phase 2 runtime-control entrypoint. The older
-/// `gate_on(...)`, `gate_off(...)`, and `set_param(...)` methods are retained as
-/// compatibility helpers and delegate here.
-pub fn CompiledDsp::apply_control(
-  self : CompiledDsp,
-  control : GraphControl,
-) -> Bool {
-  self.0.apply_control_impl(control)
-}
-
-///|
-/// Apply a batch of runtime control messages to a compiled graph.
-///
-/// Controls are validated as a transaction first and then applied in order.
-/// If any control in the batch is invalid, nothing is applied and the function
-/// returns `false`.
-pub fn CompiledDsp::apply_controls(
-  self : CompiledDsp,
-  controls : Array[GraphControl],
-) -> Bool {
-  self.0.apply_controls_impl(controls)
-}
-
-///|
-/// Apply a runtime control message to a compiled stereo graph.
-pub fn CompiledStereoDsp::apply_control(
-  self : CompiledStereoDsp,
-  control : GraphControl,
-) -> Bool {
-  self.0.apply_control_impl(control)
-}
-
-///|
-/// Apply a batch of runtime control messages to a compiled stereo graph.
-pub fn CompiledStereoDsp::apply_controls(
-  self : CompiledStereoDsp,
-  controls : Array[GraphControl],
-) -> Bool {
-  self.0.apply_controls_impl(controls)
-}
-
-///|
 /// Trigger `gate_on()` on an ADSR node using its original authoring index.
 ///
 /// Compatibility helper; prefer `apply_control(GraphControl::gate_on(...))`.

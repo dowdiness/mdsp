@@ -9,46 +9,6 @@ pub(all) enum GraphValidationError {
 } derive(Show, Eq)
 
 ///|
-pub fn CompiledDsp::enable_debug_validation(self : CompiledDsp) -> Unit {
-  self.0.debug_validate = true
-}
-
-///|
-pub fn CompiledDsp::disable_debug_validation(self : CompiledDsp) -> Unit {
-  self.0.debug_validate = false
-  self.0.last_validation_errors = []
-}
-
-///|
-pub fn CompiledDsp::last_validation_errors(
-  self : CompiledDsp,
-) -> Array[GraphValidationError] {
-  self.0.last_validation_errors
-}
-
-///|
-pub fn CompiledStereoDsp::enable_debug_validation(
-  self : CompiledStereoDsp,
-) -> Unit {
-  self.0.debug_validate = true
-}
-
-///|
-pub fn CompiledStereoDsp::disable_debug_validation(
-  self : CompiledStereoDsp,
-) -> Unit {
-  self.0.debug_validate = false
-  self.0.last_validation_errors = []
-}
-
-///|
-pub fn CompiledStereoDsp::last_validation_errors(
-  self : CompiledStereoDsp,
-) -> Array[GraphValidationError] {
-  self.0.last_validation_errors
-}
-
-///|
 /// Check that node's input0 and input1 are within buffer bounds.
 /// Called per node in debug mode only. Returns true if valid.
 fn validate_node_inputs(

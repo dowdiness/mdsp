@@ -36,42 +36,49 @@ let sched_gain : @ref.Ref[Double] = @ref.new(0.3)
 
 ///|
 fn bd_template() -> Array[@lib.DspNode] {
+  // [0] osc → [1] adsr (envelope) → [2] gain(input=0) → [3] output(input=2)
+  // ADSR is standalone; gain reads from oscillator, not ADSR
   [
     @lib.DspNode::oscillator(@lib.Waveform::Sine, 60.0),
     @lib.DspNode::adsr(0.001, 0.15, 0.0, 0.1),
-    @lib.DspNode::gain(1, 1.0),
+    @lib.DspNode::gain(0, 1.0),
     @lib.DspNode::output(2),
   ]
 }
 
 ///|
 fn sd_template() -> Array[@lib.DspNode] {
+  // [0] noise → [1] biquad(input=0) → [2] adsr (envelope) → [3] gain(input=1) → [4] output(input=3)
+  // ADSR is standalone; gain reads from biquad, not ADSR
   [
     @lib.DspNode::noise(12345U),
     @lib.DspNode::biquad(0, @lib.BiquadMode::BandPass, 800.0, 2.0),
     @lib.DspNode::adsr(0.001, 0.08, 0.0, 0.05),
-    @lib.DspNode::gain(2, 1.0),
+    @lib.DspNode::gain(1, 1.0),
     @lib.DspNode::output(3),
   ]
 }
 
 ///|
 fn hh_template() -> Array[@lib.DspNode] {
+  // [0] noise → [1] biquad(input=0) → [2] adsr (envelope) → [3] gain(input=1) → [4] output(input=3)
+  // ADSR is standalone; gain reads from biquad, not ADSR
   [
     @lib.DspNode::noise(67890U),
     @lib.DspNode::biquad(0, @lib.BiquadMode::HighPass, 8000.0, 1.0),
     @lib.DspNode::adsr(0.001, 0.03, 0.0, 0.02),
-    @lib.DspNode::gain(2, 1.0),
+    @lib.DspNode::gain(1, 1.0),
     @lib.DspNode::output(3),
   ]
 }
 
 ///|
 fn synth_template() -> Array[@lib.DspNode] {
+  // Same pattern as old sched_template: osc(0), adsr(1), gain(input=0), output(input=2)
   [
     @lib.DspNode::oscillator(@lib.Waveform::Sine, 440.0),
     @lib.DspNode::adsr(0.01, 0.1, 0.7, 0.3),
-    @lib.DspNode::gain(1, 1.0),
+    @lib.DspNode::gain(0, 1.0),
     @lib.DspNode::output(2),
   ]
 }
@@ -283,14 +290,60 @@ pub fn process_scheduler_block() -> Bool {
 }
 
 ///|
-pub fn parse_and_set_pattern(text : String) -> String {
+let sched_last_error : @ref.Ref[String] = @ref.new("")
+
+///|
+let sched_input_chars : Array[Int] = []
+
+///|
+pub fn clear_pattern_input() -> Unit {
+  sched_input_chars.clear()
+}
+
+///|
+pub fn push_pattern_char(code : Int) -> Unit {
+  sched_input_chars.push(code)
+}
+
+///|
+pub fn eval_pattern_input() -> Int {
+  let buf = StringBuilder::new()
+  for c in sched_input_chars {
+    buf.write_char(Char::from_int(c))
+  }
+  let text = buf.to_string()
+  sched_input_chars.clear()
   match @mini.parse(text) {
     Ok(pat) => {
       sched_active_pattern.val = Some(pat)
-      ""
+      sched_last_error.val = ""
+      0
     }
-    Err(msg) => msg
+    Err(msg) => {
+      sched_last_error.val = msg
+      1
+    }
   }
+}
+
+///|
+pub fn parse_and_set_pattern(text : String) -> Int {
+  match @mini.parse(text) {
+    Ok(pat) => {
+      sched_active_pattern.val = Some(pat)
+      sched_last_error.val = ""
+      0
+    }
+    Err(msg) => {
+      sched_last_error.val = msg
+      1
+    }
+  }
+}
+
+///|
+pub fn get_scheduler_parse_error() -> String {
+  sched_last_error.val
 }
 
 ///|

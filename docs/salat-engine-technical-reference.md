@@ -322,19 +322,19 @@ Linear ADSR with four stages:
      gate ON ─────────────── gate OFF
 ```
 
-Per-sample computation:
+Per-sample computation (times in **milliseconds**):
 ```
 match stage:
   Attack:
-    level += 1.0 / (attack_time * sample_rate)
+    level += 1000.0 / (attack_ms * sample_rate)
     if level >= 1.0: level = 1.0, stage = Decay
   Decay:
-    level -= (1.0 - sustain) / (decay_time * sample_rate)
+    level -= (1.0 - sustain) * 1000.0 / (decay_ms * sample_rate)
     if level <= sustain: level = sustain, stage = Sustain
   Sustain:
     level = sustain  (no change)
   Release:
-    level -= level_at_release / (release_time * sample_rate)
+    level -= level_at_release * 1000.0 / (release_ms * sample_rate)
     if level <= 0.0: level = 0.0, stage = Idle
   Idle:
     level = 0.0
@@ -452,6 +452,8 @@ Trivial but important to get right:
 
 ```
 // Gain: output[i] = input[i] * gain_value
+// Gain (envelope): output[i] = input[i] * envelope[i] * gain_value
+//   when input1 >= 0, Gain multiplies by a second buffer (e.g. ADSR output)
 // Pan (equal-power): left = input * cos(pan * π/4), right = input * sin(pan * π/4)
 //   where pan ∈ [-1, 1], center = 0
 // Mix: output[i] = sum(inputs[j][i]) — may need scaling by 1/sqrt(N) to prevent clipping
@@ -1155,7 +1157,7 @@ Minimum set needed for a useful synthesizer (Phase 1-2):
 ### Envelopes (1 input + params)
 | Node | Params | State | Description |
 |------|--------|-------|-------------|
-| `ADSR` | a, d, s, r | stage, level, gate | Attack-Decay-Sustain-Release |
+| `ADSR` | a_ms, d_ms, s, r_ms | stage, level, gate | Attack-Decay-Sustain-Release (times in ms) |
 
 ### Arithmetic (2 inputs, stateless)
 | Node | Description |
@@ -1169,7 +1171,7 @@ Minimum set needed for a useful synthesizer (Phase 1-2):
 | Node | Params | State | Description |
 |------|--------|-------|-------------|
 | `Delay` | time, feedback | circular buffer | Echo/delay |
-| `Gain` | amount | — | Volume control |
+| `Gain` | amount | — | Volume control (with optional envelope buffer via input1) |
 | `Pan` | position | — | Stereo panning |
 | `Clip` | threshold | — | Hard clipping / distortion |
 

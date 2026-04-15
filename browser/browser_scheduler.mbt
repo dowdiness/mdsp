@@ -36,8 +36,7 @@ let sched_gain : @ref.Ref[Double] = @ref.new(0.3)
 
 ///|
 fn bd_template() -> Array[@lib.DspNode] {
-  // [0] osc → [1] adsr (envelope) → [2] gain(input=0) → [3] output(input=2)
-  // ADSR is standalone; gain reads from oscillator, not ADSR
+  // ADSR gating handled by compiled graph — no explicit Mul needed
   [
     @lib.DspNode::oscillator(@lib.Waveform::Sine, 60.0),
     @lib.DspNode::adsr(0.001, 0.15, 0.0, 0.1),
@@ -48,8 +47,6 @@ fn bd_template() -> Array[@lib.DspNode] {
 
 ///|
 fn sd_template() -> Array[@lib.DspNode] {
-  // [0] noise → [1] biquad(input=0) → [2] adsr (envelope) → [3] gain(input=1) → [4] output(input=3)
-  // ADSR is standalone; gain reads from biquad, not ADSR
   [
     @lib.DspNode::noise(12345U),
     @lib.DspNode::biquad(0, @lib.BiquadMode::BandPass, 800.0, 2.0),
@@ -61,8 +58,6 @@ fn sd_template() -> Array[@lib.DspNode] {
 
 ///|
 fn hh_template() -> Array[@lib.DspNode] {
-  // [0] noise → [1] biquad(input=0) → [2] adsr (envelope) → [3] gain(input=1) → [4] output(input=3)
-  // ADSR is standalone; gain reads from biquad, not ADSR
   [
     @lib.DspNode::noise(67890U),
     @lib.DspNode::biquad(0, @lib.BiquadMode::HighPass, 8000.0, 1.0),
@@ -74,7 +69,6 @@ fn hh_template() -> Array[@lib.DspNode] {
 
 ///|
 fn synth_template() -> Array[@lib.DspNode] {
-  // Same pattern as old sched_template: osc(0), adsr(1), gain(input=0), output(input=2)
   [
     @lib.DspNode::oscillator(@lib.Waveform::Sine, 440.0),
     @lib.DspNode::adsr(0.01, 0.1, 0.7, 0.3),
@@ -193,26 +187,6 @@ pub fn scheduler_right_sample(index : Int) -> Double {
 }
 
 ///|
-/// Keep events where "sound" key matches a specific MIDI number.
-fn keep_sound(midi : Double) -> (@pattern.ControlMap) -> @pattern.ControlMap? {
-  fn(cm) {
-    match cm.0.get("sound") {
-      Some(v) => if v == midi { Some(cm) } else { None }
-      _ => None
-    }
-  }
-}
-
-///|
-/// Keep events that have a "note" key.
-fn keep_note(cm : @pattern.ControlMap) -> @pattern.ControlMap? {
-  match cm.0.get("note") {
-    Some(_) => Some(cm)
-    _ => None
-  }
-}
-
-///|
 /// Process one sub-pattern through its sound pool, accumulating into main buffers.
 fn process_sub_pool(
   sp : SoundPool,
@@ -248,33 +222,51 @@ pub fn process_scheduler_block() -> Bool {
     Some(p) => p
     None => return true
   }
-  // Process each drum pool with filtered sub-pattern
-  // BD = MIDI 36, SD = MIDI 38, HH = MIDI 42
+  // Route drum events to their pools, note events to synth
   match sched_bd.val {
     Some(sp) => {
-      let sub = pat.filter_map(keep_sound(36.0))
+      let sub = pat.filter_map(fn(cm) {
+        match cm.0.get("sound") {
+          Some(v) => if v == 36.0 { Some(cm) } else { None }
+          _ => None
+        }
+      })
       process_sub_pool(sp, sub, left, right)
     }
     None => ()
   }
   match sched_sd.val {
     Some(sp) => {
-      let sub = pat.filter_map(keep_sound(38.0))
+      let sub = pat.filter_map(fn(cm) {
+        match cm.0.get("sound") {
+          Some(v) => if v == 38.0 { Some(cm) } else { None }
+          _ => None
+        }
+      })
       process_sub_pool(sp, sub, left, right)
     }
     None => ()
   }
   match sched_hh.val {
     Some(sp) => {
-      let sub = pat.filter_map(keep_sound(42.0))
+      let sub = pat.filter_map(fn(cm) {
+        match cm.0.get("sound") {
+          Some(v) => if v == 42.0 { Some(cm) } else { None }
+          _ => None
+        }
+      })
       process_sub_pool(sp, sub, left, right)
     }
     None => ()
   }
-  // Synth pool gets events with "note" key
   match sched_synth.val {
     Some(sp) => {
-      let sub = pat.filter_map(keep_note)
+      let sub = pat.filter_map(fn(cm) {
+        match cm.0.get("note") {
+          Some(_) => Some(cm)
+          _ => None
+        }
+      })
       process_sub_pool(sp, sub, left, right)
     }
     None => ()

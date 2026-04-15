@@ -16,6 +16,10 @@ pub fn max_feedback_amount() -> Double
 
 pub fn mono_shape() -> Int
 
+pub fn pan_left_gain(Double) -> Double
+
+pub fn pan_right_gain(Double) -> Double
+
 pub fn[T : ArithSym] range(T, Double, Double) -> T
 
 pub fn sanitize_buffer(AudioBuffer, Int) -> Int

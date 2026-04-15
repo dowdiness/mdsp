@@ -464,36 +464,12 @@ fn self_register_stereo_input_right(
 
 ///|
 fn feedback_pan_left_gain(position : Double) -> Double {
-  if !is_finite(position) {
-    0.0
-  } else {
-    let clamped = position.clamp(min=-1.0, max=1.0)
-    if clamped <= -1.0 {
-      1.0
-    } else if clamped >= 1.0 {
-      0.0
-    } else {
-      let angle = (clamped + 1.0) * @math.PI * 0.25
-      @math.cos(angle)
-    }
-  }
+  pan_left_gain(position)
 }
 
 ///|
 fn feedback_pan_right_gain(position : Double) -> Double {
-  if !is_finite(position) {
-    0.0
-  } else {
-    let clamped = position.clamp(min=-1.0, max=1.0)
-    if clamped <= -1.0 {
-      0.0
-    } else if clamped >= 1.0 {
-      1.0
-    } else {
-      let angle = (clamped + 1.0) * @math.PI * 0.25
-      @math.sin(angle)
-    }
-  }
+  pan_right_gain(position)
 }
 
 ///|

@@ -71,6 +71,46 @@ pub fn Pan::process(
 }
 
 ///|
+/// Equal-power left-channel gain for a pan position in [-1.0, 1.0].
+/// -1.0 = hard left (gain 1.0), 0.0 = center (~0.707), 1.0 = hard right (gain 0.0).
+/// Non-finite positions return 0.0.
+pub fn pan_left_gain(position : Double) -> Double {
+  if !is_finite(position) {
+    0.0
+  } else {
+    let clamped = position.clamp(min=-1.0, max=1.0)
+    if clamped <= -1.0 {
+      1.0
+    } else if clamped >= 1.0 {
+      0.0
+    } else {
+      let angle = (clamped + 1.0) * @math.PI * 0.25
+      @math.cos(angle)
+    }
+  }
+}
+
+///|
+/// Equal-power right-channel gain for a pan position in [-1.0, 1.0].
+/// -1.0 = hard left (gain 0.0), 0.0 = center (~0.707), 1.0 = hard right (gain 1.0).
+/// Non-finite positions return 0.0.
+pub fn pan_right_gain(position : Double) -> Double {
+  if !is_finite(position) {
+    0.0
+  } else {
+    let clamped = position.clamp(min=-1.0, max=1.0)
+    if clamped <= -1.0 {
+      0.0
+    } else if clamped >= 1.0 {
+      1.0
+    } else {
+      let angle = (clamped + 1.0) * @math.PI * 0.25
+      @math.sin(angle)
+    }
+  }
+}
+
+///|
 fn pan_sample_count(
   context : DspContext,
   input : AudioBuffer,

@@ -51,6 +51,8 @@ pub using @dsp {
   mono_shape,
   stereo_shape,
   max_feedback_amount,
+  pan_left_gain,
+  pan_right_gain,
 
   // Tagless compositions
   exit_deliverable,

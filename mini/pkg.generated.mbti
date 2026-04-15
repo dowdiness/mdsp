@@ -2,7 +2,7 @@
 package "dowdiness/mdsp/mini"
 
 // Values
-pub fn smoke_test() -> Bool
+pub fn drum_midi(String) -> Int?
 
 // Errors
 

@@ -1,8 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "dowdiness/mdsp/mini"
 
+import {
+  "dowdiness/mdsp/pattern",
+}
+
 // Values
 pub fn drum_midi(String) -> Int?
+
+pub fn parse(String) -> Result[@pattern.Pat[@pattern.ControlMap], String]
 
 // Errors
 

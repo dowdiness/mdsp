@@ -18,6 +18,8 @@ pub fn s_pan(Double) -> Pat[ControlMap]
 
 pub fn[A] sequence(Array[Pat[A]]) -> Pat[A]
 
+pub fn sound(Double) -> Pat[ControlMap]
+
 pub fn[A] stack(Array[Pat[A]]) -> Pat[A]
 
 // Errors

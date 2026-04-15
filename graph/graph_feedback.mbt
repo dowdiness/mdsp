@@ -37,8 +37,8 @@ fn CompiledGraph::process_feedback_graph_impl(
   // Pre-compute pan trig gains once per block (position is constant within block)
   for i = 0; i < self.nodes.length(); i = i + 1 {
     if self.nodes[i].kind is Pan {
-      self.pan_left_gains[i] = feedback_pan_left_gain(self.nodes[i].value0)
-      self.pan_right_gains[i] = feedback_pan_right_gain(self.nodes[i].value0)
+      self.pan_left_gains[i] = @dsp.pan_left_gain(self.nodes[i].value0)
+      self.pan_right_gains[i] = @dsp.pan_right_gain(self.nodes[i].value0)
     }
   }
 
@@ -460,16 +460,6 @@ fn self_register_stereo_input_right(
   } else {
     0.0
   }
-}
-
-///|
-fn feedback_pan_left_gain(position : Double) -> Double {
-  @dsp.pan_left_gain(position)
-}
-
-///|
-fn feedback_pan_right_gain(position : Double) -> Double {
-  @dsp.pan_right_gain(position)
 }
 
 ///|

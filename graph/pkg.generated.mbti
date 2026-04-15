@@ -6,27 +6,17 @@ import {
 }
 
 // Values
-pub fn effective_sample_count(@dsp.DspContext, @dsp.AudioBuffer) -> Int
-
 pub fn[T : @dsp.FilterSym] exit_deliverable() -> T
 
 pub fn is_finite(Double) -> Bool
-
-pub fn max_feedback_amount() -> Double
 
 pub fn node_accepts_slot(DspNode, GraphParamSlot) -> Bool
 
 pub fn optimize_graph(Array[DspNode]) -> (Array[DspNode], FixedArray[Int])
 
-pub fn pan_left_gain(Double) -> Double
-
-pub fn pan_right_gain(Double) -> Double
-
 pub fn[T : @dsp.ArithSym] range(T, Double, Double) -> T
 
 pub fn[T : @dsp.ArithSym + @dsp.DspSym + @dsp.FilterSym + @dsp.DelaySym + @dsp.StereoSym + @dsp.StereoFilterSym + @dsp.StereoDelaySym] replay(Array[DspNode]) -> T?
-
-pub fn sanitize_buffer(@dsp.AudioBuffer, Int) -> Int
 
 // Errors
 

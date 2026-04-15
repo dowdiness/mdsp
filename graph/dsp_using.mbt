@@ -22,13 +22,8 @@ pub using @dsp {
   trait StereoFilterSym,
   trait StereoDelaySym,
 
-  // Utility functions used by graph source and test files
+  // Utility functions
   is_finite,
-  sanitize_buffer,
-  effective_sample_count,
-  max_feedback_amount,
-  pan_left_gain,
-  pan_right_gain,
 
   // Tagless compositions
   exit_deliverable,

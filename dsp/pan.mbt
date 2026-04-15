@@ -37,23 +37,8 @@ pub fn Pan::process(
     return
   }
 
-  let clamped = position.clamp(min=-1.0, max=1.0)
-  let left_gain = if clamped <= -1.0 {
-    1.0
-  } else if clamped >= 1.0 {
-    0.0
-  } else {
-    let angle = (clamped + 1.0) * @math.PI * 0.25
-    @math.cos(angle)
-  }
-  let right_gain = if clamped <= -1.0 {
-    0.0
-  } else if clamped >= 1.0 {
-    1.0
-  } else {
-    let angle = (clamped + 1.0) * @math.PI * 0.25
-    @math.sin(angle)
-  }
+  let left_gain = pan_left_gain(position)
+  let right_gain = pan_right_gain(position)
 
   for index = 0; index < sample_count; index = index + 1 {
     let sample = input.get(index)

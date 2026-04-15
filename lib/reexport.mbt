@@ -3,8 +3,8 @@
 /// existing consumers of `lib/` continue to work without changing their imports.
 ///
 /// `pub using` both re-exports the symbols AND makes them available
-/// locally within this package, so voice code can use `AudioBuffer`,
-/// `CompiledDsp`, etc. without the `@dsp.` or `@graph.` prefix.
+/// locally within this package, so integration tests and any future
+/// lib/ code can use `AudioBuffer`, `CompiledDsp`, etc. without prefix.
 
 ///|
 // Re-export dsp/ package — DSP primitives, tagless algebra, utilities

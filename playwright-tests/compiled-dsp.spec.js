@@ -111,10 +111,14 @@ async function startAudio(page, path) {
 test('browser demo first render proves CompiledStereoDsp feedback recurrence', async ({ page }) => {
   await startAudio(page, '/?freq=0&delaySamples=0');
   await expect(page.locator('#status')).toContainText('CompiledStereoDsp block runtime');
+  // Wait for telemetry where freq=0 has been applied (postMessage race)
   await expect
-    .poll(async () => (await firstTelemetry(page))?.sequence || 0, { timeout: 10_000 })
+    .poll(async () => {
+      const t = await currentTelemetry(page);
+      return t?.sequence > 0 && t?.freq === 0 ? t.sequence : 0;
+    }, { timeout: 10_000 })
     .toBeGreaterThan(0);
-  const telemetry = await firstTelemetry(page);
+  const telemetry = await currentTelemetry(page);
 
   expect(telemetry.freq).toBeCloseTo(0, 9);
   expect(telemetry.leftPreview[0]).toBeGreaterThan(0.001);

@@ -56,4 +56,7 @@ pub using @dsp {
   exit_deliverable,
   range,
   lin_map,
+
+  // Demo
+  type DemoSource,
 }

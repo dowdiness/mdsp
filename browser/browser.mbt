@@ -31,6 +31,9 @@
 /// during a `process_*` call.
 
 ///|
+let demo : @ref.Ref[@lib.DemoSource] = @ref.new(@lib.DemoSource::new())
+
+///|
 /// Browser-export wrapper package that preserves the original Phase 0/1 wasm ABI.
 fn main {
   ()
@@ -110,7 +113,7 @@ const BROWSER_STEREO_TOPOLOGY_EDIT_CROSSFADE_SAMPLES : Int = 128
 ///|
 /// Reset browser demo state.
 pub fn reset_phase() -> Unit {
-  reset_demo_phase()
+  demo.val.reset()
   reset_compiled_graph()
   reset_compiled_hot_swap_graph()
   reset_compiled_topology_edit_graph()
@@ -124,7 +127,7 @@ pub fn reset_phase() -> Unit {
 ///|
 /// Generate one sine sample for the browser demo.
 pub fn tick(freq : Double, sample_rate : Double) -> Double {
-  demo_tick_source(0, freq, sample_rate)
+  demo.val.tick_source(0, freq, sample_rate)
 }
 
 ///|
@@ -134,7 +137,7 @@ pub fn tick_source(
   freq : Double,
   sample_rate : Double,
 ) -> Double {
-  demo_tick_source(source_id, freq, sample_rate)
+  demo.val.tick_source(source_id, freq, sample_rate)
 }
 
 // ---------------------------------------------------------------------------

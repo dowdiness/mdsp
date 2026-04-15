@@ -101,6 +101,15 @@ pub fn DelayLine::set_delay_samples(Self, Int) -> Unit
 pub fn DelayLine::set_feedback(Self, Double) -> Unit
 pub fn DelayLine::tick(Self, Double) -> Double
 
+pub struct DemoSource {
+  // private fields
+
+  fn new() -> DemoSource
+}
+pub fn DemoSource::new() -> Self
+pub fn DemoSource::reset(Self) -> Unit
+pub fn DemoSource::tick_source(Self, Int, Double, Double) -> Double
+
 pub struct DspContext {
   sample_rate : Double
   block_size : Int

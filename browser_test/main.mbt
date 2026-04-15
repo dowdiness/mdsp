@@ -1,4 +1,7 @@
 ///|
+let demo : @ref.Ref[@lib.DemoSource] = @ref.new(@lib.DemoSource::new())
+
+///|
 /// Browser test wrapper package that proves mono compiled fallback when
 /// stereo initialization fails from the wasm side.
 fn main {
@@ -37,13 +40,13 @@ let compiled_block_size : @ref.Ref[Int] = @ref.new(0)
 
 ///|
 pub fn reset_phase() -> Unit {
-  reset_demo_phase()
+  demo.val.reset()
   reset_compiled_graph()
 }
 
 ///|
 pub fn tick(freq : Double, sample_rate : Double) -> Double {
-  demo_tick_source(0, freq, sample_rate)
+  demo.val.tick_source(0, freq, sample_rate)
 }
 
 ///|
@@ -52,7 +55,7 @@ pub fn tick_source(
   freq : Double,
   sample_rate : Double,
 ) -> Double {
-  demo_tick_source(source_id, freq, sample_rate)
+  demo.val.tick_source(source_id, freq, sample_rate)
 }
 
 ///|

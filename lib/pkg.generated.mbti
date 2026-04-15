@@ -277,6 +277,8 @@ pub using @dsp {type Clip}
 
 pub using @dsp {type DelayLine}
 
+pub using @dsp {type DemoSource}
+
 pub using @dsp {type DspContext}
 
 pub using @dsp {type EnvStage}

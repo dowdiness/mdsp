@@ -329,7 +329,7 @@ pub fn push_pattern_char(code : Int) -> Unit {
 pub fn eval_pattern_input() -> Int {
   let buf = StringBuilder::new()
   for c in sched_input_chars {
-    buf.write_char(Char::from_int(c))
+    buf.write_char(c.unsafe_to_char())
   }
   let text = buf.to_string()
   sched_input_chars.clear()

@@ -68,8 +68,10 @@ impl Output for StereoOut with reset(self) {
 
 ///|
 impl Output for StereoOut with allocate(self, n) {
-  self.left.val = Some(@lib.AudioBuffer::filled(n))
-  self.right.val = Some(@lib.AudioBuffer::filled(n))
+  let left = @lib.AudioBuffer::filled(n)
+  let right = @lib.AudioBuffer::filled(n)
+  self.left.val = Some(left)
+  self.right.val = Some(right)
 }
 
 ///|
@@ -134,10 +136,16 @@ fn[T, O] GraphSlot::new(
 /// are all consistent. After it returns false, the slot is reset.
 /// Allocation happens BEFORE publishing graph/context so that a failing
 /// allocator leaves the slot cleared rather than half-initialized.
+///
+/// `on_rebuild` fires when the graph is actually rebuilt (not on cache
+/// hit or reset). Use it to reset variant-owned structural state
+/// (e.g. a `topo_edit_inserted` flag) whose validity is tied to the
+/// specific compiled graph instance.
 fn[T, O : Output] GraphSlot::ensure(
   self : GraphSlot[T, O],
   rate : Double,
   block : Int,
+  on_rebuild? : () -> Unit = fn() {  },
 ) -> Bool {
   if rate <= 0.0 || block <= 0 {
     self.reset()
@@ -156,6 +164,7 @@ fn[T, O : Output] GraphSlot::ensure(
       self.context.val = Some(ctx)
       self.sample_rate.val = rate
       self.block_size.val = block
+      on_rebuild()
       true
     }
     None => {

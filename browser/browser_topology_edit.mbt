@@ -26,7 +26,9 @@ pub fn init_compiled_topology_edit_graph(
   sample_rate : Double,
   block_size : Int,
 ) -> Bool {
-  compiled_topology_edit.ensure(sample_rate, block_size)
+  compiled_topology_edit.ensure(sample_rate, block_size, on_rebuild=() => {
+    topo_edit_inserted.val = false
+  })
 }
 
 ///|
@@ -95,7 +97,9 @@ pub fn process_compiled_topology_edit_block(
   sample_rate : Double,
   block_size : Int,
 ) -> Bool {
-  if !compiled_topology_edit.ensure(sample_rate, block_size) {
+  if !compiled_topology_edit.ensure(sample_rate, block_size, on_rebuild=() => {
+      topo_edit_inserted.val = false
+    }) {
     return false
   }
   let topology = compiled_topology_edit.graph_val()

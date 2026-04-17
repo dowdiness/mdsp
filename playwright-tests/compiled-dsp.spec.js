@@ -111,7 +111,9 @@ async function startAudio(page, path) {
 test('browser demo first render proves CompiledStereoDsp feedback recurrence', async ({ page }) => {
   await startAudio(page, '/?freq=0&delaySamples=0');
   await expect(page.locator('#status')).toContainText('CompiledStereoDsp block runtime');
-  // Pin to sequence=2 (first post-warmup telemetry block, ~45ms after start).
+  // Pin to sequence=2 (first post-warmup telemetry block, emitted on block 18
+  // — block 1 emits sequence=1, blocks 2–17 are warmup-skipped, block 18
+  // emits sequence=2, ~48 ms after start).
   //
   // The previous `find(t => t.freq === 0 && t.leftPreview[0] > 0.001)` filter
   // implicitly depended on a postMessage race: sequence=1 is emitted right
@@ -121,10 +123,15 @@ test('browser demo first render proves CompiledStereoDsp feedback recurrence', a
   // leftPreview[0] fell below the 0.3 * PAN_CENTER_GAIN upper bound — that's
   // the retry-masked flake this fix eliminates.
   //
-  // By sequence=2 (block 17) set-freq=0 has always propagated and the delay
-  // line has reached its bit-exact feedback plateau. Assert only what the
-  // test name promises: the delay line sustains non-zero output long after
-  // the oscillator drops to silence, without exploding, with left==right.
+  // By sequence=2, set-freq=0 has always propagated and the `mix(3,5)` +
+  // `gain(0.3)` z^-1 feedback loop has reached its bit-exact steady-state
+  // plateau: with freq=0 the oscillator drops out, so the loop solves
+  //   x = 1.0 + 0.3 * x  →  x = 1/0.7 ≈ 1.4286
+  //   post-gain: 0.3 * 1.4286 ≈ 0.4286
+  //   post-pan-center: 0.4286 * (1/√2) ≈ 0.30305
+  // If the feedback loop were broken the feed-forward path alone would
+  // settle at 0.3 * (1/√2) ≈ 0.2121, so the `> 0.25` lower bound below is
+  // the discriminator that actually proves recurrence.
   await expect
     .poll(async () => {
       const history = await telemetryHistory(page);
@@ -136,8 +143,11 @@ test('browser demo first render proves CompiledStereoDsp feedback recurrence', a
   const telemetry = history.find(t => t.sequence === 2 && t.freq === 0);
 
   expect(telemetry.freq).toBeCloseTo(0, 9);
-  expect(telemetry.leftPreview[0]).toBeGreaterThan(0.001);
-  expect(telemetry.leftPreview[0]).toBeLessThan(1.0);
+  // Lower bound 0.25 > 0.2121 feed-forward-only value: must have feedback.
+  // Upper bound 0.35 > 0.30305 plateau: ensures the loop is bounded (feedback
+  // gain < 1), not runaway.
+  expect(telemetry.leftPreview[0]).toBeGreaterThan(0.25);
+  expect(telemetry.leftPreview[0]).toBeLessThan(0.35);
   expect(telemetry.rightPreview[0]).toBeCloseTo(telemetry.leftPreview[0], 9);
 });
 

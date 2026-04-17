@@ -70,7 +70,8 @@ Phase 5 (not yet implemented) will bridge the two: pattern events become `VoiceP
 ## Repository layout
 
 ```
-lib/           Core DSP: oscillators, filters, graph compiler, voice pool
+./             Library public API facade (`mdsp.mbt` re-exports from lib/)
+lib/           Internal facade: re-exports dsp/, graph/, voice/
 pattern/       Pattern engine: rational time, combinators, control maps (standalone)
 browser/       AudioWorklet integration (wasm-gc/js exports)
 web/           Browser demo UI (HTML + AudioWorklet processor)

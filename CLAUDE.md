@@ -15,7 +15,7 @@ remains open for native targets such as CLAP plugins.
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| `dowdiness/mdsp` | `./` | Demo entrypoint (`mdsp.mbt`), delegates to `lib/` |
+| `dowdiness/mdsp` | `./` | Library public API facade — `pub using @lib { ... }` re-exports the full library surface so external consumers write `@mdsp.X` |
 | `dowdiness/mdsp/dsp` | `dsp/` | DSP primitives (oscillators, filters, tagless algebra, pan math) |
 | `dowdiness/mdsp/graph` | `graph/` | Compiled graph runtime (compile, optimize, topology edit, hot-swap, control binding) |
 | `dowdiness/mdsp/voice` | `voice/` | Polyphonic voice pool with priority stealing |

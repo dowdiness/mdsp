@@ -1,56 +1,78 @@
 ///|
-let demo : @ref.Ref[@lib.DemoSource] = @ref.new(@lib.DemoSource::new())
-
-///|
-/// Entry point required because the root package is built as a main package for
-/// the exported wasm/js prototype.
-fn main {
-  ()
-}
-
-///|
-/// Reset oscillator and noise state to the start of the waveform.
-pub fn demo_reset_phase() -> Unit {
-  demo.val.reset()
-}
-
-///|
-/// Generate one sine sample for the current frequency.
+/// Public API facade for the `dowdiness/mdsp` library.
 ///
-/// This function is exported for the `wasm-gc` and `js` backends so the
-/// browser prototype can call it from the AudioWorklet processor.
-pub fn demo_tick(freq : Double, sample_rate : Double) -> Double {
-  demo.val.tick_source(0, freq, sample_rate)
-}
-
-///|
-/// Browser demo source selector entrypoint exported for wasm/js builds.
-pub fn demo_tick_source(
-  source_id : Int,
-  freq : Double,
-  sample_rate : Double,
-) -> Double {
-  demo.val.tick_source(source_id, freq, sample_rate)
-}
-
-///|
-/// Backward-compatible browser demo alias for the old prototype name.
-pub fn reset_phase() -> Unit {
-  demo.val.reset()
-}
-
-///|
-/// Backward-compatible browser demo alias for the old prototype name.
-pub fn tick(freq : Double, sample_rate : Double) -> Double {
-  demo.val.tick_source(0, freq, sample_rate)
-}
-
-///|
-/// Backward-compatible browser demo alias.
-pub fn tick_source(
-  source_id : Int,
-  freq : Double,
-  sample_rate : Double,
-) -> Double {
-  demo.val.tick_source(source_id, freq, sample_rate)
+/// This file re-exports the library surface provided by `@lib`, which in
+/// turn consolidates `@dsp`, `@graph`, and `@voice`. External consumers
+/// should prefer `@mdsp.X` over `@mdsp.lib.X`; the `@lib` layer remains
+/// as the internal re-export hub that project packages import.
+pub using @lib {
+  type Adsr,
+  type AudioBuffer,
+  type Biquad,
+  type BiquadMode,
+  type Clip,
+  type CompiledDsp,
+  type CompiledDspHotSwap,
+  type CompiledDspTopologyController,
+  type CompiledStereoDsp,
+  type CompiledStereoDspHotSwap,
+  type CompiledStereoDspTopologyController,
+  type ControlBinding,
+  type ControlBindingBuilder,
+  type ControlBindingError,
+  type ControlBindingMap,
+  type DelayLine,
+  type DemoSource,
+  type DspContext,
+  type DspNode,
+  type DspNodeKind,
+  type EnvStage,
+  type Gain,
+  type GraphBuilder,
+  type GraphControl,
+  type GraphControlKind,
+  type GraphParamSlot,
+  type GraphTopologyEdit,
+  type GraphTopologyInputSlot,
+  type GraphValidationError,
+  type Mix,
+  type Mono,
+  type Noise,
+  type Oscillator,
+  type Pan,
+  type ParamSmoother,
+  type Stereo,
+  type VoiceHandle,
+  type VoicePool,
+  type VoiceState,
+  type Waveform,
+  trait ArithSym,
+  trait ChannelSpec,
+  trait DelaySym,
+  trait DspSym,
+  trait FilterSym,
+  trait GraphControllable,
+  trait GraphDebuggable,
+  trait NodeEditable,
+  trait NodeFoldable,
+  trait NodeSpanning,
+  trait NodeStateful,
+  trait StereoDelaySym,
+  trait StereoFilterSym,
+  trait StereoSym,
+  effective_sample_count,
+  exit_deliverable,
+  is_finite,
+  is_finite_positive,
+  lin_map,
+  max_feedback_amount,
+  mono_shape,
+  node_accepts_slot,
+  optimize_graph,
+  pan_left_gain,
+  pan_right_gain,
+  range,
+  replay,
+  sanitize_buffer,
+  stereo_shape,
 }

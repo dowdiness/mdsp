@@ -72,6 +72,11 @@ pub fn CompiledStereoDspTopologyController::queue_topology_edit(Self, GraphTopol
 pub fn CompiledStereoDspTopologyController::queue_topology_edits(Self, Array[GraphTopologyEdit]) -> Bool
 pub impl GraphControllable for CompiledStereoDspTopologyController
 
+pub struct CompiledTemplate {
+  // private fields
+}
+pub fn CompiledTemplate::analyze(Array[DspNode]) -> Self
+
 pub struct ControlBinding {
   key : String
   node_index : Int

@@ -72,15 +72,19 @@ pub fn ControlBindingMap::length(self : ControlBindingMap) -> Int {
 /// compatibility, and key uniqueness. Returns the first error found.
 pub fn ControlBindingBuilder::build(
   self : ControlBindingBuilder,
-  template : Array[DspNode],
+  compiled_template : CompiledTemplate,
 ) -> Result[ControlBindingMap, ControlBindingError] {
   let seen_keys : Map[String, Bool] = {}
   for i = 0; i < self.bindings.length(); i = i + 1 {
     let binding = self.bindings[i]
-    if binding.node_index < 0 || binding.node_index >= template.length() {
+    if binding.node_index < 0 ||
+      binding.node_index >= compiled_template.length() {
       return Err(ControlBindingError::InvalidNodeIndex(binding.node_index))
     }
-    if !node_accepts_slot(template[binding.node_index], binding.slot) {
+    if !node_accepts_slot(
+        compiled_template.node_at(binding.node_index),
+        binding.slot,
+      ) {
       return Err(
         ControlBindingError::InvalidSlotForNode(
           binding.node_index,
@@ -88,6 +92,8 @@ pub fn ControlBindingBuilder::build(
         ),
       )
     }
+    // NB: orphan check is added in Task 7 — this commit keeps build
+    // behavior identical apart from the signature.
     if seen_keys.contains(binding.key) {
       return Err(ControlBindingError::DuplicateKey(binding.key))
     }

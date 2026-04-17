@@ -93,7 +93,7 @@ pub struct ControlBindingBuilder {
   fn new() -> ControlBindingBuilder
 } derive(@debug.Debug)
 pub fn ControlBindingBuilder::bind(Self, key~ : String, node_index~ : Int, slot~ : GraphParamSlot) -> Self
-pub fn ControlBindingBuilder::build(Self, Array[DspNode]) -> Result[ControlBindingMap, ControlBindingError]
+pub fn ControlBindingBuilder::build(Self, CompiledTemplate) -> Result[ControlBindingMap, ControlBindingError]
 pub fn ControlBindingBuilder::new() -> Self
 pub impl Show for ControlBindingBuilder
 

@@ -33,7 +33,7 @@ test "PatternScheduler::new initializes with zero position" {
   let ctx = @lib.DspContext::new(48000.0, 128)
   let bindings = @lib.ControlBindingBuilder::new()
     .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
-    .build(template)
+    .build(@lib.CompiledTemplate::analyze(template))
   match bindings {
     Ok(b) => {
       let sched = @scheduler.PatternScheduler::new(bpm=120.0, bindings=b, ctx~)
@@ -108,7 +108,7 @@ fn make_test_sched() -> (
   let (pool, template, ctx) = make_test_pool()
   let bindings = @lib.ControlBindingBuilder::new()
     .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
-    .build(template)
+    .build(@lib.CompiledTemplate::analyze(template))
   match bindings {
     Ok(b) => {
       let sched = @scheduler.PatternScheduler::new(bpm=120.0, bindings=b, ctx~)
@@ -125,7 +125,7 @@ test "expire_notes: removes notes past their end_time" {
   let (pool, template, ctx) = make_test_pool()
   let bindings = @lib.ControlBindingBuilder::new()
     .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
-    .build(template)
+    .build(@lib.CompiledTemplate::analyze(template))
   match bindings {
     Err(_) => assert_true(false)
     Ok(b) => {
@@ -242,7 +242,7 @@ test "process_block: stolen voice gate-off is harmless" {
     Some(pool) => {
       let bindings = @lib.ControlBindingBuilder::new()
         .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
-        .build(template)
+        .build(@lib.CompiledTemplate::analyze(template))
       match bindings {
         Err(_) => assert_true(false)
         Ok(b) => {

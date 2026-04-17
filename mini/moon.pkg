@@ -1,7 +1,3 @@
 import {
   "dowdiness/mdsp/pattern" @pattern,
 }
-
-import {
-  "moonbitlang/quickcheck" @qc,
-} for "test"

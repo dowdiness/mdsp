@@ -3,8 +3,3 @@ import {
   "dowdiness/mdsp/graph" @graph,
   "moonbitlang/core/int" @int,
 }
-
-import {
-  "moonbitlang/core/double" @double,
-  "moonbitlang/quickcheck" @qc,
-} for "test"

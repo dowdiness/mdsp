@@ -5,11 +5,21 @@ const { test, expect } = require('@playwright/test');
 // AudioWorklet) and calls mul_adsr_peak, which builds
 // [osc(Sine, 440), adsr(5,5,0.5,50) ms, mul(0,1), output(2)],
 // gate_on(1), processes one 128-sample block, and returns max abs sample.
-// With Mul working, peak should be clearly non-trivial (> 0.3); the old
-// "broken Mul" symptom reported peak ~0.003.
-test('Mul in wasm-gc release: [osc, adsr(ms), mul, output] produces non-zero peak', async ({ page }) => {
+//
+// At 48 kHz/128 samples with a 5 ms attack, the ADSR envelope reaches ~0.53
+// by the end of the block, and the 440 Hz sine covers ~1.16 cycles with peak
+// 1.0. The true product |sine × envelope| should peak in a tight band just
+// below the envelope ceiling — roughly 0.45.
+//
+// The bounds below are chosen to DISCRIMINATE multiplication from other
+// candidate behaviors of this graph:
+//   - pass-through of osc (≈ 1.0)               → fails upper bound
+//   - pass-through of adsr (≈ 0.53)             → fails upper bound
+//   - zero / near-zero (old "broken Mul" claim) → fails lower bound
+// Only an actual per-sample multiply falls in the [0.42, 0.50] window.
+test('Mul in wasm-gc release: [osc, adsr(ms), mul, output] peak lies in the multiply-specific band', async ({ page }) => {
   await page.goto('/');
-  const peak = await page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     const response = await fetch('moonbit_dsp_test.wasm');
     if (!response.ok) {
       return { error: `fetch failed: ${response.status}` };
@@ -31,7 +41,7 @@ test('Mul in wasm-gc release: [osc, adsr(ms), mul, output] produces non-zero pea
     }
     return { value: instance.exports.mul_adsr_peak(48000, 128) };
   });
-  expect(peak.error, peak.error || '').toBeFalsy();
-  expect(peak.value).toBeGreaterThan(0.3);
-  expect(peak.value).toBeLessThanOrEqual(1.0);
+  expect(result.error, result.error || '').toBeFalsy();
+  expect(result.value, `peak=${result.value}`).toBeGreaterThan(0.42);
+  expect(result.value, `peak=${result.value}`).toBeLessThan(0.50);
 });

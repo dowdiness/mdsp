@@ -105,7 +105,10 @@ priv struct GraphSlot[T, O] {
   block_size : @ref.Ref[Int]
   compile : (@lib.DspContext) -> T?
 
-  fn[T, O] new(output~ : O, compile~ : (@lib.DspContext) -> T?) -> GraphSlot[T, O]
+  fn[T, O] new(
+    output~ : O,
+    compile~ : (@lib.DspContext) -> T?,
+  ) -> GraphSlot[T, O]
 }
 
 ///|

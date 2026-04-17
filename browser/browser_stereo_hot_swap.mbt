@@ -1,27 +1,27 @@
 ///|
-let compiled_stereo_hot_swap : GraphSlot[@lib.CompiledStereoDspHotSwap, StereoOut] = GraphSlot::new(
-  output=StereoOut::new(),
-  compile=fn(ctx) {
-    match
-      @lib.CompiledStereoDsp::compile(
-        [
-          @lib.DspNode::constant(BROWSER_STEREO_HOT_SWAP_OLD_CONSTANT),
-          @lib.DspNode::pan(0, 0.0),
-          @lib.DspNode::stereo_output(1),
-        ],
-        ctx,
-      ) {
-      Some(active) =>
-        Some(
-          @lib.CompiledStereoDspHotSwap::from_graph(
-            active,
-            crossfade_samples=BROWSER_STEREO_HOT_SWAP_CROSSFADE_SAMPLES,
-          ),
-        )
-      None => None
-    }
-  },
-)
+let compiled_stereo_hot_swap : GraphSlot[
+  @lib.CompiledStereoDspHotSwap,
+  StereoOut,
+] = GraphSlot::new(output=StereoOut::new(), compile=fn(ctx) {
+  match
+    @lib.CompiledStereoDsp::compile(
+      [
+        @lib.DspNode::constant(BROWSER_STEREO_HOT_SWAP_OLD_CONSTANT),
+        @lib.DspNode::pan(0, 0.0),
+        @lib.DspNode::stereo_output(1),
+      ],
+      ctx,
+    ) {
+    Some(active) =>
+      Some(
+        @lib.CompiledStereoDspHotSwap::from_graph(
+          active,
+          crossfade_samples=BROWSER_STEREO_HOT_SWAP_CROSSFADE_SAMPLES,
+        ),
+      )
+    None => None
+  }
+})
 
 ///|
 /// Initialize the browser proof graph that runs through `CompiledStereoDspHotSwap`.

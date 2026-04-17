@@ -5,20 +5,17 @@ let stereo_topo_edit_level : @ref.Ref[Double] = @ref.new(1.0)
 let compiled_stereo_topology_edit : GraphSlot[
   @lib.CompiledStereoDspTopologyController,
   StereoOut,
-] = GraphSlot::new(
-  output=StereoOut::new(),
-  compile=fn(ctx) {
-    @lib.CompiledStereoDspTopologyController::from_nodes(
-      [
-        @lib.DspNode::constant(1.0),
-        @lib.DspNode::pan(0, BROWSER_STEREO_TOPOLOGY_EDIT_OLD_PAN),
-        @lib.DspNode::stereo_output(1),
-      ],
-      ctx,
-      crossfade_samples=BROWSER_STEREO_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,
-    )
-  },
-)
+] = GraphSlot::new(output=StereoOut::new(), compile=fn(ctx) {
+  @lib.CompiledStereoDspTopologyController::from_nodes(
+    [
+      @lib.DspNode::constant(1.0),
+      @lib.DspNode::pan(0, BROWSER_STEREO_TOPOLOGY_EDIT_OLD_PAN),
+      @lib.DspNode::stereo_output(1),
+    ],
+    ctx,
+    crossfade_samples=BROWSER_STEREO_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,
+  )
+})
 
 ///|
 /// Initialize the browser proof graph that runs through

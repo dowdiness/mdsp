@@ -8,19 +8,16 @@ let topo_edit_inserted : @ref.Ref[Bool] = @ref.new(false)
 let compiled_topology_edit : GraphSlot[
   @lib.CompiledDspTopologyController,
   MonoOut,
-] = GraphSlot::new(
-  output=MonoOut::new(),
-  compile=fn(ctx) {
-    @lib.CompiledDspTopologyController::from_nodes(
-      [
-        @lib.DspNode::constant(BROWSER_COMPILED_DEFAULT_GAIN),
-        @lib.DspNode::output(0),
-      ],
-      ctx,
-      crossfade_samples=BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,
-    )
-  },
-)
+] = GraphSlot::new(output=MonoOut::new(), compile=fn(ctx) {
+  @lib.CompiledDspTopologyController::from_nodes(
+    [
+      @lib.DspNode::constant(BROWSER_COMPILED_DEFAULT_GAIN),
+      @lib.DspNode::output(0),
+    ],
+    ctx,
+    crossfade_samples=BROWSER_TOPOLOGY_EDIT_CROSSFADE_SAMPLES,
+  )
+})
 
 ///|
 /// Initialize the browser proof graph that runs through
@@ -68,7 +65,12 @@ pub fn queue_compiled_topology_delete_edit() -> Bool {
     return false
   }
   let queued = topology.queue_topology_edit(
-    @lib.GraphTopologyEdit::delete_node(2, 1, @lib.GraphTopologyInputSlot::Input0, 2),
+    @lib.GraphTopologyEdit::delete_node(
+      2,
+      1,
+      @lib.GraphTopologyInputSlot::Input0,
+      2,
+    ),
   )
   if queued {
     topo_edit_inserted.val = false

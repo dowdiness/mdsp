@@ -28,7 +28,6 @@ pub struct CompiledTemplate {
 /// dead-code elimination. Omitting the context makes analyze infallible
 /// and cheap.
 pub fn CompiledTemplate::analyze(template : Array[DspNode]) -> CompiledTemplate {
-  // DspNode is a flat value struct (no nested arrays/refs), so Array.copy() produces a fully independent snapshot.
   let snapshot = template.copy()
   let (_, index_map) = optimize_graph(snapshot)
   { template: snapshot, index_map }
@@ -50,11 +49,6 @@ fn CompiledTemplate::node_at(self : CompiledTemplate, index : Int) -> DspNode {
 ///|
 /// Does authoring index `i` survive the optimizer? Returns false for
 /// out-of-range indices (no abort).
-///
-/// Package-private: binding validation in control_binding.mbt uses this;
-/// external callers should not need raw liveness queries — orphan counts
-/// (for diagnostics) or the build rejection flow (for enforcement) are
-/// sufficient.
 fn CompiledTemplate::is_node_live(self : CompiledTemplate, index : Int) -> Bool {
   index >= 0 && index < self.index_map.length() && self.index_map[index] >= 0
 }

@@ -1,4 +1,16 @@
 ///|
+/// 4-node template where index 1 (the second Oscillator) has no downstream
+/// consumer and is eliminated by optimize_graph. Used by orphan-binding tests.
+fn orphan_template() -> Array[DspNode] {
+  [
+    DspNode::oscillator(Waveform::Sine, 440.0), // index 0 — live (feeds Output via gain)
+    DspNode::oscillator(Waveform::Sine, 880.0), // index 1 — orphan
+    DspNode::gain(0, 0.3),
+    DspNode::output(2),
+  ]
+}
+
+///|
 test "build: valid bindings produce Ok" {
   let template = [
     DspNode::oscillator(Waveform::Sine, 440.0),
@@ -195,7 +207,6 @@ test "build: post-build bind does not mutate validated map" {
 
 ///|
 test "build: live binding on surviving node produces Ok" {
-  // Oscillator is live (feeds Output via gain). Binding on its Value0 is valid.
   let template = [
     DspNode::oscillator(Waveform::Sine, 440.0),
     DspNode::gain(0, 0.3),
@@ -209,41 +220,27 @@ test "build: live binding on surviving node produces Ok" {
 
 ///|
 test "build: orphan binding returns OrphanBinding with key and index" {
-  // Oscillator at index 1 is orphan (not connected to any live path).
-  // optimize_graph eliminates it; binding on its Value0 would silently no-op.
-  let template = [
-    DspNode::oscillator(Waveform::Sine, 440.0), // live — reaches Output via gain
-    DspNode::oscillator(Waveform::Sine, 880.0), // orphan — not wired to anything
-    DspNode::gain(0, 0.3),
-    DspNode::output(2),
-  ]
   let result = ControlBindingBuilder::new()
     .bind(key="orphan_freq", node_index=1, slot=GraphParamSlot::Value0)
-    .build(CompiledTemplate::analyze(template))
+    .build(CompiledTemplate::analyze(orphan_template()))
   assert_eq(result, Err(ControlBindingError::OrphanBinding("orphan_freq", 1)))
 }
 
 ///|
 test "build: orphan error carries the specific binding's key" {
-  // Two bindings on the same orphan node with different keys.
-  // build should report the FIRST encountered (insertion order).
-  let template = [
-    DspNode::oscillator(Waveform::Sine, 440.0), // live
-    DspNode::oscillator(Waveform::Sine, 880.0), // orphan
-    DspNode::gain(0, 0.3),
-    DspNode::output(2),
-  ]
+  // Two bindings on the same orphan node with different keys — build reports
+  // the FIRST encountered (insertion order).
   let result = ControlBindingBuilder::new()
     .bind(key="orphan_a", node_index=1, slot=GraphParamSlot::Value0)
     .bind(key="orphan_b", node_index=1, slot=GraphParamSlot::Value0)
-    .build(CompiledTemplate::analyze(template))
+    .build(CompiledTemplate::analyze(orphan_template()))
   assert_eq(result, Err(ControlBindingError::OrphanBinding("orphan_a", 1)))
 }
 
 ///|
 test "build: slot error preempts orphan check" {
-  // Node 1 is Output — has no Value0 slot. The slot check runs BEFORE
-  // the orphan check per the per-binding validation ordering.
+  // Node 1 is Output — has no Value0 slot. Slot check runs before orphan
+  // check per the per-binding validation ordering.
   let template = [DspNode::constant(1.0), DspNode::output(0)]
   let result = ControlBindingBuilder::new()
     .bind(key="x", node_index=1, slot=GraphParamSlot::Value0)
@@ -256,39 +253,27 @@ test "build: slot error preempts orphan check" {
 
 ///|
 test "build: bounds error preempts orphan check" {
-  // node_index 99 is out of range — bounds check reports InvalidNodeIndex
-  // regardless of optimization state.
-  let template = [
-    DspNode::oscillator(Waveform::Sine, 440.0),
-    DspNode::oscillator(Waveform::Sine, 880.0), // orphan
-    DspNode::gain(0, 0.3),
-    DspNode::output(2),
-  ]
+  // Out-of-range node_index reports InvalidNodeIndex regardless of
+  // optimization state.
   let result = ControlBindingBuilder::new()
     .bind(key="x", node_index=99, slot=GraphParamSlot::Value0)
-    .build(CompiledTemplate::analyze(template))
+    .build(CompiledTemplate::analyze(orphan_template()))
   assert_eq(result, Err(ControlBindingError::InvalidNodeIndex(99)))
 }
 
 ///|
 test "build: orphan preempts duplicate key" {
   // First binding is orphan; duplicate appears later. Orphan reported first.
-  let template = [
-    DspNode::oscillator(Waveform::Sine, 440.0), // live
-    DspNode::oscillator(Waveform::Sine, 880.0), // orphan
-    DspNode::gain(0, 0.3),
-    DspNode::output(2),
-  ]
   let result = ControlBindingBuilder::new()
     .bind(key="dup", node_index=1, slot=GraphParamSlot::Value0)
     .bind(key="dup", node_index=0, slot=GraphParamSlot::Value0)
-    .build(CompiledTemplate::analyze(template))
+    .build(CompiledTemplate::analyze(orphan_template()))
   assert_eq(result, Err(ControlBindingError::OrphanBinding("dup", 1)))
 }
 
 ///|
 test "build: duplicate key still reported for live-node bindings" {
-  // Regression — no orphans present, duplicate check still works.
+  // Regression: no orphans present, duplicate check still fires.
   let template = [
     DspNode::oscillator(Waveform::Sine, 440.0),
     DspNode::gain(0, 0.3),
@@ -303,15 +288,8 @@ test "build: duplicate key still reported for live-node bindings" {
 
 ///|
 test "build: empty builder still succeeds on any template" {
-  // Regression — no bindings means nothing to validate.
-  let template = [
-    DspNode::oscillator(Waveform::Sine, 440.0),
-    DspNode::oscillator(Waveform::Sine, 880.0), // orphan — irrelevant when unbound
-    DspNode::gain(0, 0.3),
-    DspNode::output(2),
-  ]
   let result = ControlBindingBuilder::new().build(
-    CompiledTemplate::analyze(template),
+    CompiledTemplate::analyze(orphan_template()),
   )
   assert_true(result is Ok(_))
 }

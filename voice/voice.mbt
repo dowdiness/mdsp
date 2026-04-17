@@ -96,7 +96,7 @@ fn gate_all_adsrs(
   template : Array[DspNode],
   gate_on : Bool,
 ) -> Unit {
-  for i = 0; i < template.length(); i = i + 1 {
+  for i in 0..<template.length() {
     if template[i].kind is Adsr {
       if gate_on {
         ignore(compiled.gate_on(i))
@@ -148,8 +148,8 @@ pub struct VoicePool {
 /// WHY template.copy(): the pool's long-lived snapshot (used by note_on
 /// compiles and by set_template transitions) must be independent of the
 /// caller's array, which can be mutated after VoicePool::new returns.
-/// CompiledDsp::compile runs optimize_graph on its own local copy and
-/// does not affect the caller's array.
+/// optimize_graph does not mutate its input, so neither CompiledTemplate::analyze
+/// nor CompiledDsp::compile disturbs the caller's array.
 pub fn VoicePool::new(
   template : Array[DspNode],
   context : DspContext,

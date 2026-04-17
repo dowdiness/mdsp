@@ -106,9 +106,6 @@ pub fn ControlBindingBuilder::build(
         ),
       )
     }
-    // Orphan check — binding targets a node that optimize_graph eliminated.
-    // Without this, resolve_controls would emit set_param messages that
-    // CompiledDsp silently drops via index_map[i] = -1.
     if !compiled_template.is_node_live(binding.node_index) {
       return Err(
         ControlBindingError::OrphanBinding(binding.key, binding.node_index),

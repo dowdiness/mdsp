@@ -25,6 +25,9 @@ pub(all) enum ControlBindingError {
   InvalidNodeIndex(Int)
   InvalidSlotForNode(Int, GraphParamSlot)
   DuplicateKey(String)
+  /// Binding (key, node_index) targets a template node that
+  /// optimize_graph eliminated. Prevents silent set_param no-ops.
+  OrphanBinding(String, Int)
 } derive(Debug, Eq)
 
 ///|
@@ -52,7 +55,19 @@ pub fn ControlBindingBuilder::bind(
 }
 
 ///|
+/// Proven-valid control bindings. Validated against a specific
+/// CompiledTemplate at build time (bounds + slot compatibility +
+/// orphan detection + key uniqueness).
+///
 /// No public constructor — only reachable through ControlBindingBuilder::build().
+///
+/// WARNING: A ControlBindingMap's validity is tied to the template it was
+/// built against. After VoicePool::set_template swaps to a new template,
+/// bindings validated against the prior template remain type-level valid
+/// but may silently retarget the wrong kind of node or no-op against
+/// nodes the new template's optimize_graph eliminated. Rebuild the
+/// ControlBindingMap whenever the template changes. Structural staleness
+/// detection is tracked as a follow-up.
 pub struct ControlBindingMap {
   priv bindings : Array[ControlBinding]
 } derive(Debug, Eq)
@@ -64,25 +79,36 @@ pub fn ControlBindingMap::length(self : ControlBindingMap) -> Int {
 }
 
 ///|
-/// Validate all bindings against the graph template and transition to
-/// the proven-valid ControlBindingMap. Checks node index bounds, slot
-/// compatibility, and key uniqueness. Returns the first error found.
+/// Validate all bindings against the compiled template and transition
+/// to the proven-valid ControlBindingMap. Per-binding checks in order:
+/// node index bounds, slot compatibility with the authoring node kind,
+/// post-optimization liveness (rejects bindings on nodes eliminated by
+/// optimize_graph), and key uniqueness. Returns the first error found.
 pub fn ControlBindingBuilder::build(
   self : ControlBindingBuilder,
-  template : Array[DspNode],
+  compiled_template : CompiledTemplate,
 ) -> Result[ControlBindingMap, ControlBindingError] {
   let seen_keys : Map[String, Bool] = {}
-  for i = 0; i < self.bindings.length(); i = i + 1 {
+  for i in 0..<self.bindings.length() {
     let binding = self.bindings[i]
-    if binding.node_index < 0 || binding.node_index >= template.length() {
+    if binding.node_index < 0 ||
+      binding.node_index >= compiled_template.length() {
       return Err(ControlBindingError::InvalidNodeIndex(binding.node_index))
     }
-    if !node_accepts_slot(template[binding.node_index], binding.slot) {
+    if !node_accepts_slot(
+        compiled_template.node_at(binding.node_index),
+        binding.slot,
+      ) {
       return Err(
         ControlBindingError::InvalidSlotForNode(
           binding.node_index,
           binding.slot,
         ),
+      )
+    }
+    if !compiled_template.is_node_live(binding.node_index) {
+      return Err(
+        ControlBindingError::OrphanBinding(binding.key, binding.node_index),
       )
     }
     if seen_keys.contains(binding.key) {
@@ -106,7 +132,7 @@ pub fn ControlBindingMap::resolve_controls(
   controls : Map[String, Double],
 ) -> Array[GraphControl] {
   let result = Array::new(capacity=self.bindings.length())
-  for i = 0; i < self.bindings.length(); i = i + 1 {
+  for i in 0..<self.bindings.length() {
     let binding = self.bindings[i]
     match controls.get(binding.key) {
       Some(value) =>

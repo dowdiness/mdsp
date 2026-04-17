@@ -2,7 +2,12 @@
 using @dsp {type AudioBuffer, type DspContext}
 
 ///|
-using @graph {type CompiledDsp, type DspNode, type GraphControl}
+using @graph {
+  type CompiledDsp,
+  type CompiledTemplate,
+  type DspNode,
+  type GraphControl,
+}
 
 ///|
 pub enum VoiceState {
@@ -91,7 +96,7 @@ fn gate_all_adsrs(
   template : Array[DspNode],
   gate_on : Bool,
 ) -> Unit {
-  for i = 0; i < template.length(); i = i + 1 {
+  for i in 0..<template.length() {
     if template[i].kind is Adsr {
       if gate_on {
         ignore(compiled.gate_on(i))
@@ -140,8 +145,11 @@ pub struct VoicePool {
 /// index to -1 and silently no-ops, and voices play with a 0 envelope —
 /// a frustrating footgun. Reject at pool-construction time with a clear
 /// failure rather than at note-trigger time with silent audio.
-/// WHY template.copy(): the pool must own a stable snapshot. compile()
-/// internally calls optimize_graph which may consume or mutate the array.
+/// WHY template.copy(): the pool's long-lived snapshot (used by note_on
+/// compiles and by set_template transitions) must be independent of the
+/// caller's array, which can be mutated after VoicePool::new returns.
+/// optimize_graph does not mutate its input, so neither CompiledTemplate::analyze
+/// nor CompiledDsp::compile disturbs the caller's array.
 pub fn VoicePool::new(
   template : Array[DspNode],
   context : DspContext,
@@ -150,11 +158,13 @@ pub fn VoicePool::new(
   if max_voices <= 0 {
     return None
   }
-  let test_compile = match CompiledDsp::compile(template, context) {
-    Some(c) => c
-    None => return None
+  let compiled_template = CompiledTemplate::analyze(template)
+  if compiled_template.orphan_adsr_count() > 0 {
+    return None
   }
-  if test_compile.orphan_adsr_count(template) > 0 {
+  // Sanity-compile to catch non-orphan problems (feedback cycle validation
+  // etc.). Result discarded — per-voice slots compile their own on note_on.
+  if CompiledDsp::compile(template, context) is None {
     return None
   }
   let block_size = context.block_size()
@@ -174,12 +184,11 @@ pub fn VoicePool::set_template(
   self : VoicePool,
   template : Array[DspNode],
 ) -> Bool {
-  let test_compile = match
-    CompiledDsp::compile(template, self.compile_context) {
-    Some(c) => c
-    None => return false
+  let compiled_template = CompiledTemplate::analyze(template)
+  if compiled_template.orphan_adsr_count() > 0 {
+    return false
   }
-  if test_compile.orphan_adsr_count(template) > 0 {
+  if CompiledDsp::compile(template, self.compile_context) is None {
     return false
   }
   self.template = template.copy()

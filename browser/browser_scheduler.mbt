@@ -115,7 +115,9 @@ fn make_drum_pool(
   match @lib.VoicePool::new(template, ctx, max_voices=4) {
     None => None
     Some(pool) => {
-      let bindings_result = @lib.ControlBindingBuilder::new().build(template)
+      let bindings_result = @lib.ControlBindingBuilder::new().build(
+        @lib.CompiledTemplate::analyze(template),
+      )
       match bindings_result {
         Err(_) => None
         Ok(bindings) => {
@@ -145,7 +147,7 @@ fn make_synth_pool(ctx : @lib.DspContext, block_size : Int) -> SoundPool? {
     Some(pool) => {
       let bindings_result = @lib.ControlBindingBuilder::new()
         .bind(key="note", node_index=0, slot=@lib.GraphParamSlot::Value0)
-        .build(template)
+        .build(@lib.CompiledTemplate::analyze(template))
       match bindings_result {
         Err(_) => None
         Ok(bindings) => {

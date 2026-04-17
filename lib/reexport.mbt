@@ -73,6 +73,7 @@ pub using @graph {
   type CompiledStereoDsp,
   type CompiledStereoDspHotSwap,
   type CompiledStereoDspTopologyController,
+  type CompiledTemplate,
   type DspNode,
   type DspNodeKind,
   type GraphBuilder,

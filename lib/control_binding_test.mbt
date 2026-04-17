@@ -225,7 +225,7 @@ test "build: orphan binding returns OrphanBinding with key and index" {
 
 ///|
 test "build: orphan error carries the specific binding's key" {
-  // Two bindings on the same orphan node but different slots.
+  // Two bindings on the same orphan node with different keys.
   // build should report the FIRST encountered (insertion order).
   let template = [
     DspNode::oscillator(Waveform::Sine, 440.0), // live

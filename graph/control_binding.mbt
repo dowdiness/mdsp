@@ -25,6 +25,9 @@ pub(all) enum ControlBindingError {
   InvalidNodeIndex(Int)
   InvalidSlotForNode(Int, GraphParamSlot)
   DuplicateKey(String)
+  /// Binding (key, node_index) targets a template node that
+  /// optimize_graph eliminated. Prevents silent set_param no-ops.
+  OrphanBinding(String, Int)
 } derive(Debug, Eq)
 
 ///|

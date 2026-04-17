@@ -101,6 +101,7 @@ pub(all) enum ControlBindingError {
   InvalidNodeIndex(Int)
   InvalidSlotForNode(Int, GraphParamSlot)
   DuplicateKey(String)
+  OrphanBinding(String, Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for ControlBindingError
 

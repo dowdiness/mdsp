@@ -52,8 +52,8 @@ priv struct MonoOut {
 }
 
 fn MonoOut::new() -> MonoOut { { buffer: @ref.new(None) } }
-priv impl Output for MonoOut with reset(self) { self.buffer.val = None }
-priv impl Output for MonoOut with allocate(self, n) {
+impl Output for MonoOut with reset(self) { self.buffer.val = None }
+impl Output for MonoOut with allocate(self, n) {
   self.buffer.val = Some(@lib.AudioBuffer::filled(n))
 }
 
@@ -72,10 +72,10 @@ priv struct StereoOut {
 fn StereoOut::new() -> StereoOut {
   { left: @ref.new(None), right: @ref.new(None) }
 }
-priv impl Output for StereoOut with reset(self) {
+impl Output for StereoOut with reset(self) {
   self.left.val = None; self.right.val = None
 }
-priv impl Output for StereoOut with allocate(self, n) {
+impl Output for StereoOut with allocate(self, n) {
   self.left.val  = Some(@lib.AudioBuffer::filled(n))
   self.right.val = Some(@lib.AudioBuffer::filled(n))
 }
@@ -131,9 +131,12 @@ fn[T, O : Output] GraphSlot::ensure(
   let ctx = @lib.DspContext::new(rate, block)
   match (self.compile)(ctx) {
     Some(g) => {
+      // Allocate output buffers FIRST so that if allocation aborts,
+      // no slot refs are published — preserving the all-or-nothing init
+      // invariant the current per-variant code enforces with locals.
+      self.output.allocate(block)
       self.graph.val = Some(g)
       self.context.val = Some(ctx)
-      self.output.allocate(block)
       self.sample_rate.val = rate
       self.block_size.val = block
       true
@@ -256,9 +259,19 @@ fn reset_compiled_topology_edit_graph() -> Unit {
 
 The `reset_phase()` function in `browser.mbt` continues to call each `reset_<variant>()` explicitly — explicit is clearer than iterating a registry for seven known variants.
 
+## Invariants
+
+The refactor must preserve these contracts:
+
+- **All-or-nothing init.** After `ensure` returns `true`, the slot's `graph`, `context`, output buffer(s), `sample_rate`, and `block_size` are all consistent with the requested rate/block. After `ensure` returns `false`, the slot matches the post-`reset` state (all refs cleared). There is no intermediate state observable to callers. This is why `ensure` allocates output *before* publishing graph/context.
+- **Compile closures are side-effect free.** The `compile : (DspContext) -> T?` closure must only construct the graph; it must not mutate external state, log, or depend on anything other than its argument. Re-running on rate/block change must be idempotent.
+- **Single-threaded access per variant.** Unchanged from today — documented in `browser/browser.mbt:1`. Any overlap between `init`/`reset`/`queue`/`set` and `process` on the same slot remains undefined behavior; this refactor neither improves nor regresses that contract.
+- **Wasm ABI stable.** Every `pub fn` currently exported to JavaScript keeps its name and signature.
+
 ## Verification
 
 - **Type check:** `moon check && moon test` passes across all packages.
+- **WASM export gate:** `browser/moon.pkg` lists every symbol exposed to JavaScript. Diff before and after the refactor — it MUST show zero changes to exported names. This is a stricter check than "does it compile" and catches accidental rename/removal of a public wrapper.
 - **Playwright suite:** the existing browser integration tests exercise every wasm export and must continue to pass without modification. They are the primary behavioral check.
 - **WASM build:** `moon build --target wasm-gc` produces a working bundle that loads in the browser demo.
 - **Manual browser smoke test:** open `web/index.html` after deploying, confirm the existing demo behaviors (mono oscillator, hot-swap crossfade, topology edit, stereo pan, scheduler drums) still work.
@@ -271,17 +284,21 @@ Single bundled PR. The refactor is mechanical once `slot.mbt` exists; splitting 
 Suggested implementation order inside the PR:
 
 1. Add `browser/slot.mbt` with the three types and the trait. Move `checked_sample` from `browser.mbt`. Confirm `moon check` passes.
-2. Convert one variant — `browser_compiled.mbt` — end-to-end. Run Playwright tests to confirm behavior.
-3. Convert the remaining six variants in sequence, running `moon check` after each file per the Incremental Edit Rule.
-4. Delete the now-unused `checked_sample` and `bounded_feedback_gain` copies in `browser.mbt` if any remain.
-5. Run `moon info && moon fmt && moon test`.
-6. Playwright sweep + manual browser smoke test.
+2. Convert `browser_compiled.mbt` end-to-end — validates the `MonoOut` + simple-controls shape. Run Playwright tests.
+3. Convert `browser_stereo.mbt` end-to-end — validates the `StereoOut` shape. Run Playwright tests. Together steps 2–3 catch any `MonoOut`/`StereoOut` mistakes before bulk conversion.
+4. Convert the remaining five variants in sequence, running `moon check` after each file per the Incremental Edit Rule.
+5. Diff `browser/moon.pkg` against the pre-refactor baseline — confirm zero changes to exported symbols.
+6. Run `moon info && moon fmt && moon test`.
+7. Playwright sweep + manual browser smoke test.
+
+Note: `bounded_feedback_gain` in `browser.mbt:165` stays — it is still called by `browser_stereo.mbt:48`, not duplicated scaffolding. No deletion step for it.
 
 ## Risks
 
-- **Closure capture in `compile : (@lib.DspContext) -> T?`.** Each variant constructs its graph inside a closure. These are called only on init or on rate/block change — not in the audio hot loop — so any allocation they incur is negligible. No audit action needed.
+- **Closure capture in `compile : (@lib.DspContext) -> T?`.** The closure object allocates once when the top-level slot is constructed, not on every `ensure` call. Allocations inside the closure body happen only on rebuild, matching today's behavior. wasm-gc tolerates function fields. Keep captures small — the DSP constants referenced inside are module-level `const`s, not heap values.
 - **The `graph_val()` / `ctx_val()` helpers unwrap without checking.** This preserves the current contract: callers always call `ensure` first. A mis-ordered call still panics, same as today. No regression.
 - **Scheduler variant diverges further.** After this refactor, `browser_scheduler.mbt` is the lone copy-paste holdout. That is a known tradeoff — documented as out of scope.
+- **Alternative considered and rejected: swap `@ref.Ref`s for `mut` struct fields.** Would simplify the slot further but is a larger semantic shift than "dedupe existing scaffolding." Keeping refs preserves the current mutation pattern for an easier review.
 
 ## Success criteria
 

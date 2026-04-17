@@ -1,6 +1,6 @@
 ///|
-let compiled : GraphSlot[@lib.CompiledDsp, MonoOut] = GraphSlot::new(
-  output=MonoOut::new(),
+let compiled : GraphSlot[@lib.CompiledDsp, MonoOut] = GraphSlot(
+  output=MonoOut(),
   compile=fn(ctx) {
     @lib.CompiledDsp::compile(
       [

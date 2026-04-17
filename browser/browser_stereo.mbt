@@ -1,6 +1,6 @@
 ///|
-let compiled_stereo : GraphSlot[@lib.CompiledStereoDsp, StereoOut] = GraphSlot::new(
-  output=StereoOut::new(),
+let compiled_stereo : GraphSlot[@lib.CompiledStereoDsp, StereoOut] = GraphSlot(
+  output=StereoOut(),
   compile=fn(ctx) {
     @lib.CompiledStereoDsp::compile(
       [

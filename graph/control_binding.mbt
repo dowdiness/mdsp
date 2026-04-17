@@ -55,7 +55,19 @@ pub fn ControlBindingBuilder::bind(
 }
 
 ///|
+/// Proven-valid control bindings. Validated against a specific
+/// CompiledTemplate at build time (bounds + slot compatibility +
+/// orphan detection + key uniqueness).
+///
 /// No public constructor — only reachable through ControlBindingBuilder::build().
+///
+/// WARNING: A ControlBindingMap's validity is tied to the template it was
+/// built against. After VoicePool::set_template swaps to a new template,
+/// bindings validated against the prior template remain type-level valid
+/// but may silently retarget the wrong kind of node or no-op against
+/// nodes the new template's optimize_graph eliminated. Rebuild the
+/// ControlBindingMap whenever the template changes. Structural staleness
+/// detection is tracked as a follow-up.
 pub struct ControlBindingMap {
   priv bindings : Array[ControlBinding]
 } derive(Debug, Eq)

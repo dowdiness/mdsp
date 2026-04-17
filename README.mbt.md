@@ -104,6 +104,7 @@ moon test -p lib    # run DSP tests only
 moon test -p pattern # run pattern tests only
 moon info && moon fmt   # regenerate interfaces + format (run before committing)
 moon bench --release -p lib -f graph_benchmark.mbt   # run performance benchmarks
+npm run test:browser   # Playwright browser-integration tests (builds wasm-gc first)
 ```
 
 The project follows an incremental edit rule: run `moon check` after every file edit, fix errors before proceeding.

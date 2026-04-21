@@ -23,8 +23,8 @@ Introduce `StereoMixDown` in a way that:
 - `AGENTS.md`
 - `docs/salat-engine-blueprint.md`
 - `docs/salat-engine-technical-reference.md`
-- `docs/phase2-stereo-graph-design-brief.md`
-- `docs/phase2-stereo-post-processing-design-brief.md`
+- `phase2-stereo-graph-design-brief.md`
+- `phase2-stereo-post-processing-design-brief.md`
 - `graph.mbt`
 - `integration_test.mbt`
 

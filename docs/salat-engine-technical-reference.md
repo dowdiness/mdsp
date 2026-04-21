@@ -1,6 +1,6 @@
 # Salat Engine — Technical Reference
 
-Companion to `salat-engine-blueprint.md` and `step0-instruction.md`.
+Companion to `salat-engine-blueprint.md` (historical bootstrap notes live in `archive/step0-instruction.md`).
 This document provides the implementation-level knowledge a coding agent needs.
 
 ---
@@ -641,8 +641,9 @@ Advantages: buffer-based processing enables SIMD optimization, better cache beha
 
 This section is the authoritative description of the current compiled-graph
 runtime-control surface. Update it first when Phase 2 runtime behavior changes;
-keep `RESULTS.md` and `docs/salat-engine-blueprint.md` as summary-level
-pointers back to this section.
+keep `docs/salat-engine-blueprint.md` as a summary-level pointer back to this
+section (the early Phase 0/1/2 status log lives at `docs/archive/RESULTS.md`
+for historical context).
 
 The current repository already implements:
 

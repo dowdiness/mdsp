@@ -23,7 +23,7 @@ Introduce the first stereo post-processing model that:
 - `AGENTS.md`
 - `docs/salat-engine-blueprint.md`
 - `docs/salat-engine-technical-reference.md`
-- `docs/phase2-stereo-graph-design-brief.md`
+- `phase2-stereo-graph-design-brief.md`
 - `graph.mbt`
 - `pan.mbt`
 - `integration_test.mbt`

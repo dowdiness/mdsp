@@ -44,7 +44,7 @@ Verification:
 - If a command fails, fix what is feasible and summarize the remaining issue
 
 Artifacts:
-- Update or create: <docs, snapshots, RESULTS.md, etc.>
+- Update or create: <docs, dated snapshots under docs/performance/, design specs under docs/superpowers/specs/, etc.>
 
 Git:
 - Commit when done with a sensible message
@@ -68,7 +68,7 @@ Goal:
 
 Source of truth:
 - AGENTS.md
-- docs/step0-instruction.md
+- docs/salat-engine-technical-reference.md
 - docs/salat-engine-blueprint.md
 - <issue text or additional doc if relevant>
 
@@ -103,7 +103,8 @@ Verification:
 
 Artifacts:
 - Update docs when behavior, workflow, or findings change
-- Write `RESULTS.md` when the task is an experiment or platform validation
+- For benchmark or platform-validation tasks, add a dated snapshot under
+  `docs/performance/` instead of editing earlier snapshots in place
 
 Git:
 - Commit at the end with a sensible message
@@ -118,13 +119,13 @@ Final report:
 ## Good Prompt Example
 
 ```md
-Read `docs/step0-instruction.md` and implement the minimal browser
+Read `docs/archive/step0-instruction.md` and implement the minimal browser
 AudioWorklet prototype in this repo.
 
 Success criteria:
 - MoonBit exports a `tick(freq, sample_rate)` sine oscillator
 - `web/index.html` and `web/processor.js` exist
-- `RESULTS.md` records what worked, what failed, and any wasm-gc findings
+- `docs/archive/RESULTS.md` records what worked, what failed, and any wasm-gc findings
 - `moon check` passes
 
 Non-goals:

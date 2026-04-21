@@ -1,18 +1,14 @@
-# dowdiness/mdsp
+# `dowdiness/mdsp/lib`
 
-`mdsp` is a MoonBit digital signal processing playground and engine prototype.
-The repository currently contains:
+Internal re-export facade. `lib/` consolidates `@dsp`, `@graph`, and `@voice`
+into one surface so existing consumers keep working without changing their
+imports.
 
-- Phase 1 DSP primitives such as oscillators, noise, ADSR, filters, delay,
-  gain, mix, clip, pan, smoothing, and audio-buffer/context helpers
-- a browser AudioWorklet prototype for manual sound verification
-- an in-progress Phase 2 compiled graph runtime with mono and narrow stereo
-  graph support
+External consumers should import the module's public facade (`@mdsp.X`) rather
+than `@mdsp.lib.X`. See the top-level landing page and docs index for where to
+start.
 
-Good starting points:
-
-- [`RESULTS.md`](RESULTS.md) for current project checkpoints
-- [`docs/salat-engine-blueprint.md`](docs/salat-engine-blueprint.md) for the
-  roadmap
-- [`docs/salat-engine-technical-reference.md`](docs/salat-engine-technical-reference.md)
-  for the detailed implementation reference
+- Package landing page: [`../README.mbt.md`](../README.mbt.md)
+- Docs index: [`../docs/README.md`](../docs/README.md)
+- Authoritative runtime/control reference:
+  [`../docs/salat-engine-technical-reference.md`](../docs/salat-engine-technical-reference.md)

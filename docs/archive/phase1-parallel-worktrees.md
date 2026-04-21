@@ -13,9 +13,9 @@ Each worktree starts from commit `cec45b7` on its own branch.
 
 ## Assigned Briefs
 
-- `phase1-filter` uses `docs/phase1-filter-long-stretch.md`
-- `phase1-clip` uses `docs/phase1-clip-long-stretch.md`
-- `phase1-smoother` uses `docs/phase1-smoother-long-stretch.md`
+- `phase1-filter` uses `phase1-filter-long-stretch.md`
+- `phase1-clip` uses `phase1-clip-long-stretch.md`
+- `phase1-smoother` uses `phase1-smoother-long-stretch.md`
 
 ## Why These Three First
 

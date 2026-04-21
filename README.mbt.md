@@ -7,7 +7,7 @@ mdsp combines a Strudel/TidalCycles-inspired pattern algebra with a compiled sig
 ## Quick start
 
 ```bash
-moon check && moon test   # type-check + run 405 tests
+moon check && moon test       # type-check + run the full test suite
 moon build --target wasm-gc   # build for browser
 moon run cmd/main             # run CLI entry point
 ```
@@ -46,6 +46,10 @@ sequence([note_name("c3"), note_name("e3"), note_name("g3")]).fast(Rational::fro
 
 Querying this over one cycle produces 6 events with exact rational time boundaries — no floating-point drift.
 
+**Mini-notation parser** — the `mini/` package turns a short text string into a `Pat[ControlMap]`, so you can write `s("bd sd hh sd")` or `note("60 64 67")` and chain `.fast(n)`, `.slow(n)`, `.rev()` on the result.
+
+**Pattern → DSP scheduler** — the `scheduler/` package drives a `VoicePool` from a `Pat[ControlMap]`: it converts the pattern's event stream into `note_on`/`note_off` calls, routes control-map entries through a `ControlBindingMap`, and ticks the block clock. `PatternScheduler::process_block` is the one call that turns patterns into audio.
+
 ## How it works
 
 The engine has two independent layers connected by a control map:
@@ -58,65 +62,72 @@ Pattern Engine                    DSP Engine
   Array[Event[ControlMap]]         VoicePool.process(ctx, L, R)
        |                                  ^
        +-- { note: 60, cutoff: 800 } -----+
-           event_to_dsp (Phase 5)
+           PatternScheduler.process_block
 ```
 
 **Pattern layer** operates at "human time" — rational fractions of musical cycles. It produces events describing what should happen.
 
 **DSP layer** operates at "audio time" — 128 samples per callback at 48 kHz (2.67 ms budget). It compiles declarative node graphs into flat execution plans and runs them without allocation.
 
-Phase 5 (not yet implemented) will bridge the two: pattern events become `VoicePool::note_on` calls with `GraphControl` parameters.
+**Bridge** — `scheduler/` connects the two: `PatternScheduler::process_block` queries a `Pat[ControlMap]` over the current block's time arc, turns events into `VoicePool::note_on`/`note_off` calls, and pushes control-map entries through a `ControlBindingMap` onto `GraphControl` slots.
 
 ## Repository layout
 
 ```
-./             Library public API facade (`mdsp.mbt` re-exports from lib/)
-lib/           Internal facade: re-exports dsp/, graph/, voice/
-pattern/       Pattern engine: rational time, combinators, control maps (standalone)
-browser/       AudioWorklet integration (wasm-gc/js exports)
-web/           Browser demo UI (HTML + AudioWorklet processor)
-cmd/main/      CLI entry point
-docs/          Architecture blueprint, technical reference, performance snapshots
+./              Library public API facade (`mdsp.mbt` re-exports from lib/)
+dsp/            DSP primitives, tagless algebra, pan math
+graph/          Compiled graph runtime, topology editing, hot-swap, control binding
+voice/          Polyphonic voice pool with priority stealing
+lib/            Internal facade: re-exports dsp/, graph/, voice/
+pattern/        Pattern engine: rational time, combinators, control maps (standalone)
+mini/           Mini-notation parser: text → Pat[ControlMap]
+scheduler/      Pattern scheduler: bridges pattern events to voice pool
+browser/        AudioWorklet integration (wasm-gc/js exports)
+browser_test/   Browser-integration test wrapper
+web/            Browser demo UI (HTML + AudioWorklet processor)
+cmd/main/       CLI entry point
+docs/           Architecture blueprint, technical reference, performance snapshots
 ```
 
 The `pattern/` package has zero dependency on `lib/` — it compiles and tests independently.
 
 ## Performance
 
-All process benchmarks at 128 samples / 48 kHz (budget: 2.67 ms):
+The audio budget at 128 samples / 48 kHz is 2.67 ms per block. The graph
+runtime is designed around that budget: a single compiled voice (oscillator
++ filter + delay + ADSR) processes in the low-microsecond range, and 32
+simultaneous FM voices comfortably fit inside the block. Compilation and
+hot-swap crossfades are also microsecond-scale, so graphs can be rebuilt or
+swapped between blocks without audible glitches.
 
-| Graph | Nodes | Process time |
-|-------|------:|-------------:|
-| Passthrough | 2 | 0.19 us |
-| Minimal voice (osc + gain) | 4 | 1.20 us |
-| FM synthesis voice | 12 | 6.79 us |
-| Full voice (osc + noise + ADSR + filter + delay) | 12 | 3.43 us |
-| Feedback voice (z^-1 back-edge) | 7 | 4.46 us |
-| Stereo chain (15 nodes) | 15 | 5.67 us |
-
-At 7 us per FM voice, 32 simultaneous voices fit in ~224 us — well under the 2.67 ms real-time budget. Compilation takes 1–13 us. Hot-swap crossfade takes 7–27 us. See `docs/performance/` for dated benchmark snapshots.
+For measured numbers, see the dated snapshots under
+[`docs/performance/`](docs/performance/) (new measurements go in new files —
+older snapshots are preserved rather than overwritten, so you can see drift
+over time).
 
 ## Development
 
 ```bash
-moon check          # type-check
-moon test           # run all 405 tests
-moon test -p lib    # run DSP tests only
-moon test -p pattern # run pattern tests only
-moon info && moon fmt   # regenerate interfaces + format (run before committing)
-moon bench --release -p lib -f graph_benchmark.mbt   # run performance benchmarks
-npm run test:browser   # Playwright browser-integration tests (builds wasm-gc first)
+moon check            # type-check
+moon test             # run the full test suite
+moon test -p lib      # run integration tests against the facade
+moon test -p pattern  # run pattern-engine tests only
+moon info && moon fmt # regenerate interfaces + format (run before committing)
+moon bench --release -p graph -f graph_benchmark.mbt  # run performance benchmarks
+npm run test:browser  # Playwright browser-integration tests (builds wasm-gc first)
 ```
 
 The project follows an incremental edit rule: run `moon check` after every file edit, fix errors before proceeding.
 
 ## Documentation
 
-- **[Blueprint](docs/salat-engine-blueprint.md)** — full architecture vision, design principles, and Phases 0–9 roadmap
-- **[Technical reference](docs/salat-engine-technical-reference.md)** — node types, parameter slots, runtime control surface
+Start at the **[docs index](docs/README.md)**, which groups material by audience:
+
+- **[Technical reference](docs/salat-engine-technical-reference.md)** — node types, parameter slots, runtime control surface (authoritative for graph runtime-control behavior)
+- **[Blueprint](docs/salat-engine-blueprint.md)** — full architecture vision, design principles, roadmap
 - **[Performance snapshots](docs/performance/)** — dated benchmark results (new measurements go in new files)
-- **[Design specs](docs/superpowers/specs/)** — per-feature design documents
-- **[Implementation plans](docs/superpowers/plans/)** — task-level plans for each feature
+- **[Design specs](docs/superpowers/specs/)** and **[implementation plans](docs/superpowers/plans/)** — per-feature design + task-level plans
+- **[`CLAUDE.md`](CLAUDE.md)** — project map and conventions for contributors
 
 ## Project status
 
@@ -127,7 +138,7 @@ The project follows an incremental edit rule: run `moon check` after every file 
 | 2 — Graph compiler | Complete | Compiled graphs, hot-swap, topology editing, stereo |
 | 3 — Voice management | Complete | 32+ voice pool with priority stealing and stereo mixdown |
 | 4 — Pattern engine | Complete | Rational time, 8 combinators, ControlMap output |
-| 5 — Pattern x DSP | Next | Wire pattern events to voice allocation |
+| 5 — Pattern × DSP | Complete | `scheduler/` + `mini/` wire pattern events to voice allocation |
 | 6 — incr integration | Planned | Incremental memoization for pattern/graph changes |
 | 7+ — UI, native, collab | Planned | REPL, CLAP plugins, CRDT multi-user |
 

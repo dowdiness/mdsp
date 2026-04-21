@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-17
 **Status:** Draft — awaiting user review
-**Audit reference:** `docs/audit-2026-04-02.md` §S2 ("Browser package is monolithic")
+**Audit reference:** `docs/archive/audit-2026-04-02.md` §S2 ("Browser package is monolithic")
 
 ## Goal
 

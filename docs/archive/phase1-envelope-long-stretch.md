@@ -14,8 +14,8 @@ release behavior.
 - `AGENTS.md`
 - `docs/salat-engine-blueprint.md`
 - `docs/salat-engine-technical-reference.md`
-- `docs/phase1-dsp-context-long-stretch.md`
-- `docs/phase1-gain-long-stretch.md`
+- `phase1-dsp-context-long-stretch.md`
+- `phase1-gain-long-stretch.md`
 - `RESULTS.md`
 
 ## Why This Task

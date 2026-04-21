@@ -15,9 +15,9 @@ non-source processor in the Phase 1 DSP surface.
 - `AGENTS.md`
 - `docs/salat-engine-blueprint.md`
 - `docs/salat-engine-technical-reference.md`
-- `docs/phase1-oscillator-long-stretch.md`
-- `docs/phase1-audiobuffer-long-stretch.md`
-- `docs/phase1-dsp-context-long-stretch.md`
+- `phase1-oscillator-long-stretch.md`
+- `phase1-audiobuffer-long-stretch.md`
+- `phase1-dsp-context-long-stretch.md`
 - `RESULTS.md`
 
 ## Why This Task

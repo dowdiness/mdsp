@@ -15,8 +15,8 @@ separate stage rather than an accidental side effect of mixing.
 - `AGENTS.md`
 - `docs/salat-engine-blueprint.md`
 - `docs/salat-engine-technical-reference.md`
-- `docs/phase1-gain-long-stretch.md`
-- `docs/phase1-mix-long-stretch.md`
+- `phase1-gain-long-stretch.md`
+- `phase1-mix-long-stretch.md`
 - `RESULTS.md`
 
 ## Why This Task

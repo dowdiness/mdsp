@@ -153,7 +153,7 @@ MoonBit's ecosystem is young. Avoid large foundation libraries. Each library (`i
 - Record findings: GC behavior, export mechanics, import requirements
 - Fallback path: MoonBit → JS backend if wasm-gc is problematic
 
-**Deliverable**: `RESULTS.md` documenting platform viability + a working sine tone.
+**Deliverable**: `archive/RESULTS.md` documenting platform viability + a working sine tone.
 
 ### Phase 1 — DSP Primitives (1-2 weeks)
 

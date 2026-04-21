@@ -74,11 +74,10 @@ Pattern Engine                    DSP Engine
 ## Repository layout
 
 ```
-./              Library public API facade (`moondsp.mbt` re-exports from lib/)
+./              Library public API facade (`moondsp.mbt` re-exports from dsp/, graph/, voice/)
 dsp/            DSP primitives, tagless algebra, pan math
 graph/          Compiled graph runtime, topology editing, hot-swap, control binding
 voice/          Polyphonic voice pool with priority stealing
-lib/            Internal facade: re-exports dsp/, graph/, voice/
 pattern/        Pattern engine: rational time, combinators, control maps (standalone)
 mini/           Mini-notation parser: text → Pat[ControlMap]
 scheduler/      Pattern scheduler: bridges pattern events to voice pool
@@ -89,7 +88,7 @@ cmd/main/       CLI entry point
 docs/           Architecture blueprint, technical reference, performance snapshots
 ```
 
-The `pattern/` package has zero dependency on `lib/` — it compiles and tests independently.
+The `pattern/` package has zero dependency on the DSP layers — it compiles and tests independently.
 
 ## Performance
 

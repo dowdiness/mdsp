@@ -281,7 +281,7 @@ Implemented:
 **Decision**: Concrete function composition (approach C from brainstorming). No traits/AST
 until Phase 6 when `incr` needs it for memoization.
 
-Implemented in standalone `pattern/` package (zero dependency on `lib/`):
+Implemented in standalone `pattern/` package (zero dependency on the DSP layers):
 
 ```
 pattern/

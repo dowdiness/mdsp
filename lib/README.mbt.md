@@ -1,11 +1,11 @@
-# `dowdiness/mdsp/lib`
+# `dowdiness/moondsp/lib`
 
 Internal re-export facade. `lib/` consolidates `@dsp`, `@graph`, and `@voice`
 into one surface so existing consumers keep working without changing their
 imports.
 
-External consumers should import the module's public facade (`@mdsp.X`) rather
-than `@mdsp.lib.X`. See the top-level landing page and docs index for where to
+External consumers should import the module's public facade (`@moondsp.X`) rather
+than `@moondsp.lib.X`. See the top-level landing page and docs index for where to
 start.
 
 - Package landing page: [`../README.mbt.md`](../README.mbt.md)

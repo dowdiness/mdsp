@@ -25,31 +25,31 @@ async function renderPeaks(page) {
 }
 
 async function firstTelemetry(page) {
-  return page.evaluate(() => window.__mdspFirstTelemetry);
+  return page.evaluate(() => window.__moondspFirstTelemetry);
 }
 
 async function currentTelemetry(page) {
-  return page.evaluate(() => window.__mdspTelemetry);
+  return page.evaluate(() => window.__moondspTelemetry);
 }
 
 async function hotSwapQueued(page) {
-  return page.evaluate(() => window.__mdspHotSwapQueued);
+  return page.evaluate(() => window.__moondspHotSwapQueued);
 }
 
 async function stereoHotSwapQueued(page) {
-  return page.evaluate(() => window.__mdspStereoHotSwapQueued);
+  return page.evaluate(() => window.__moondspStereoHotSwapQueued);
 }
 
 async function topologyEditQueued(page) {
-  return page.evaluate(() => window.__mdspTopologyEditQueued);
+  return page.evaluate(() => window.__moondspTopologyEditQueued);
 }
 
 async function stereoTopologyEditQueued(page) {
-  return page.evaluate(() => window.__mdspStereoTopologyEditQueued);
+  return page.evaluate(() => window.__moondspStereoTopologyEditQueued);
 }
 
 async function telemetryHistory(page) {
-  return page.evaluate(() => window.__mdspTelemetryHistory);
+  return page.evaluate(() => window.__moondspTelemetryHistory);
 }
 
 function previewEnergy(samples) {
@@ -365,7 +365,7 @@ test('browser demo proves CompiledDspHotSwap crossfade in the worklet', async ({
   expect(initialTelemetry.rightPreview.every(sample => Math.abs(sample - 0.25) < 0.000001)).toBeTruthy();
 
   await page.evaluate(() => {
-    window.__mdspNode.port.postMessage({ type: 'queue-hot-swap' });
+    window.__moondspNode.port.postMessage({ type: 'queue-hot-swap' });
   });
   await expect
     .poll(async () => (await hotSwapQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })
@@ -442,7 +442,7 @@ test('browser demo proves CompiledDspTopologyController insert delete roundtrip 
     .toBeGreaterThan(0);
 
   await page.evaluate(() => {
-    window.__mdspNode.port.postMessage({ type: 'queue-topology-edit' });
+    window.__moondspNode.port.postMessage({ type: 'queue-topology-edit' });
   });
   await expect
     .poll(async () => (await topologyEditQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })
@@ -493,7 +493,7 @@ test('browser demo proves CompiledDspTopologyController insert delete roundtrip 
   expect(insertedTelemetry.overallPeak).toBeCloseTo(0.25, 6);
 
   await page.evaluate(() => {
-    window.__mdspNode.port.postMessage({ type: 'queue-topology-delete-edit' });
+    window.__moondspNode.port.postMessage({ type: 'queue-topology-delete-edit' });
   });
   await expect
     .poll(async () => (await topologyEditQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })
@@ -580,7 +580,7 @@ test('browser demo proves CompiledStereoDspTopologyController crossfade in the w
     .toBeGreaterThan(0);
 
   await page.evaluate(() => {
-    window.__mdspNode.port.postMessage({ type: 'queue-stereo-topology-edit' });
+    window.__moondspNode.port.postMessage({ type: 'queue-stereo-topology-edit' });
   });
   await expect
     .poll(async () => (await stereoTopologyEditQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })
@@ -725,7 +725,7 @@ test('browser demo proves CompiledStereoDspHotSwap crossfade in the worklet', as
   ).toBeTruthy();
 
   await page.evaluate(() => {
-    window.__mdspNode.port.postMessage({ type: 'queue-stereo-hot-swap' });
+    window.__moondspNode.port.postMessage({ type: 'queue-stereo-hot-swap' });
   });
   await expect
     .poll(async () => (await stereoHotSwapQueued(page))?.telemetrySequence ?? -1, { timeout: 10_000 })

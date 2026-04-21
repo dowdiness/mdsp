@@ -1,5 +1,5 @@
 import {
-  "dowdiness/mdsp/dsp" @dsp,
+  "dowdiness/moondsp/dsp" @dsp,
   "moonbitlang/core/bench" @bench,
   "moonbitlang/core/debug" @debug,
   "moonbitlang/core/math" @math,

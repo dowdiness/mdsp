@@ -79,7 +79,7 @@ test "analyze: length matches input template length" {
 
 - [ ] **Step 2: Run test to confirm failure**
 
-Run: `moon test -p dowdiness/mdsp/graph`
+Run: `moon test -p dowdiness/moondsp/graph`
 Expected: compile error — `CompiledTemplate` not defined.
 
 - [ ] **Step 3: Create `graph/compiled_template.mbt` with minimal skeleton**
@@ -136,7 +136,7 @@ fn CompiledTemplate::node_at(self : CompiledTemplate, index : Int) -> DspNode {
 
 - [ ] **Step 4: Run whitebox tests to confirm pass**
 
-Run: `moon test -p dowdiness/mdsp/graph`
+Run: `moon test -p dowdiness/moondsp/graph`
 Expected: both new tests PASS. No other test regressions.
 
 - [ ] **Step 5: Re-export `CompiledTemplate` from `lib/`**
@@ -245,7 +245,7 @@ test "orphan_adsr_count: multiple dead ADSRs returns correct count" {
 
 - [ ] **Step 2: Run tests to confirm failure**
 
-Run: `moon test -p dowdiness/mdsp/graph`
+Run: `moon test -p dowdiness/moondsp/graph`
 Expected: three failures — `orphan_adsr_count` undefined on `CompiledTemplate`.
 
 - [ ] **Step 3: Implement `orphan_adsr_count` in `graph/compiled_template.mbt`**
@@ -276,7 +276,7 @@ pub fn CompiledTemplate::orphan_adsr_count(self : CompiledTemplate) -> Int {
 
 - [ ] **Step 4: Run tests to confirm pass**
 
-Run: `moon test -p dowdiness/mdsp/graph`
+Run: `moon test -p dowdiness/moondsp/graph`
 Expected: three new tests PASS; existing PR #8 tests (which call `CompiledDsp::orphan_adsr_count(template)`) continue to PASS because that method is unchanged.
 
 - [ ] **Step 5: Run `moon info && moon fmt`**
@@ -357,7 +357,7 @@ test "is_node_live: out-of-bounds index returns false (does not abort)" {
 
 - [ ] **Step 2: Run tests to confirm failure**
 
-Run: `moon test -p dowdiness/mdsp/graph`
+Run: `moon test -p dowdiness/moondsp/graph`
 Expected: `is_node_live` undefined.
 
 - [ ] **Step 3: Implement `is_node_live`**
@@ -380,7 +380,7 @@ fn CompiledTemplate::is_node_live(self : CompiledTemplate, index : Int) -> Bool 
 
 - [ ] **Step 4: Run tests to confirm pass**
 
-Run: `moon test -p dowdiness/mdsp/graph`
+Run: `moon test -p dowdiness/moondsp/graph`
 Expected: three new tests PASS.
 
 - [ ] **Step 5: Run `moon info && moon fmt && moon check`**
@@ -526,9 +526,9 @@ Keep the rest of the function identical (allocation of slots, etc.).
 
 The `set_template` body (~line 174+) uses the same pattern. Apply the identical replacement there.
 
-- [ ] **Step 5: Run `moon test -p dowdiness/mdsp/voice`**
+- [ ] **Step 5: Run `moon test -p dowdiness/moondsp/voice`**
 
-Run: `moon test -p dowdiness/mdsp/voice`
+Run: `moon test -p dowdiness/moondsp/voice`
 Expected: all PR #8 tests PASS unchanged — `voice_test.mbt`'s orphan-ADSR rejection tests still produce `None` / `false` for the same offending templates. The transactional rollback test (set_template returning false leaves prior template intact) still holds because the two gates are run sequentially before any state mutation, matching the original.
 
 - [ ] **Step 6: Run full test suite**
@@ -880,7 +880,7 @@ test "build: empty builder still succeeds on any template" {
 
 - [ ] **Step 2: Run tests to confirm failures (orphan tests fail; others pass)**
 
-Run: `moon test -p dowdiness/mdsp/lib`
+Run: `moon test -p dowdiness/moondsp/lib`
 Expected: "build: orphan binding returns OrphanBinding with key and index", "build: orphan error carries the specific binding's key", and "build: orphan preempts duplicate key" all FAIL (current implementation has no orphan check so the tests see `Ok(_)` instead of `Err(OrphanBinding(...))`). The other new tests PASS (they exercise paths that already work).
 
 - [ ] **Step 3: Add orphan check to `build`**
@@ -914,7 +914,7 @@ Modify `graph/control_binding.mbt` — inside the for-loop in `build`, insert th
 
 - [ ] **Step 4: Run tests to confirm all pass**
 
-Run: `moon test -p dowdiness/mdsp/lib`
+Run: `moon test -p dowdiness/moondsp/lib`
 Expected: all new orphan tests PASS; all existing tests PASS (no regressions).
 
 - [ ] **Step 5: Run full test suite**
@@ -1034,7 +1034,7 @@ EOF
 
 **Files:**
 - Modify: `graph/control_binding.mbt`
-- Modify: `~/.claude/projects/-home-antisatori-ghq-github-com-dowdiness-mdsp/memory/project_phase5_todos.md`
+- Modify: `~/.claude/projects/-home-antisatori-ghq-github-com-dowdiness-moondsp/memory/project_phase5_todos.md`
 
 - [ ] **Step 1: Add `ControlBindingMap` staleness docstring**
 
@@ -1076,7 +1076,7 @@ Expected: clean. No `.mbti` change (doc-only).
 
 - [ ] **Step 3: Update the project memory**
 
-Edit `~/.claude/projects/-home-antisatori-ghq-github-com-dowdiness-mdsp/memory/project_phase5_todos.md`:
+Edit `~/.claude/projects/-home-antisatori-ghq-github-com-dowdiness-moondsp/memory/project_phase5_todos.md`:
 
 - Strike the "Store `orphan_adsr_count` at compile time" bullet from the "Silent-failure footgun follow-ups" section (subsumed by this PR).
 - Strike the "Control-binding orphan detection" bullet (this PR).

@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/mdsp/scheduler"
+package "dowdiness/moondsp/scheduler"
 
 import {
-  "dowdiness/mdsp/dsp",
-  "dowdiness/mdsp/graph",
-  "dowdiness/mdsp/pattern",
-  "dowdiness/mdsp/voice",
+  "dowdiness/moondsp/dsp",
+  "dowdiness/moondsp/graph",
+  "dowdiness/moondsp/pattern",
+  "dowdiness/moondsp/voice",
 }
 
 // Values

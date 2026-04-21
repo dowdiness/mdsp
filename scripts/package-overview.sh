@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-echo "=== mdsp package overview ==="
+echo "=== moondsp package overview ==="
 echo ""
 
 for pkg in lib pattern scheduler browser browser_test cmd/main; do

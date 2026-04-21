@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mdsp Phase 2 Stereo Feedback Browser Proof</title>
+  <title>moondsp Phase 2 Stereo Feedback Browser Proof</title>
   <style>
     :root {
       --bg: #f3efe5;
@@ -448,7 +448,7 @@
       delaySlider.value = String(Math.trunc(initialDelaySamples));
     }
 
-    window.__mdspTelemetry = {
+    window.__moondspTelemetry = {
       sequence: 0,
       overallPeak: 0,
       leftPeak: 0,
@@ -456,12 +456,12 @@
       leftPreview: [],
       rightPreview: [],
     };
-    window.__mdspFirstTelemetry = null;
-    window.__mdspTelemetryHistory = [];
-    window.__mdspHotSwapQueued = null;
-    window.__mdspTopologyEditQueued = null;
-    window.__mdspStereoHotSwapQueued = null;
-    window.__mdspStereoTopologyEditQueued = null;
+    window.__moondspFirstTelemetry = null;
+    window.__moondspTelemetryHistory = [];
+    window.__moondspHotSwapQueued = null;
+    window.__moondspTopologyEditQueued = null;
+    window.__moondspStereoHotSwapQueued = null;
+    window.__moondspStereoTopologyEditQueued = null;
 
     function setStatus(message, state = "idle") {
       statusBox.textContent = message;
@@ -568,7 +568,7 @@
     }
 
     async function start(extraOptions = {}) {
-      window.__mdspTelemetry = {
+      window.__moondspTelemetry = {
         sequence: 0,
         overallPeak: 0,
         leftPeak: 0,
@@ -576,12 +576,12 @@
         leftPreview: [],
         rightPreview: [],
       };
-      window.__mdspFirstTelemetry = null;
-      window.__mdspTelemetryHistory = [];
-      window.__mdspHotSwapQueued = null;
-      window.__mdspTopologyEditQueued = null;
-      window.__mdspStereoHotSwapQueued = null;
-      window.__mdspStereoTopologyEditQueued = null;
+      window.__moondspFirstTelemetry = null;
+      window.__moondspTelemetryHistory = [];
+      window.__moondspHotSwapQueued = null;
+      window.__moondspTopologyEditQueued = null;
+      window.__moondspStereoHotSwapQueued = null;
+      window.__moondspStereoTopologyEditQueued = null;
       setStatus("Creating AudioContext...");
       audioContext = new AudioContext({ sampleRate: 48000 });
 
@@ -623,7 +623,7 @@
           numberOfOutputs: 1,
           outputChannelCount: [2],
         });
-        window.__mdspNode = node;
+        window.__moondspNode = node;
 
         node.port.onmessage = (event) => {
           if (event.data?.type === "ready") {
@@ -648,25 +648,25 @@
           } else if (event.data?.type === "error") {
             setStatus(`Processor init failed: ${event.data.message}`, "error");
           } else if (event.data?.type === "telemetry") {
-            window.__mdspTelemetry = event.data;
-            if (!window.__mdspFirstTelemetry) {
-              window.__mdspFirstTelemetry = event.data;
+            window.__moondspTelemetry = event.data;
+            if (!window.__moondspFirstTelemetry) {
+              window.__moondspFirstTelemetry = event.data;
             }
-            window.__mdspTelemetryHistory.push(event.data);
-            if (window.__mdspTelemetryHistory.length > 64) {
-              window.__mdspTelemetryHistory.shift();
+            window.__moondspTelemetryHistory.push(event.data);
+            if (window.__moondspTelemetryHistory.length > 64) {
+              window.__moondspTelemetryHistory.shift();
             }
             renderPeakValue.textContent = Number(event.data.overallPeak).toFixed(3);
             renderLeftPeakValue.textContent = Number(event.data.leftPeak).toFixed(3);
             renderRightPeakValue.textContent = Number(event.data.rightPeak).toFixed(3);
           } else if (event.data?.type === "hot-swap-queued") {
-            window.__mdspHotSwapQueued = event.data;
+            window.__moondspHotSwapQueued = event.data;
           } else if (event.data?.type === "topology-edit-queued") {
-            window.__mdspTopologyEditQueued = event.data;
+            window.__moondspTopologyEditQueued = event.data;
           } else if (event.data?.type === "stereo-hot-swap-queued") {
-            window.__mdspStereoHotSwapQueued = event.data;
+            window.__moondspStereoHotSwapQueued = event.data;
           } else if (event.data?.type === "stereo-topology-edit-queued") {
-            window.__mdspStereoTopologyEditQueued = event.data;
+            window.__moondspStereoTopologyEditQueued = event.data;
           } else if (event.data?.type === "pattern-updated") {
             const statusEl = document.getElementById('patternStatus');
             if (statusEl) {
@@ -722,7 +722,7 @@
         }
         audioContext = null;
         node = null;
-        window.__mdspNode = null;
+        window.__moondspNode = null;
         gainNode = null;
         analyserNode = null;
         analyserData = null;
@@ -741,7 +741,7 @@
       }
       audioContext = null;
       node = null;
-      window.__mdspNode = null;
+      window.__moondspNode = null;
       gainNode = null;
       analyserNode = null;
       analyserData = null;
@@ -755,7 +755,7 @@
       document.getElementById('schedulerControls').style.display = 'none';
       document.querySelector('.controls').style.display = '';
       resetMeter();
-      window.__mdspTelemetry = {
+      window.__moondspTelemetry = {
         sequence: 0,
         overallPeak: 0,
         leftPeak: 0,
@@ -763,12 +763,12 @@
         leftPreview: [],
         rightPreview: [],
       };
-      window.__mdspFirstTelemetry = null;
-      window.__mdspTelemetryHistory = [];
-      window.__mdspHotSwapQueued = null;
-      window.__mdspTopologyEditQueued = null;
-      window.__mdspStereoHotSwapQueued = null;
-      window.__mdspStereoTopologyEditQueued = null;
+      window.__moondspFirstTelemetry = null;
+      window.__moondspTelemetryHistory = [];
+      window.__moondspHotSwapQueued = null;
+      window.__moondspTopologyEditQueued = null;
+      window.__moondspStereoHotSwapQueued = null;
+      window.__moondspStereoTopologyEditQueued = null;
       setStatus("Stopped.");
     }
 

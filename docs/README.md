@@ -1,7 +1,7 @@
-# mdsp documentation
+# moondsp documentation
 
 This directory holds architecture, reference, performance, and design material
-for `dowdiness/mdsp`. Read order below goes roughly from "new user" to
+for `dowdiness/moondsp`. Read order below goes roughly from "new user" to
 "contributor" to "historical".
 
 ## Start here
@@ -45,7 +45,7 @@ These are direction documents, not descriptions of shipped behavior. They may
 diverge from current code.
 
 - **[`dsp-structural-editor-vision.md`](dsp-structural-editor-vision.md)** —
-  text-shaped authoring experience for `mdsp` (draft).
+  text-shaped authoring experience for `moondsp` (draft).
 - **[`dsp-structural-editor-architecture.md`](dsp-structural-editor-architecture.md)**
   — architectural sketch for the same.
 

@@ -1,8 +1,8 @@
-# mdsp
+# moondsp
 
 A live-codable DSP audio engine written in [MoonBit](https://www.moonbitlang.com/), targeting browser AudioWorklet via wasm-gc. Patterns describe *what* plays *when*; DSP graphs describe *how* it sounds.
 
-mdsp combines a Strudel/TidalCycles-inspired pattern algebra with a compiled signal-processing graph, a polyphonic voice pool, and a browser AudioWorklet runtime — all in one codebase, all in MoonBit.
+moondsp combines a Strudel/TidalCycles-inspired pattern algebra with a compiled signal-processing graph, a polyphonic voice pool, and a browser AudioWorklet runtime — all in one codebase, all in MoonBit.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ moon run cmd/main             # run CLI entry point
 
 To hear it in the browser, open `web/index.html` after building. The AudioWorklet loads the compiled wasm-gc module and drives the DSP graph in real time.
 
-## What mdsp can do today
+## What moondsp can do today
 
 **DSP primitives** — sine/saw/square/triangle oscillators, white noise, ADSR envelopes, biquad filters (LPF/HPF/BPF), delay lines with feedback, gain, mix, hard clip, equal-power pan, and parameter smoothing. All zero-allocation in the audio thread.
 
@@ -74,7 +74,7 @@ Pattern Engine                    DSP Engine
 ## Repository layout
 
 ```
-./              Library public API facade (`mdsp.mbt` re-exports from lib/)
+./              Library public API facade (`moondsp.mbt` re-exports from lib/)
 dsp/            DSP primitives, tagless algebra, pan math
 graph/          Compiled graph runtime, topology editing, hot-swap, control binding
 voice/          Polyphonic voice pool with priority stealing

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/mdsp/dsp"
+package "dowdiness/moondsp/dsp"
 
 // Values
 pub fn effective_sample_count(DspContext, AudioBuffer) -> Int

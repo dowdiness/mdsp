@@ -1,9 +1,9 @@
 ///|
-/// Public API facade for the `dowdiness/mdsp` library.
+/// Public API facade for the `dowdiness/moondsp` library.
 ///
 /// This file re-exports the library surface provided by `@lib`, which in
 /// turn consolidates `@dsp`, `@graph`, and `@voice`. External consumers
-/// should prefer `@mdsp.X` over `@mdsp.lib.X`; the `@lib` layer remains
+/// should prefer `@moondsp.X` over `@moondsp.lib.X`; the `@lib` layer remains
 /// as the internal re-export hub that project packages import.
 pub using @lib {
   type Adsr,

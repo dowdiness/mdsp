@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/mdsp/lib"
+package "dowdiness/moondsp/lib"
 
 import {
-  "dowdiness/mdsp/dsp",
-  "dowdiness/mdsp/graph",
-  "dowdiness/mdsp/voice",
+  "dowdiness/moondsp/dsp",
+  "dowdiness/moondsp/graph",
+  "dowdiness/moondsp/voice",
 }
 
 // Values

@@ -6,7 +6,7 @@ Status: Draft
 ## 1. Purpose
 
 This document describes the proposed architecture for a structure-first DSP
-editor for `mdsp`.
+editor for `moondsp`.
 
 Unlike the companion vision document, this document is intended to define the
 main model boundaries and contracts. It is still draft-level architecture, not
@@ -254,7 +254,7 @@ incomplete or invalid.
 
 ### 9.1 Normalization
 
-Before lowering to `mdsp`, the structural document should be normalized into a
+Before lowering to `moondsp`, the structural document should be normalized into a
 runtime-facing DSP graph form.
 
 Expected responsibilities:

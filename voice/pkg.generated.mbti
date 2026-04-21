@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/mdsp/voice"
+package "dowdiness/moondsp/voice"
 
 import {
-  "dowdiness/mdsp/dsp",
-  "dowdiness/mdsp/graph",
+  "dowdiness/moondsp/dsp",
+  "dowdiness/moondsp/graph",
   "moonbitlang/core/debug",
 }
 

@@ -64,7 +64,7 @@ rewrite the common parts every time.
 
 ```md
 Goal:
-<Concrete task in mdsp>
+<Concrete task in moondsp>
 
 Source of truth:
 - AGENTS.md

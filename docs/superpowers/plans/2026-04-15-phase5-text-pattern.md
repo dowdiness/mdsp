@@ -178,7 +178,7 @@ test "filter_map preserves event timing" {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `moon test -p dowdiness/mdsp/pattern`
+Run: `moon test -p dowdiness/moondsp/pattern`
 
 Expected: FAIL — `filter_map` not defined.
 
@@ -211,7 +211,7 @@ Note: Check that `Pat::new` exists and takes `(TimeSpan) -> Array[Event[A]]`. If
 
 - [ ] **Step 5: Run tests**
 
-Run: `moon check && moon test -p dowdiness/mdsp/pattern`
+Run: `moon check && moon test -p dowdiness/moondsp/pattern`
 
 Expected: all tests pass.
 
@@ -252,7 +252,7 @@ test "drum_midi returns None for unknown names" {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `moon test -p dowdiness/mdsp/mini`
+Run: `moon test -p dowdiness/moondsp/mini`
 
 Expected: FAIL — `drum_midi` not defined.
 
@@ -274,7 +274,7 @@ pub fn drum_midi(name : String) -> Int? {
 
 - [ ] **Step 4: Run tests**
 
-Run: `moon check && moon test -p dowdiness/mdsp/mini`
+Run: `moon check && moon test -p dowdiness/moondsp/mini`
 
 Expected: PASS.
 
@@ -1006,7 +1006,7 @@ test "parse error: fast with negative" {
 
 - [ ] **Step F2: Run tests**
 
-Run: `moon check && moon test -p dowdiness/mdsp/mini`
+Run: `moon check && moon test -p dowdiness/moondsp/mini`
 
 Expected: all pass. Debug and fix any failures — this is where API mismatches surface.
 
@@ -1033,7 +1033,7 @@ Remove loom/seam imports. Only import pattern:
 
 ```
 import {
-  "dowdiness/mdsp/pattern" @pattern,
+  "dowdiness/moondsp/pattern" @pattern,
 }
 ```
 
@@ -1123,7 +1123,7 @@ pub fn parse(input : String) -> Result[@pattern.Pat[@pattern.ControlMap], String
 
 - [ ] **Step 4: Run existing tests**
 
-Run: `moon check && moon test -p dowdiness/mdsp/mini`
+Run: `moon check && moon test -p dowdiness/moondsp/mini`
 
 Expected: all tests from Task 2 and Task 3 Step F1 pass (same test file, same public API).
 
@@ -1147,7 +1147,7 @@ git commit -m "feat(mini): hand-written mini-notation parser (loom fallback)"
 Add to imports:
 
 ```
-"dowdiness/mdsp/mini" @mini,
+"dowdiness/moondsp/mini" @mini,
 ```
 
 Add new exports to both `"js"` and `"wasm-gc"` export lists:

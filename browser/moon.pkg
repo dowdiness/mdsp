@@ -1,8 +1,8 @@
 import {
-  "dowdiness/mdsp/lib" @lib,
-  "dowdiness/mdsp/mini" @mini,
-  "dowdiness/mdsp/scheduler" @scheduler,
-  "dowdiness/mdsp/pattern" @pattern,
+  "dowdiness/moondsp/lib" @lib,
+  "dowdiness/moondsp/mini" @mini,
+  "dowdiness/moondsp/scheduler" @scheduler,
+  "dowdiness/moondsp/pattern" @pattern,
   "moonbitlang/core/ref" @ref,
 }
 

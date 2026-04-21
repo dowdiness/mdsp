@@ -1,5 +1,5 @@
 {
-  "name": "dowdiness/mdsp",
+  "name": "dowdiness/moondsp",
   "version": "0.1.0",
   "deps": {
     "moonbitlang/quickcheck": "0.11.2"

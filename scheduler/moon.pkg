@@ -1,5 +1,5 @@
 import {
-  "dowdiness/mdsp/lib",
-  "dowdiness/mdsp/pattern",
+  "dowdiness/moondsp/lib",
+  "dowdiness/moondsp/pattern",
   "moonbitlang/core/math" @math,
 }

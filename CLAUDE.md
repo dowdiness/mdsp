@@ -1,6 +1,6 @@
-# mdsp — MoonBit DSP Audio Engine
+# moondsp — MoonBit DSP Audio Engine
 
-`mdsp` is a MoonBit DSP audio engine library in the Salat Engine project.
+`moondsp` is a MoonBit DSP audio engine library in the Salat Engine project.
 Phases 0–5 complete: AudioWorklet proof, DSP primitives, compiled graph
 runtime with hot-swap and stereo, voice pool with priority stealing,
 pattern engine with rational time, pattern scheduler, and text-to-audio
@@ -11,21 +11,21 @@ remains open for native targets such as CLAP plugins.
 
 ## Project Structure
 
-**Module:** `dowdiness/mdsp`
+**Module:** `dowdiness/moondsp`
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| `dowdiness/mdsp` | `./` | Library public API facade — `pub using @lib { ... }` re-exports the full library surface so external consumers write `@mdsp.X` |
-| `dowdiness/mdsp/dsp` | `dsp/` | DSP primitives (oscillators, filters, tagless algebra, pan math) |
-| `dowdiness/mdsp/graph` | `graph/` | Compiled graph runtime (compile, optimize, topology edit, hot-swap, control binding) |
-| `dowdiness/mdsp/voice` | `voice/` | Polyphonic voice pool with priority stealing |
-| `dowdiness/mdsp/lib` | `lib/` | Re-export facade (dsp/ + graph/ + voice/) |
-| `dowdiness/mdsp/pattern` | `pattern/` | Standalone pattern engine (rational time, combinators, control maps) — zero dep on `lib/` |
-| `dowdiness/mdsp/mini` | `mini/` | Mini-notation parser: text → `Pat[ControlMap]` (e.g. `s("bd sd hh sd").fast(2)`) |
-| `dowdiness/mdsp/scheduler` | `scheduler/` | Pattern scheduler — bridges pattern engine to DSP voice pool |
-| `dowdiness/mdsp/browser` | `browser/` | AudioWorklet export wrapper with multi-pool drum routing |
-| `dowdiness/mdsp/browser_test` | `browser_test/` | Browser integration test wrapper |
-| `dowdiness/mdsp/cmd/main` | `cmd/main/` | CLI entry point |
+| `dowdiness/moondsp` | `./` | Library public API facade — `pub using @lib { ... }` re-exports the full library surface so external consumers write `@moondsp.X` |
+| `dowdiness/moondsp/dsp` | `dsp/` | DSP primitives (oscillators, filters, tagless algebra, pan math) |
+| `dowdiness/moondsp/graph` | `graph/` | Compiled graph runtime (compile, optimize, topology edit, hot-swap, control binding) |
+| `dowdiness/moondsp/voice` | `voice/` | Polyphonic voice pool with priority stealing |
+| `dowdiness/moondsp/lib` | `lib/` | Re-export facade (dsp/ + graph/ + voice/) |
+| `dowdiness/moondsp/pattern` | `pattern/` | Standalone pattern engine (rational time, combinators, control maps) — zero dep on `lib/` |
+| `dowdiness/moondsp/mini` | `mini/` | Mini-notation parser: text → `Pat[ControlMap]` (e.g. `s("bd sd hh sd").fast(2)`) |
+| `dowdiness/moondsp/scheduler` | `scheduler/` | Pattern scheduler — bridges pattern engine to DSP voice pool |
+| `dowdiness/moondsp/browser` | `browser/` | AudioWorklet export wrapper with multi-pool drum routing |
+| `dowdiness/moondsp/browser_test` | `browser_test/` | Browser integration test wrapper |
+| `dowdiness/moondsp/cmd/main` | `cmd/main/` | CLI entry point |
 
 ## Architecture
 

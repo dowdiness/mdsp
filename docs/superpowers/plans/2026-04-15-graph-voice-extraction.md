@@ -212,7 +212,7 @@ git commit -m "refactor: extract equal-power pan gain functions to dsp/pan.mbt"
 
 ```
 import {
-  "dowdiness/mdsp/dsp" @dsp,
+  "dowdiness/moondsp/dsp" @dsp,
   "moonbitlang/core/bench" @bench,
   "moonbitlang/core/math" @math,
   "moonbitlang/core/ref" @ref,
@@ -320,8 +320,8 @@ Fix any unexpected errors in graph/ iteratively.
 
 ```
 import {
-  "dowdiness/mdsp/dsp" @dsp,
-  "dowdiness/mdsp/graph" @graph,
+  "dowdiness/moondsp/dsp" @dsp,
+  "dowdiness/moondsp/graph" @graph,
   "moonbitlang/core/int" @int,
   "moonbitlang/core/ref" @ref,
 }
@@ -549,8 +549,8 @@ git commit -m "refactor: extract graph/ package from lib/ monolith"
 
 ```
 import {
-  "dowdiness/mdsp/dsp" @dsp,
-  "dowdiness/mdsp/graph" @graph,
+  "dowdiness/moondsp/dsp" @dsp,
+  "dowdiness/moondsp/graph" @graph,
   "moonbitlang/core/int" @int,
 }
 ```
@@ -628,9 +628,9 @@ Fix any remaining errors iteratively.
 
 ```
 import {
-  "dowdiness/mdsp/dsp" @dsp,
-  "dowdiness/mdsp/graph" @graph,
-  "dowdiness/mdsp/voice" @voice,
+  "dowdiness/moondsp/dsp" @dsp,
+  "dowdiness/moondsp/graph" @graph,
+  "dowdiness/moondsp/voice" @voice,
 }
 
 import {
@@ -721,16 +721,16 @@ Update the Project Structure table:
 ```markdown
 | Package | Path | Purpose |
 |---------|------|---------|
-| `dowdiness/mdsp` | `./` | Demo entrypoint (`mdsp.mbt`), delegates to `lib/` |
-| `dowdiness/mdsp/dsp` | `dsp/` | DSP primitives (oscillators, filters, tagless algebra, pan math) |
-| `dowdiness/mdsp/graph` | `graph/` | Compiled graph runtime (compile, optimize, topology edit, hot-swap, control binding) |
-| `dowdiness/mdsp/voice` | `voice/` | Polyphonic voice pool with priority stealing |
-| `dowdiness/mdsp/lib` | `lib/` | Re-export facade (dsp/ + graph/ + voice/) |
-| `dowdiness/mdsp/pattern` | `pattern/` | Pattern engine (rational time, combinators, control maps) |
-| `dowdiness/mdsp/scheduler` | `scheduler/` | Pattern scheduler — bridges pattern engine to voice pool |
-| `dowdiness/mdsp/browser` | `browser/` | AudioWorklet export wrapper |
-| `dowdiness/mdsp/browser_test` | `browser_test/` | Browser integration test wrapper |
-| `dowdiness/mdsp/cmd/main` | `cmd/main/` | CLI entry point |
+| `dowdiness/moondsp` | `./` | Demo entrypoint (`moondsp.mbt`), delegates to `lib/` |
+| `dowdiness/moondsp/dsp` | `dsp/` | DSP primitives (oscillators, filters, tagless algebra, pan math) |
+| `dowdiness/moondsp/graph` | `graph/` | Compiled graph runtime (compile, optimize, topology edit, hot-swap, control binding) |
+| `dowdiness/moondsp/voice` | `voice/` | Polyphonic voice pool with priority stealing |
+| `dowdiness/moondsp/lib` | `lib/` | Re-export facade (dsp/ + graph/ + voice/) |
+| `dowdiness/moondsp/pattern` | `pattern/` | Pattern engine (rational time, combinators, control maps) |
+| `dowdiness/moondsp/scheduler` | `scheduler/` | Pattern scheduler — bridges pattern engine to voice pool |
+| `dowdiness/moondsp/browser` | `browser/` | AudioWorklet export wrapper |
+| `dowdiness/moondsp/browser_test` | `browser_test/` | Browser integration test wrapper |
+| `dowdiness/moondsp/cmd/main` | `cmd/main/` | CLI entry point |
 ```
 
 - [ ] **Step 6: Commit**

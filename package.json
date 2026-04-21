@@ -1,5 +1,5 @@
 {
-  "name": "mdsp-browser-tools",
+  "name": "moondsp-browser-tools",
   "private": true,
   "scripts": {
     "build:browser": "moon build browser --target wasm-gc --release",

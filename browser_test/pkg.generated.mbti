@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/mdsp/browser_test"
+package "dowdiness/moondsp/browser_test"
 
 // Values
 pub fn compiled_output_sample(Int) -> Double

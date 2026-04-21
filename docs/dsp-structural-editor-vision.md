@@ -5,7 +5,7 @@ Status: Draft
 
 ## 1. Goal
 
-Design a text-shaped DSP authoring experience for `mdsp` that preserves
+Design a text-shaped DSP authoring experience for `moondsp` that preserves
 node-level collaborative semantics and permanent structural identity without
 making raw source text the canonical source of truth.
 
@@ -15,7 +15,7 @@ all details are finalized or implementation-ready.
 
 ## 2. Why This Exists
 
-`mdsp` already has a strong runtime-side story:
+`moondsp` already has a strong runtime-side story:
 
 - declarative graph authoring through `DspNode`
 - graph construction through `GraphBuilder`
@@ -51,7 +51,7 @@ The editor should be structure-first:
 - collaboration operates on structural patches
 - text is a projection of the structural document
 - local parsing is a bridge from bounded text edits into structure
-- lowering into `mdsp` remains a separate runtime boundary
+- lowering into `moondsp` remains a separate runtime boundary
 
 This is the key design move. Everything else follows from it.
 
@@ -115,7 +115,7 @@ The system should maintain a deliberate boundary:
 
 `editor document -> normalized DSP graph -> Array[DspNode] -> compiled runtime`
 
-That preserves the existing `mdsp` architecture rather than replacing it.
+That preserves the existing `moondsp` architecture rather than replacing it.
 
 ## 6. Product Shape
 
@@ -166,11 +166,11 @@ Presence should eventually point to semantic targets such as:
 Projected text spans are a rendering convenience, not the primary collaboration
 anchor.
 
-## 9. Relationship to `mdsp`
+## 9. Relationship to `moondsp`
 
 This work should complement the existing runtime rather than disturb it.
 
-The editor layer should lower into the current `mdsp` graph model and then
+The editor layer should lower into the current `moondsp` graph model and then
 reuse the current runtime capabilities:
 
 - `GraphControl` for supported runtime parameter changes
@@ -217,7 +217,7 @@ The vision does not require the first iteration to solve:
 - a fully general DSP surface syntax
 
 The first iteration only needs to prove that structure-first editing can coexist
-with a text-shaped language and the current `mdsp` runtime.
+with a text-shaped language and the current `moondsp` runtime.
 
 ## 12. Success Criteria
 
@@ -227,6 +227,6 @@ This vision is on the right track if the eventual system can demonstrate:
 - a readable text projection
 - native structural topology edits
 - bounded local text parsing into structure
-- lowering into the current `mdsp` graph/runtime stack
+- lowering into the current `moondsp` graph/runtime stack
 - collaboration anchored to semantic structure instead of byte offsets
 

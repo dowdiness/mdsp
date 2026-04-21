@@ -5,8 +5,8 @@
     "moonbitlang/quickcheck": "0.11.2"
   },
   "readme": "README.mbt.md",
-  "repository": "",
+  "repository": "https://github.com/dowdiness/moondsp",
   "license": "Apache-2.0",
-  "keywords": [],
-  "description": ""
+  "keywords": ["moonbit", "audio"],
+  "description": "MoonBit DSP audio engine"
 }

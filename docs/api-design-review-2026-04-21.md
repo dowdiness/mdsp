@@ -31,6 +31,16 @@ to `archive/` rather than edited in place.
   separate pass would be needed to extend labelling through the tagless
   symantic traits.
 
+  **Deferred sub-items (API-consistency follow-ups, not correctness bugs):**
+  - `Oscillator::process_waveform` / `tick` / `tick_waveform` are still
+    positional — asymmetric with the now-labelled `process`.
+  - `DspNode::stereo_biquad` is still positional — asymmetric with the
+    now-labelled `DspNode::biquad`. Same pattern likely applies to other
+    stereo / process methods (`Gain::process`, `Clip::process`,
+    `Pan::process`, `stereo_gain`, `stereo_clip`). If we extend labelling
+    to these, we should do it as a single consistent sweep rather than
+    piecemeal.
+
 ## Step 1 — Facts / Assumptions / Unknowns
 
 ### Facts
@@ -344,7 +354,7 @@ output. Consistent with the codebase.
 
 Consolidated public surface (proposed, not current):
 
-```
+```text
 @moondsp
 ├── Context & buffers
 │   ├── DspContext (pub, immutable, labelled new)

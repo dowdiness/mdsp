@@ -6,12 +6,114 @@
   <title>moondsp Phase 2 Stereo Feedback Browser Proof</title>
   <style>
     :root {
+      /* Base palette */
       --bg: #f3efe5;
       --ink: #1d1b18;
+      --ink-muted: #5a5248;          /* AA on panel/surfaces */
       --panel: rgba(255, 252, 245, 0.9);
       --accent: #b44f2c;
       --accent-soft: #e8c2a2;
       --border: rgba(29, 27, 24, 0.14);
+
+      /* Body gradient stops */
+      --bg-grad-1: #fff9ef;
+      --bg-grad-2: #efe0cb;
+      --bg-grad-3: #f8f4eb;
+      --bg-grad-4: #dfc7b1;
+
+      /* Panel / surface tints */
+      --panel-grad-1: rgba(255, 255, 255, 0.82);
+      --panel-grad-2: rgba(247, 238, 223, 0.88);
+      --surface-soft: rgba(255, 255, 255, 0.62);
+      --surface-softer: rgba(255, 255, 255, 0.58);
+      --rail-bg: rgba(29, 27, 24, 0.08);
+      --rail-border: rgba(29, 27, 24, 0.08);
+      --shadow-warm: rgba(60, 34, 10, 0.12);
+
+      /* Semantic state — every state has fg + bg + border */
+      --ok-fg: #577d21;
+      --ok-bg: #f4faee;
+      --ok-border: rgba(71, 125, 33, 0.25);
+      --warn-fg: #d8a227;
+      --info-bg: #fff7ea;
+      --info-border: rgba(180, 79, 44, 0.22);
+      --err-fg: #c35a2b;
+      --err-bg: #fff0ec;
+      --err-border: rgba(180, 32, 32, 0.28);
+
+      /* Meter gradient stops (semantic — low/mid/high) */
+      --meter-low: var(--ok-fg);
+      --meter-mid: var(--warn-fg);
+      --meter-high: var(--err-fg);
+      --meter-sheen: rgba(255, 255, 255, 0.22);
+
+      /* Scope — intentionally dark in both themes (CRT aesthetic) */
+      --scope-bg: rgba(29, 27, 24, 0.92);
+      --scope-bg-trail: rgba(18, 17, 15, 0.28);
+      --scope-bg-base: rgba(18, 17, 15, 0.96);
+      --scope-grid: rgba(255, 255, 255, 0.08);
+      --scope-trace: #f4d39c;
+      --scope-border: rgba(29, 27, 24, 0.2);
+
+      /* Spacing scale — all layout gaps/padding derive from this */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 28px;
+      --space-7: 40px;
+
+      /* Radius scale — nested surfaces step down one notch */
+      --radius-lg: 28px;
+      --radius-md: 20px;
+      --radius-sm: 14px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button,
+      .meter-fill {
+        transition: none !important;
+      }
+      button:not(:disabled):hover {
+        transform: none;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1d1716;
+        --ink: #f3efe5;
+        --ink-muted: #b5aba0;
+        --panel: rgba(40, 32, 26, 0.82);
+        --accent: #e27751;           /* lifted for dark-bg contrast */
+        --accent-soft: #6b4a34;
+        --border: rgba(243, 239, 229, 0.14);
+
+        --bg-grad-1: #2a201a;
+        --bg-grad-2: #1d1716;
+        --bg-grad-3: #241c17;
+        --bg-grad-4: #3d2d22;
+
+        --panel-grad-1: rgba(255, 248, 236, 0.05);
+        --panel-grad-2: rgba(100, 70, 48, 0.18);
+        --surface-soft: rgba(255, 248, 236, 0.05);
+        --surface-softer: rgba(255, 248, 236, 0.04);
+        --rail-bg: rgba(243, 239, 229, 0.08);
+        --rail-border: rgba(243, 239, 229, 0.08);
+        --shadow-warm: rgba(0, 0, 0, 0.5);
+
+        /* State swatches darken their backgrounds but keep fg recognizable */
+        --ok-fg: #9dc863;
+        --ok-bg: rgba(87, 125, 33, 0.14);
+        --ok-border: rgba(157, 200, 99, 0.28);
+        --warn-fg: #e8bc56;
+        --info-bg: rgba(226, 119, 81, 0.12);
+        --info-border: rgba(226, 119, 81, 0.3);
+        --err-fg: #e5815a;
+        --err-bg: rgba(197, 90, 43, 0.16);
+        --err-border: rgba(197, 90, 43, 0.38);
+      }
     }
 
     * {
@@ -23,63 +125,132 @@
       min-height: 100vh;
       font-family: Georgia, "Times New Roman", serif;
       background:
-        radial-gradient(circle at top left, #fff9ef 0%, transparent 35%),
-        linear-gradient(135deg, #efe0cb 0%, #f8f4eb 48%, #dfc7b1 100%);
+        radial-gradient(circle at top left, var(--bg-grad-1) 0%, transparent 35%),
+        linear-gradient(135deg, var(--bg-grad-2) 0%, var(--bg-grad-3) 48%, var(--bg-grad-4) 100%);
       color: var(--ink);
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: clamp(var(--space-3), 3vw, var(--space-6));
     }
 
     main {
       width: min(720px, 100%);
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 28px;
-      padding: 32px;
-      box-shadow: 0 24px 80px rgba(60, 34, 10, 0.12);
+      border-radius: var(--radius-lg);
+      padding: clamp(var(--space-5), 4vw, var(--space-7));
+      box-shadow: 0 24px 80px var(--shadow-warm);
       backdrop-filter: blur(10px);
+
+      /* Vertical rhythm: generous gap between sections, tight within */
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
     }
 
     h1 {
-      margin: 0 0 12px;
+      margin: 0;
       font-size: clamp(2.2rem, 6vw, 4.5rem);
       line-height: 0.95;
       letter-spacing: -0.04em;
     }
 
-    p {
-      margin: 0 0 20px;
+    /* Header group: title + description tight together */
+    .intro {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .intro p {
+      margin: 0;
       font-size: 1.05rem;
       line-height: 1.5;
       max-width: 52ch;
     }
 
+    .page-details {
+      font-size: 0.95rem;
+      color: var(--ink-muted);
+      max-width: 62ch;
+    }
+
+    .page-details summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: bold;
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) 0;
+    }
+
+    .page-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .page-details summary::before {
+      content: "›";
+      font-size: 1.1em;
+      line-height: 1;
+      transition: transform 150ms ease;
+    }
+
+    .page-details[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .page-details p {
+      margin: var(--space-3) 0 0;
+      line-height: 1.5;
+    }
+
+    .proof-list {
+      margin: var(--space-3) 0 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      column-gap: var(--space-4);
+      row-gap: var(--space-2);
+    }
+
+    .proof-list dt {
+      grid-column: 1;
+    }
+
+    .proof-list dd {
+      grid-column: 2;
+      margin: 0;
+    }
+
     .controls {
       display: grid;
-      gap: 18px;
-      margin: 28px 0;
+      gap: var(--space-4);
     }
 
     .meter-card {
       border: 1px solid var(--border);
-      border-radius: 22px;
-      padding: 20px;
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 238, 223, 0.88));
+        linear-gradient(180deg, var(--panel-grad-1), var(--panel-grad-2));
+
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
     }
 
     .meter-head {
       display: flex;
       justify-content: space-between;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: baseline;
-      margin-bottom: 14px;
     }
 
     .meter-sub {
       font-size: 0.92rem;
-      color: rgba(29, 27, 24, 0.74);
+      color: var(--ink-muted);
+      margin-top: var(--space-1);
     }
 
     .meter-rail {
@@ -87,8 +258,8 @@
       overflow: hidden;
       height: 18px;
       border-radius: 999px;
-      background: rgba(29, 27, 24, 0.08);
-      border: 1px solid rgba(29, 27, 24, 0.08);
+      background: var(--rail-bg);
+      border: 1px solid var(--rail-border);
     }
 
     .meter-fill {
@@ -96,47 +267,47 @@
       height: 100%;
       border-radius: inherit;
       background:
-        linear-gradient(90deg, #577d21 0%, #d8a227 68%, #c35a2b 100%);
-      box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.22);
+        linear-gradient(90deg, var(--meter-low) 0%, var(--meter-mid) 68%, var(--meter-high) 100%);
+      box-shadow: inset 0 0 10px var(--meter-sheen);
       transition: width 80ms linear;
     }
 
     .meter-labels {
       display: flex;
       justify-content: space-between;
-      margin-top: 10px;
       font-size: 0.88rem;
-      color: rgba(29, 27, 24, 0.68);
+      color: var(--ink-muted);
     }
 
     .telemetry-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 12px;
+      gap: var(--space-3);
       font-size: 0.86rem;
-      color: rgba(29, 27, 24, 0.72);
+      color: var(--ink-muted);
     }
 
     .channel-grid {
       display: grid;
-      gap: 14px;
-      margin-top: 18px;
+      gap: var(--space-3);
     }
 
     .channel-meter {
-      padding: 14px;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.58);
-      border: 1px solid rgba(29, 27, 24, 0.08);
+      padding: var(--space-3);
+      border-radius: var(--radius-sm);
+      background: var(--surface-softer);
+      border: 1px solid var(--rail-border);
+
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
     }
 
     .channel-head {
       display: flex;
       justify-content: space-between;
-      gap: 12px;
+      gap: var(--space-3);
       align-items: baseline;
-      margin-bottom: 10px;
       font-size: 0.94rem;
     }
 
@@ -144,15 +315,14 @@
       display: block;
       width: 100%;
       height: 88px;
-      margin-top: 16px;
-      border-radius: 16px;
-      background: rgba(29, 27, 24, 0.92);
-      border: 1px solid rgba(29, 27, 24, 0.2);
+      border-radius: var(--radius-sm);
+      background: var(--scope-bg);
+      border: 1px solid var(--scope-border);
     }
 
     .buttons {
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
       flex-wrap: wrap;
     }
 
@@ -160,7 +330,8 @@
       appearance: none;
       border: 0;
       border-radius: 999px;
-      padding: 14px 24px;
+      padding: var(--space-3) var(--space-5);
+      min-height: 44px;
       font: inherit;
       font-size: 1rem;
       cursor: pointer;
@@ -185,18 +356,41 @@
       transform: translateY(-1px);
     }
 
+    button:not(:disabled):active {
+      transform: translateY(0);
+      opacity: 0.92;
+    }
+
+    /* Shared focus ring — keyboard users get a clear, token-driven outline */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    button:focus-visible {
+      outline-offset: 3px;
+    }
+
+    input[type="range"]:focus-visible {
+      outline-offset: 4px;
+      border-radius: 999px;
+    }
+
     .slider-card {
       border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 18px;
-      background: rgba(255, 255, 255, 0.62);
+      border-radius: var(--radius-sm);
+      padding: var(--space-4);
+      background: var(--surface-soft);
+
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
     }
 
     .slider-row {
       display: flex;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
+      gap: var(--space-3);
       font-size: 0.98rem;
     }
 
@@ -205,23 +399,68 @@
       accent-color: var(--accent);
     }
 
+    /* Scheduler controls stack — mirrors .controls cadence */
+    #schedulerControls {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .pattern-field {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .pattern-field-row {
+      display: flex;
+      gap: var(--space-2);
+      align-items: stretch;
+    }
+
+    .pattern-input {
+      flex: 1;
+      min-width: 0;
+      padding: var(--space-3) var(--space-4);
+      min-height: 44px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: white;
+      color: var(--ink);
+    }
+
+    #patternStatus {
+      font-size: 0.88rem;
+      color: var(--ink-muted);
+      min-height: 1.25em;
+    }
+
+    #patternStatus.pattern-status-ok {
+      color: var(--ok-fg);
+    }
+
+    #patternStatus.pattern-status-err {
+      color: var(--err-fg);
+    }
+
     #status {
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 16px;
-      background: #fff7ea;
-      border: 1px solid rgba(180, 79, 44, 0.22);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      background: var(--info-bg);
+      border: 1px solid var(--info-border);
       min-height: 54px;
     }
 
     #status[data-state="error"] {
-      background: #fff0ec;
-      border-color: rgba(180, 32, 32, 0.28);
+      background: var(--err-bg);
+      border-color: var(--err-border);
     }
 
     #status[data-state="ok"] {
-      background: #f4faee;
-      border-color: rgba(71, 125, 33, 0.25);
+      background: var(--ok-bg);
+      border-color: var(--ok-border);
     }
 
     code {
@@ -232,47 +471,70 @@
 </head>
 <body>
   <main>
+    <div class="intro">
     <h1 id="pageTitle">MoonBit DSP<br>Phase 2 Stereo Feedback</h1>
     <p id="pageDesc">
-      This page proves the browser pipeline now runs the compiled graph runtime
-      itself. The AudioWorklet calls a fixed MoonBit
-      <code>CompiledStereoDsp</code> graph that contains a mono
-      <code>z^-1</code> feedback loop before <code>Pan</code>. The worklet
-      reads the generated left and right blocks back sample by sample for
-      output, metering, exact recurrence checks, live loop-gain retuning, and
-      stereo pan verification. Query-param browser proofs also exercise the
-      mono <code>CompiledDspHotSwap</code> path, the mono
-      <code>CompiledDspTopologyController</code> insert/delete round-trip path
-      via explicit insert and delete queue operations,
-      the stereo
-      <code>CompiledStereoDspHotSwap</code> path, and the stereo
-      <code>CompiledStereoDspTopologyController</code> path in the same
-      AudioWorklet.
+      Proof that the MoonBit compiled-graph runtime drives audio in the browser.
+      Start Audio to hear a stereo feedback loop; the sliders retune it live.
     </p>
+    <details id="pageDetails" class="page-details">
+      <summary>Runtime details</summary>
+      <p>
+        The AudioWorklet calls a fixed MoonBit <code>CompiledStereoDsp</code>
+        graph with a mono <code>z^-1</code> feedback loop before <code>Pan</code>,
+        reading left/right blocks back sample-by-sample for metering, recurrence
+        checks, and stereo pan verification.
+      </p>
+      <p>Query-param proofs exercise the other runtime variants:</p>
+      <dl class="proof-list">
+        <dt><code>?hotSwapMono=1</code></dt>
+        <dd>mono <code>CompiledDspHotSwap</code></dd>
+        <dt><code>?topologyEditMono=1</code></dt>
+        <dd>mono <code>CompiledDspTopologyController</code> insert/delete round-trip</dd>
+        <dt><code>?hotSwapStereo=1</code></dt>
+        <dd>stereo <code>CompiledStereoDspHotSwap</code></dd>
+        <dt><code>?topologyEditStereo=1</code></dt>
+        <dd>stereo <code>CompiledStereoDspTopologyController</code></dd>
+        <dt><code>?exitDeliverable=1</code></dt>
+        <dd>Phase 2 exit deliverable FM synthesis</dd>
+      </dl>
+    </details>
+    </div>
 
     <div class="buttons">
       <button id="startBtn">Start Audio</button>
-      <button id="btnScheduler" onclick="startScheduler()">Scheduler</button>
+      <button id="btnScheduler" onclick="startScheduler()">Pattern Mode</button>
       <button id="stopBtn" class="secondary" disabled>Stop</button>
     </div>
 
-    <div id="schedulerControls" style="display: none; margin-top: 10px;">
-      <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center;">
-        <input type="text" id="patternInput" value='s("bd sd hh sd").fast(2)'
-               style="flex: 1; padding: 10px 14px; font-family: 'SFMono-Regular', Consolas, monospace;
-                      font-size: 1rem; border: 1px solid var(--border); border-radius: 12px;
-                      background: white; color: var(--ink);"
-               placeholder='s("bd sd hh sd").fast(2)'>
-        <button onclick="evalPattern()" style="padding: 10px 18px;">Eval</button>
+    <div id="schedulerControls" style="display: none;">
+      <div class="slider-card">
+        <div class="pattern-field">
+          <label for="patternInput"><strong>Pattern</strong></label>
+          <div class="pattern-field-row">
+            <input type="text" id="patternInput" class="pattern-input"
+                   value='s("bd sd hh sd").fast(2)'
+                   placeholder='s("bd sd hh sd").fast(2)'>
+            <button onclick="evalPattern()">Eval</button>
+          </div>
+        </div>
+        <div id="patternStatus" role="status" aria-live="polite"></div>
       </div>
-      <div id="patternStatus" style="margin-bottom: 8px; font-size: 0.88rem; color: rgba(29,27,24,0.7);"></div>
-      <div style="margin-bottom: 8px;">
-        <label>BPM: <span id="bpmValue">120</span></label>
+
+      <div class="slider-card">
+        <div class="slider-row">
+          <label for="bpmSlider"><strong>BPM</strong></label>
+          <span id="bpmValue">120</span>
+        </div>
         <input type="range" id="bpmSlider" min="60" max="240" value="120"
                oninput="setSchedulerBpm(this.value)">
       </div>
-      <div style="margin-bottom: 8px;">
-        <label>Gain: <span id="schedulerGainValue">0.30</span></label>
+
+      <div class="slider-card">
+        <div class="slider-row">
+          <label for="schedulerGainSlider"><strong>Gain</strong></label>
+          <span id="schedulerGainValue">0.30</span>
+        </div>
         <input type="range" id="schedulerGainSlider" min="0" max="100" value="30"
                oninput="setSchedulerGain(this.value / 100)">
       </div>
@@ -320,20 +582,20 @@
             </div>
           </div>
         </div>
-        <canvas id="scope" class="scope" width="640" height="88"></canvas>
+        <canvas id="scope" class="scope" width="640" height="88" role="img" aria-label="Waveform oscilloscope"></canvas>
       </div>
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Input</strong>
-          <span><span id="freqValue">440</span> / 440</span>
+          <label for="freqSlider"><strong>Frequency</strong></label>
+          <span><span id="freqValue">440</span> Hz</span>
         </div>
         <input id="freqSlider" type="range" min="0" max="2000" value="440" step="1">
       </div>
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Cutoff</strong>
+          <label for="cutoffSlider"><strong>Cutoff</strong></label>
           <span><span id="cutoffValue">1800</span> Hz</span>
         </div>
         <input id="cutoffSlider" type="range" min="80" max="6000" value="1800" step="1">
@@ -341,7 +603,7 @@
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Delay</strong>
+          <label for="delaySlider"><strong>Delay</strong></label>
           <span><span id="delayValue">0</span> samples</span>
         </div>
         <input id="delaySlider" type="range" min="0" max="128" value="0" step="1">
@@ -349,7 +611,7 @@
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Loop Gain</strong>
+          <label for="gainSlider"><strong>Loop Gain</strong></label>
           <span><span id="gainValue">30</span>%</span>
         </div>
         <input id="gainSlider" type="range" min="0" max="100" value="30" step="1">
@@ -357,14 +619,14 @@
 
       <div class="slider-card">
         <div class="slider-row">
-          <strong>Pan</strong>
-          <span><span id="panValue">0</span></span>
+          <label for="panSlider"><strong>Pan</strong></label>
+          <span id="panValue">center</span>
         </div>
         <input id="panSlider" type="range" min="-100" max="100" value="0" step="1">
       </div>
     </section>
 
-    <div id="status" data-state="idle">Ready. Build the wasm file, serve <code>web/</code>, then click Start Audio.</div>
+    <div id="status" role="status" aria-live="polite" data-state="idle">Ready. Build the wasm file, serve <code>web/</code>, then click Start Audio.</div>
   </main>
 
   <script>
@@ -392,6 +654,18 @@
     const scope = document.getElementById("scope");
     const statusBox = document.getElementById("status");
     const scopeCtx = scope.getContext("2d");
+
+    function cssToken(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+    function scopeColors() {
+      return {
+        base: cssToken("--scope-bg-base"),
+        trail: cssToken("--scope-bg-trail"),
+        grid: cssToken("--scope-grid"),
+        trace: cssToken("--scope-trace"),
+      };
+    }
     const urlParams = new URLSearchParams(window.location.search);
     const initialFreq = Number(urlParams.get("freq"));
     const initialDelaySamples = Number(urlParams.get("delaySamples"));
@@ -404,9 +678,10 @@
     if (useExitDeliverable) {
       document.getElementById("pageTitle").innerHTML = "MoonBit DSP<br>FM Synthesis";
       document.getElementById("pageDesc").textContent =
-        "Phase 2 exit deliverable: sine(2).range(200,400).sine().lpf(800,1).out() — " +
-        "a 2 Hz LFO modulates a carrier oscillator between 200–400 Hz through a low-pass filter. " +
-        "Use the sliders to control LFO rate, filter cutoff, and master gain.";
+        "A 2 Hz LFO modulates a carrier between 200–400 Hz through a low-pass filter " +
+        "(sine(2).range(200,400).sine().lpf(800,1).out()). " +
+        "Use the sliders to adjust LFO rate, filter cutoff, and master gain.";
+      document.getElementById("pageDetails").hidden = true;
       // Relabel the freq slider and update companion readout
       const freqLabel = freqSlider.closest(".slider-card").querySelector("strong");
       if (freqLabel) freqLabel.textContent = "LFO Rate";
@@ -468,12 +743,25 @@
       statusBox.dataset.state = state;
     }
 
+    function formatPan(v) {
+      const n = Number(v);
+      if (n === 0) return "center";
+      return n < 0 ? `L${-n}` : `R${n}`;
+    }
+
     function syncLabels() {
+      const freqUnit = useExitDeliverable ? "Hz" : "Hz";
       freqValue.textContent = freqSlider.value;
       cutoffValue.textContent = cutoffSlider.value;
       delayValue.textContent = delaySlider.value;
       gainValue.textContent = gainSlider.value;
-      panValue.textContent = panSlider.value;
+      panValue.textContent = formatPan(panSlider.value);
+
+      freqSlider.setAttribute("aria-valuetext", `${freqSlider.value} ${freqUnit}`);
+      cutoffSlider.setAttribute("aria-valuetext", `${cutoffSlider.value} Hz`);
+      delaySlider.setAttribute("aria-valuetext", `${delaySlider.value} samples`);
+      gainSlider.setAttribute("aria-valuetext", `${gainSlider.value}%`);
+      panSlider.setAttribute("aria-valuetext", formatPan(panSlider.value));
     }
 
     function meterState(analyserNode, analyserData) {
@@ -509,10 +797,11 @@
       leftMeterValue.textContent = "-\u221e dB";
       rightMeterFill.style.width = "0%";
       rightMeterValue.textContent = "-\u221e dB";
+      const sc = scopeColors();
       scopeCtx.clearRect(0, 0, scope.width, scope.height);
-      scopeCtx.fillStyle = "rgba(18, 17, 15, 0.96)";
+      scopeCtx.fillStyle = sc.base;
       scopeCtx.fillRect(0, 0, scope.width, scope.height);
-      scopeCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      scopeCtx.strokeStyle = sc.grid;
       scopeCtx.beginPath();
       scopeCtx.moveTo(0, scope.height / 2);
       scopeCtx.lineTo(scope.width, scope.height / 2);
@@ -532,6 +821,7 @@
         return;
       }
 
+      const sc = scopeColors();
       const draw = () => {
         if (!analyserNode || !analyserData) {
           return;
@@ -544,10 +834,10 @@
         updateMeter(leftMeterFill, leftMeterValue, leftState.peak, leftState.db);
         updateMeter(rightMeterFill, rightMeterValue, rightState.peak, rightState.db);
 
-        scopeCtx.fillStyle = "rgba(18, 17, 15, 0.28)";
+        scopeCtx.fillStyle = sc.trail;
         scopeCtx.fillRect(0, 0, scope.width, scope.height);
         scopeCtx.lineWidth = 2;
-        scopeCtx.strokeStyle = "#f4d39c";
+        scopeCtx.strokeStyle = sc.trace;
         scopeCtx.beginPath();
         for (let index = 0; index < analyserData.length; index += 1) {
           const x = (index / (analyserData.length - 1)) * scope.width;
@@ -671,13 +961,15 @@
             const statusEl = document.getElementById('patternStatus');
             if (statusEl) {
               statusEl.textContent = "Pattern updated";
-              statusEl.style.color = "#577d21";
+              statusEl.classList.remove("pattern-status-err");
+              statusEl.classList.add("pattern-status-ok");
             }
           } else if (event.data?.type === "pattern-error") {
             const statusEl = document.getElementById('patternStatus');
             if (statusEl) {
               statusEl.textContent = event.data.message;
-              statusEl.style.color = "#c35a2b";
+              statusEl.classList.remove("pattern-status-ok");
+              statusEl.classList.add("pattern-status-err");
             }
           }
         };
@@ -778,8 +1070,9 @@
         document.querySelector('.controls').style.display = 'none';
         document.getElementById('pageTitle').innerHTML = 'MoonBit DSP<br>Pattern Sequencer';
         document.getElementById('pageDesc').textContent =
-          'Phase 5: type a pattern and hear it play. Try s("bd sd hh sd").fast(2), ' +
+          'Type a pattern and hear it play. Try s("bd sd hh sd").fast(2), ' +
           'note("60 64 67"), or s("bd [sd hh], hh hh hh").';
+        document.getElementById('pageDetails').hidden = true;
         start({ useScheduler: true });
         setTimeout(() => evalPattern(), 200);
       }

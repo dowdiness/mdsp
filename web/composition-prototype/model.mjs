@@ -1,3 +1,4 @@
+import {ramp,cutoffAt,OPEN,BRIDGE} from './filter.mjs';
 // PROTOTYPE: a finite prepared score and game scenes share one musical clock.
 import {Q, BAR} from './prepare.mjs';
 export {Q, BAR};
@@ -32,7 +33,7 @@ export function ownBundle(b) {
   if (end !== b.length) throw Error('invalid length');
   return freeze({...b, score, scenes: freeze(scenes), arrangement: freeze(arrangement)});
 }
-export const initial = () => freeze({now: 0, latest: 0, active: null, pending: null});
+export const initial = () => freeze({now: 0, latest: 0, active: null, pending: null, filter:freeze({enabled:false,mode:"score",bridge:null})});
 const result = (state, decision, events=[]) => ({state: freeze(state), decision, events: freeze(events)});
 export function position(s) {
   if (!s.active) return {mode: 'waiting', scene: null};
@@ -60,9 +61,23 @@ export function reduce(s, action) {
     if (!s.active) return result(s,'waiting');
     let current = s, decision = 'render';
     if (s.pending && s.now === s.pending.at) {
-      current = {...s, active: s.pending.next, pending: null}; decision = 'applied';
+      const from=cutoffAt(s.filter,s.active,s.now),next=s.pending.next;
+      let filter=s.filter;
+      // An edit keeps the same timeline and automation; a transport request has fxMode.
+      if(s.pending.fxMode && filter.enabled) filter=s.pending.fxMode==='score'
+        ? freeze({enabled:true,mode:'score',bridge:freeze({from,start:s.now,end:s.now+BRIDGE})})
+        : freeze({enabled:true,mode:'ramp',ramp:ramp(from,s.pending.fxMode==='suspension'?600:OPEN,s.now,s.now+96000),bridge:null});
+      current = {...s, active: next, pending: null,filter}; decision = 'applied';
     }
     return result({...current, now: s.now + Q}, decision, eventsAt(current.active, s.now));
+  }
+  if(action.kind==='filter' || action.kind==='filter-score'){
+    if(action.kind==='filter' && (!Number.isFinite(action.hz)||action.hz<80||action.hz>12000||!Number.isFinite(action.beats)||action.beats<0.25||action.beats>16))return result(s,'invalid-filter');
+    const from=cutoffAt(s.filter,s.active,s.now);
+    const filter=action.kind==='filter'
+      ? freeze({enabled:true,mode:'ramp',ramp:ramp(from,action.hz,s.now,s.now+action.beats*24000),bridge:null})
+      : freeze({enabled:true,mode:'score',bridge:freeze({from,start:s.now,end:s.now+BRIDGE})});
+    return result({...s,filter},'filter-applied');
   }
   if (action.kind === 'cancel') {
     if (!s.pending) return result(s,'not-pending');
@@ -76,7 +91,7 @@ export function reduce(s, action) {
     if (!s.active) return result({...s,latest:bundle.revision,active:freeze({bundle, mode:'score', origin:0})},'started');
     if (JSON.stringify(bundle.arrangement) !== JSON.stringify(s.active.bundle.arrangement)) return result(s,'layout-change');
     const next = freeze({...(s.pending?.next ?? s.active), bundle});
-    return result({...s,latest:bundle.revision,pending:freeze({at:s.pending?.at ?? (Math.floor((s.now + Q)/BAR)+1)*BAR,next})},'reserved');
+    return result({...s,latest:bundle.revision,pending:freeze({at:s.pending?.at ?? (Math.floor((s.now + Q)/BAR)+1)*BAR,next,fxMode:s.pending?.fxMode})},'reserved');
   }
   if (action.kind === 'game' || action.kind === 'score') {
     if (!s.active) return result(s,'not-ready');
@@ -87,7 +102,7 @@ export function reduce(s, action) {
     if (action.kind === 'score' && !row) return result(s,'unknown-section');
     const offset=action.offsetBeats??0;
     if(!Number.isFinite(offset)||offset<0||action.kind==='score'&&offset*24000>=row.length)return result(s,'invalid-offset');
-    return result({...s,pending:freeze({at,next:freeze({bundle,mode,origin:at-(row?.from ?? 0)-offset*24000})})},'reserved');
+    return result({...s,pending:freeze({at,next:freeze({bundle,mode,origin:at-(row?.from ?? 0)-offset*24000}),fxMode:mode})},'reserved');
   }
   return result(s,'unknown-action');
 }

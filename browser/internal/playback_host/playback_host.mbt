@@ -1,15 +1,4 @@
 ///|
-/// Active playback source parsed from the explicit browser protocol.
-priv enum SchedulerActivePlayback {
-  ActiveSnapshots(PlaybackLayout)
-  ActivePattern(Array[@pattern.Pat[@pattern.ControlMap]])
-  ActiveSong(Array[@song.Song[@pattern.ControlMap]])
-}
-
-///|
-let sched_active_playback : @ref.Ref[SchedulerActivePlayback?] = @ref.new(None)
-
-///|
 /// Per-sound pool state: voice pool + scheduler + tmp buffers.
 priv struct SoundPool {
   pool : @moondsp.BoundVoicePool
@@ -171,8 +160,7 @@ pub fn init_scheduler_graph_with_templates(
   sched_left.val = Some(@moondsp.AudioBuffer::filled(block_size))
   sched_right.val = Some(@moondsp.AudioBuffer::filled(block_size))
   sched_gain.val = 0.5
-  sched_active_playback.val = None
-  sched_pending_update.val = None
+  reset_playback_state()
   true
 }
 
@@ -182,8 +170,7 @@ pub fn reset_scheduler_graph() -> Unit {
   sched_left.val = None
   sched_right.val = None
   sched_gain.val = 0.5
-  sched_active_playback.val = None
-  sched_pending_update.val = None
+  reset_playback_state()
 }
 
 ///|
@@ -221,32 +208,6 @@ fn accumulate_sub_pool(
     left.set(i, left.get(i) + sp.tmp_left.get(i))
     right.set(i, right.get(i) + sp.tmp_right.get(i))
   }
-}
-
-///|
-fn process_sub_pool(
-  sp : SoundPool,
-  sub_pat : @pattern.Pat[@pattern.ControlMap],
-  left : @moondsp.AudioBuffer,
-  right : @moondsp.AudioBuffer,
-) -> Unit {
-  sp.tmp_left.fill(0.0)
-  sp.tmp_right.fill(0.0)
-  sp.scheduler.process_block(sub_pat, sp.pool, sp.tmp_left, sp.tmp_right)
-  accumulate_sub_pool(sp, left, right)
-}
-
-///|
-fn process_sub_song_pool(
-  sp : SoundPool,
-  song : @song.Song[@pattern.ControlMap],
-  left : @moondsp.AudioBuffer,
-  right : @moondsp.AudioBuffer,
-) -> Unit {
-  sp.tmp_left.fill(0.0)
-  sp.tmp_right.fill(0.0)
-  sp.scheduler.process_song_block(song, sp.pool, sp.tmp_left, sp.tmp_right)
-  accumulate_sub_pool(sp, left, right)
 }
 
 ///|
@@ -336,65 +297,30 @@ fn filter_song_for_route(
 }
 
 ///|
-fn route_patterns_for_current_routes(
+fn route_patterns(
   pat : @pattern.Pat[@pattern.ControlMap],
+  selectors : Array[SchedulerRouteSelector],
 ) -> Array[@pattern.Pat[@pattern.ControlMap]] {
   let route_patterns : Array[@pattern.Pat[@pattern.ControlMap]] = []
-  for route in sched_routes.val {
-    route_patterns.push(filter_pat_for_route(route.selector, pat))
+  for selector in selectors {
+    route_patterns.push(filter_pat_for_route(selector, pat))
   }
   route_patterns
 }
 
 ///|
-fn route_songs_for_current_routes(
+fn route_songs(
   song : @song.Song[@pattern.ControlMap],
+  selectors : Array[SchedulerRouteSelector],
 ) -> Result[Array[@song.Song[@pattern.ControlMap]], String] {
   let route_songs : Array[@song.Song[@pattern.ControlMap]] = []
-  for route in sched_routes.val {
-    match filter_song_for_route(route.selector, song) {
+  for selector in selectors {
+    match filter_song_for_route(selector, song) {
       Ok(route_song) => route_songs.push(route_song)
       Err(msg) => return Err(msg)
     }
   }
   Ok(route_songs)
-}
-
-///|
-fn reset_route_transports_for_playback_start() -> Unit {
-  sched_pending_update.val = None
-  for route in sched_routes.val {
-    route.pool.scheduler.reset_transport_and_kill_notes(route.pool.pool)
-  }
-}
-
-///|
-fn process_pattern_routes(
-  route_patterns : Array[@pattern.Pat[@pattern.ControlMap]],
-  left : @moondsp.AudioBuffer,
-  right : @moondsp.AudioBuffer,
-) -> Unit {
-  for i in 0..<sched_routes.val.length() {
-    match route_patterns.get(i) {
-      Some(pat) => process_sub_pool(sched_routes.val[i].pool, pat, left, right)
-      None => ()
-    }
-  }
-}
-
-///|
-fn process_song_routes(
-  route_songs : Array[@song.Song[@pattern.ControlMap]],
-  left : @moondsp.AudioBuffer,
-  right : @moondsp.AudioBuffer,
-) -> Unit {
-  for i in 0..<sched_routes.val.length() {
-    match route_songs.get(i) {
-      Some(song) =>
-        process_sub_song_pool(sched_routes.val[i].pool, song, left, right)
-      None => ()
-    }
-  }
 }
 
 ///|
@@ -407,18 +333,14 @@ pub fn process_scheduler_block() -> Bool {
     Some(b) => b
     None => return false
   }
-  commit_playback_update()
+  commit_playback_request()
   // Clear main output buffers
   left.fill(0.0)
   right.fill(0.0)
-  // Get active playback; if none set, output silence.
-  match sched_active_playback.val {
-    Some(ActiveSnapshots(_)) => process_snapshot_routes(left, right)
-    Some(ActivePattern(pat)) => process_pattern_routes(pat, left, right)
-    Some(ActiveSong(route_songs)) =>
-      process_song_routes(route_songs, left, right)
-    None => return true
+  if playback_state.val.active is None {
+    return true
   }
+  process_snapshot_routes(left, right)
   // Apply master gain
   let gain = sched_gain.val
   let len = left.length()
@@ -451,14 +373,11 @@ fn set_scheduler_parse_error(message : String) -> Int {
 }
 
 ///|
-let sched_pattern_input_chars : Array[Int] = []
-
-///|
-let sched_song_input_chars : Array[Int] = []
+let playback_input_chars : Array[Int] = []
 
 ///|
 fn input_chars_to_string(chars : Array[Int]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in chars {
     buf.write_char(c.unsafe_to_char())
   }
@@ -466,121 +385,33 @@ fn input_chars_to_string(chars : Array[Int]) -> String {
 }
 
 ///|
-fn set_active_pattern_text(text : String) -> Int {
-  match @mini.parse(text) {
-    Ok(pat) => {
-      let route_patterns = route_patterns_for_current_routes(pat)
-      reset_route_transports_for_playback_start()
-      sched_active_playback.val = Some(ActivePattern(route_patterns))
-      set_scheduler_parse_success()
-    }
-    Err(msg) => set_scheduler_parse_error(msg)
-  }
+pub fn clear_playback_input() -> Unit {
+  playback_input_chars.clear()
 }
 
 ///|
-fn set_active_song_text(text : String) -> Int {
-  match @mini.parse_song_with_bpm(text) {
-    Ok(parsed) =>
-      match route_songs_for_current_routes(parsed.song()) {
-        Ok(route_songs) => {
-          match parsed.bpm() {
-            Some(bpm) => set_scheduler_bpm(bpm)
-            None => ()
-          }
-          reset_route_transports_for_playback_start()
-          sched_active_playback.val = Some(ActiveSong(route_songs))
-          set_scheduler_parse_success()
-        }
-        Err(msg) => set_scheduler_parse_error(msg)
-      }
-    Err(msg) => set_scheduler_parse_error(msg)
-  }
+pub fn push_playback_char(code : Int) -> Unit {
+  playback_input_chars.push(code)
 }
 
 ///|
-pub fn clear_pattern_input() -> Unit {
-  sched_pattern_input_chars.clear()
-}
-
-///|
-pub fn push_pattern_char(code : Int) -> Unit {
-  sched_pattern_input_chars.push(code)
-}
-
-///|
-pub fn eval_pattern_input() -> Int {
-  let text = input_chars_to_string(sched_pattern_input_chars)
-  sched_pattern_input_chars.clear()
-  set_active_pattern_text(text)
-}
-
-///|
-pub fn parse_and_set_pattern(text : String) -> Int {
-  set_active_pattern_text(text)
-}
-
-///|
-pub fn clear_song_input() -> Unit {
-  sched_song_input_chars.clear()
-}
-
-///|
-pub fn push_song_char(code : Int) -> Unit {
-  sched_song_input_chars.push(code)
-}
-
-///|
-pub fn eval_song_input() -> Int {
-  let text = input_chars_to_string(sched_song_input_chars)
-  sched_song_input_chars.clear()
-  set_active_song_text(text)
-}
-
-///|
-pub fn parse_and_set_song(text : String) -> Int {
-  set_active_song_text(text)
-}
-
-///|
-pub fn get_scheduler_parse_error() -> String {
+pub fn get_playback_error() -> String {
   sched_last_error.val
 }
 
 ///|
-pub fn get_song_parse_error() -> String {
-  sched_last_error.val
-}
-
-///|
-/// Length of the last parse-error message, in chars.
-/// Char-by-char accessor companion to `get_pattern_error_char` for JS
-/// consumers that can't receive MoonBit strings across the wasm-gc boundary.
-pub fn get_pattern_error_length() -> Int {
+pub fn get_playback_error_length() -> Int {
   sched_last_error.val.length()
 }
 
 ///|
-/// i-th character (UTF-16 code unit) of the last parse-error message.
-/// Returns 0 if `i` is out of range; callers should respect
-/// `get_pattern_error_length` first.
-pub fn get_pattern_error_char(i : Int) -> Int {
+pub fn get_playback_error_char(i : Int) -> Int {
   let s = sched_last_error.val
   if i < 0 || i >= s.length() {
     0
   } else {
     s[i].to_int()
   }
-}
-
-///|
-pub fn get_song_error_length() -> Int {
-  sched_last_error.val.length()
-}
-
-///|
-pub fn get_song_error_char(i : Int) -> Int {
-  get_pattern_error_char(i)
 }
 
 ///|

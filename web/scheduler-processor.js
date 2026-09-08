@@ -1,3 +1,5 @@
+import { PlaybackController } from "./playback-controller.js";
+
 class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
@@ -8,7 +10,7 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
     this.gain = this.sanitizeGain(options?.processorOptions?.initialGain ?? 0.3);
     this.bpm = null;
     this.pendingPlayback = null;
-    this.pendingAppliedReply = null;
+    this.playback = null;
     this.graphInitialized = false;
     this.graphBlockSize = 0;
 
@@ -21,12 +23,13 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
       if (!this.wasm) {
         return;
       }
-      if (data.type === "set-pattern-text") {
-        this.setPatternText(data.text || "", typeof data.revision === "number" ? data.revision : undefined);
-      } else if (data.type === "set-song-text") {
-        this.setSongText(data.text || "", typeof data.revision === "number" ? data.revision : undefined);
-      } else if (data.type === "update-pattern-text" || data.type === "update-song-text") {
-        this.submitPlayback(data.type === "update-pattern-text" ? "pattern" : "song", data.text || "", data.revision, true);
+      if (data.type === "apply-score" || data.type === "restart-playback") {
+        if (!this.graphInitialized && data.type === "apply-score" && data.policy === "restart") {
+          if (this.pendingPlayback) this.port.postMessage({ type: "playback-superseded", revision: this.pendingPlayback.revision });
+          this.pendingPlayback = data;
+        } else {
+          this.playback?.handle(data);
+        }
       } else if (data.type === "set-scheduler-bpm") {
         this.bpm = Number(data.bpm);
         this.applyBpm();
@@ -63,24 +66,16 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
         "scheduler_right_sample",
         "set_scheduler_bpm",
         "set_scheduler_gain",
-        "clear_pattern_input",
-        "push_pattern_char",
-        "eval_pattern_input",
-        "clear_song_input",
-        "push_song_char",
-        "eval_song_input",
-        "update_pattern_input",
-        "update_song_input",
-        "scheduler_sample_position",
-        "get_pattern_error_length",
-        "get_pattern_error_char",
-        "get_song_error_length",
-        "get_song_error_char",
+        "clear_playback_input", "push_playback_char",
+        "prepare_pattern_input", "prepare_song_input",
+        "apply_prepared_playback", "discard_prepared_playback", "restart_playback",
+        "scheduler_sample_position", "get_playback_error_length", "get_playback_error_char",
       ]);
       if (missingExports.length > 0) {
         throw new Error(`Scheduler browser exports not found: ${missingExports.join(", ")}`);
       }
 
+      this.playback = new PlaybackController(this.wasm, reply => this.port.postMessage(reply));
       this.ready = true;
       this.port.postMessage({ type: "ready", mode: "scheduler-dsp" });
     } catch (error) {
@@ -95,6 +90,13 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
   ensureSchedulerGraph(blockSize) {
     if (this.graphInitialized && this.graphBlockSize === blockSize) {
       return true;
+    }
+    if (this.graphInitialized) {
+      if (!this.reportedInitError) {
+        this.reportedInitError = true;
+        this.postError("Audio block size changed; rebuild the audio engine");
+      }
+      return false;
     }
     const ok = this.wasm.init_scheduler_graph(sampleRate, blockSize);
     this.graphInitialized = ok;
@@ -114,11 +116,9 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
     if (!this.pendingPlayback) {
       return;
     }
-    if (this.pendingPlayback.kind === "pattern") {
-      this.setPatternText(this.pendingPlayback.text, this.pendingPlayback.revision);
-    } else {
-      this.setSongText(this.pendingPlayback.text, this.pendingPlayback.revision);
-    }
+    const request = this.pendingPlayback;
+    this.pendingPlayback = null;
+    this.playback.handle(request);
   }
 
   applyBpm() {
@@ -136,45 +136,6 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
   sanitizeGain(value) {
     const gain = Number(value);
     return Number.isFinite(gain) ? Math.max(0, Math.min(1, gain)) : 0.3;
-  }
-
-  setPatternText(text, revision) {
-    this.submitPlayback("pattern", text, revision, false);
-  }
-
-  setSongText(text, revision) {
-    this.submitPlayback("song", text, revision, false);
-  }
-
-  submitPlayback(kind, text, revision, update) {
-    if (!this.graphInitialized) {
-      if (update) {
-        this.port.postMessage({ type: `${kind}-error`, revision, message: "start playback before updating" });
-        return;
-      }
-      this.pendingPlayback = { kind, text, revision };
-      return;
-    }
-    this.wasm[`clear_${kind}_input`]();
-    for (let i = 0; i < text.length; i += 1) {
-      this.wasm[`push_${kind}_char`](text.charCodeAt(i));
-    }
-    const result = this.wasm[`${update ? "update" : "eval"}_${kind}_input`]();
-    if (result !== 0) {
-      this.port.postMessage({
-        type: `${kind}-error`, revision,
-        message: this.parseErrorMessage(`get_${kind}_error_length`, `get_${kind}_error_char`, "parse error"),
-      });
-      return;
-    }
-    this.pendingPlayback = { kind, text, revision };
-    const reply = { type: `${kind}-updated`, revision, operation: update ? "update" : "restart" };
-    if (update) {
-      this.pendingAppliedReply = reply;
-    } else {
-      this.pendingAppliedReply = null;
-      this.port.postMessage({ ...reply, samplePosition: this.wasm.scheduler_sample_position() });
-    }
   }
 
   process(_inputs, outputs) {
@@ -200,10 +161,7 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    if (this.pendingAppliedReply) {
-      this.port.postMessage({ ...this.pendingAppliedReply, samplePosition: this.wasm.scheduler_sample_position() });
-      this.pendingAppliedReply = null;
-    }
+    this.playback.didRender(left.length);
 
     for (let index = 0; index < left.length; index += 1) {
       left[index] = this.wasm.scheduler_left_sample(index);

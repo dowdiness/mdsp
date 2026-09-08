@@ -33,79 +33,53 @@ pub fn process_scheduler_block() -> Bool {
 }
 
 ///|
-pub fn clear_pattern_input() -> Unit {
-  @playback_host.clear_pattern_input()
+pub fn clear_playback_input() -> Unit {
+  @playback_host.clear_playback_input()
 }
 
 ///|
-pub fn push_pattern_char(code : Int) -> Unit {
-  @playback_host.push_pattern_char(code)
+pub fn push_playback_char(code : Int) -> Unit {
+  @playback_host.push_playback_char(code)
 }
 
 ///|
-pub fn eval_pattern_input() -> Int {
-  @playback_host.eval_pattern_input()
+pub fn prepare_pattern_input() -> Int {
+  @playback_host.prepare_pattern_input()
 }
 
 ///|
-pub fn parse_and_set_pattern(text : String) -> Int {
-  @playback_host.parse_and_set_pattern(text)
+pub fn prepare_song_input() -> Int {
+  @playback_host.prepare_song_input()
 }
 
 ///|
-pub fn clear_song_input() -> Unit {
-  @playback_host.clear_song_input()
+pub fn apply_prepared_playback(token : Int, restart : Bool) -> Int {
+  @playback_host.apply_prepared_playback(token, restart)
 }
 
 ///|
-pub fn push_song_char(code : Int) -> Unit {
-  @playback_host.push_song_char(code)
+pub fn discard_prepared_playback(token : Int) -> Bool {
+  @playback_host.discard_prepared_playback(token)
 }
 
 ///|
-pub fn eval_song_input() -> Int {
-  @playback_host.eval_song_input()
+pub fn restart_playback() -> Int {
+  @playback_host.restart_playback()
 }
 
 ///|
-pub fn parse_and_set_song(text : String) -> Int {
-  @playback_host.parse_and_set_song(text)
+pub fn get_playback_error() -> String {
+  @playback_host.get_playback_error()
 }
 
 ///|
-pub fn get_scheduler_parse_error() -> String {
-  @playback_host.get_scheduler_parse_error()
+pub fn get_playback_error_length() -> Int {
+  @playback_host.get_playback_error_length()
 }
 
 ///|
-pub fn get_song_parse_error() -> String {
-  @playback_host.get_song_parse_error()
-}
-
-///|
-/// Length of the last parse-error message, in chars.
-/// Char-by-char accessor companion to `get_pattern_error_char` for JS
-/// consumers that can't receive MoonBit strings across the wasm-gc boundary.
-pub fn get_pattern_error_length() -> Int {
-  @playback_host.get_pattern_error_length()
-}
-
-///|
-/// i-th character (UTF-16 code unit) of the last parse-error message.
-/// Returns 0 if `i` is out of range; callers should respect
-/// `get_pattern_error_length` first.
-pub fn get_pattern_error_char(i : Int) -> Int {
-  @playback_host.get_pattern_error_char(i)
-}
-
-///|
-pub fn get_song_error_length() -> Int {
-  @playback_host.get_song_error_length()
-}
-
-///|
-pub fn get_song_error_char(i : Int) -> Int {
-  @playback_host.get_song_error_char(i)
+pub fn get_playback_error_char(i : Int) -> Int {
+  @playback_host.get_playback_error_char(i)
 }
 
 ///|
@@ -116,16 +90,6 @@ pub fn set_scheduler_bpm(bpm : Double) -> Unit {
 ///|
 pub fn set_scheduler_gain(gain : Double) -> Unit {
   @playback_host.set_scheduler_gain(gain)
-}
-
-///|
-pub fn update_pattern_input() -> Int {
-  @playback_host.update_pattern_input()
-}
-
-///|
-pub fn update_song_input() -> Int {
-  @playback_host.update_song_input()
 }
 
 ///|

@@ -2,7 +2,9 @@
 package "dowdiness/moondsp/browser_test"
 
 // Values
-pub fn clear_pattern_input() -> Unit
+pub fn apply_prepared_playback(Int, Bool) -> Int
+
+pub fn clear_playback_input() -> Unit
 
 pub fn compiled_output_sample(Int) -> Double
 
@@ -26,15 +28,13 @@ pub fn crackle_probe_stream_init(Int, Int, Double, Double, Int) -> Bool
 
 pub fn crackle_probe_stream_process() -> Bool
 
-pub fn eval_pattern_input() -> Int
-
 pub fn get_browser_error_char(Int) -> Int
 
 pub fn get_browser_error_length() -> Int
 
-pub fn get_pattern_error_char(Int) -> Int
+pub fn get_playback_error_char(Int) -> Int
 
-pub fn get_pattern_error_length() -> Int
+pub fn get_playback_error_length() -> Int
 
 pub fn init_compiled_graph(Double, Int) -> Bool
 
@@ -46,13 +46,15 @@ pub fn init_scheduler_sine_graph(Double, Int) -> Bool
 
 pub fn mul_adsr_peak(Double, Int) -> Double
 
+pub fn prepare_pattern_input() -> Int
+
 pub fn process_compiled_block(Double, Double, Double, Int) -> Bool
 
 pub fn process_compiled_stereo_block(Double, Double, Double, Double, Double, Double, Int) -> Bool
 
 pub fn process_scheduler_block() -> Bool
 
-pub fn push_pattern_char(Int) -> Unit
+pub fn push_playback_char(Int) -> Unit
 
 pub fn reset_phase() -> Unit
 
@@ -75,4 +77,3 @@ pub fn tick_source(source_id~ : Int, freq_hz~ : Double, sample_rate~ : Double) -
 // Type aliases
 
 // Traits
-

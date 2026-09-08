@@ -1,8 +1,8 @@
 // AudioContext + AudioWorklet bootstrap for moondsp's live REPL.
 //
 // Wraps the browser worklet protocol:
-//   set-pattern-text / set-song-text restart; update-pattern-text /
-//   update-song-text preserve playback and acknowledge after block application.
+//   apply-score prepares and applies with an explicit continue/restart policy.
+//   restart-playback restarts the applied snapshot without parsing text.
 //   reply { type: "pattern-updated" } | { type: "pattern-error", message }
 //       | { type: "song-updated" }    | { type: "song-error", message }
 //
@@ -338,24 +338,14 @@ export class AudioEngine {
     this.currentMode = null;
   }
 
-  setPatternText(text: string, revision?: number): void {
+  applyScore(mode: "pattern" | "song", text: string, policy: "continue" | "restart", revision: number): void {
     if (!this.node || !this.usesSchedulerProtocol()) return;
-    this.node.port.postMessage({ type: "set-pattern-text", text, revision });
+    this.node.port.postMessage({ type: "apply-score", mode, text, policy, revision });
   }
 
-  setSongText(text: string, revision?: number): void {
+  restartPlayback(revision: number): void {
     if (!this.node || !this.usesSchedulerProtocol()) return;
-    this.node.port.postMessage({ type: "set-song-text", text, revision });
-  }
-
-  updatePatternText(text: string, revision?: number): void {
-    if (!this.node || !this.usesSchedulerProtocol()) return;
-    this.node.port.postMessage({ type: "update-pattern-text", text, revision });
-  }
-
-  updateSongText(text: string, revision?: number): void {
-    if (!this.node || !this.usesSchedulerProtocol()) return;
-    this.node.port.postMessage({ type: "update-song-text", text, revision });
+    this.node.port.postMessage({ type: "restart-playback", revision });
   }
 
   setBpm(bpm: number): void {

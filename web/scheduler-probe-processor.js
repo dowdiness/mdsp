@@ -14,11 +14,12 @@ const SCHEDULER_PROBE_REQUIRED_EXPORTS = [
   'process_scheduler_block',
   'scheduler_left_sample',
   'scheduler_right_sample',
-  'clear_pattern_input',
-  'push_pattern_char',
-  'eval_pattern_input',
-  'get_pattern_error_length',
-  'get_pattern_error_char',
+  'clear_playback_input',
+  'push_playback_char',
+  'prepare_pattern_input',
+  'apply_prepared_playback',
+  'get_playback_error_length',
+  'get_playback_error_char',
   'get_browser_error_length',
   'get_browser_error_char',
   'set_scheduler_bpm',
@@ -171,11 +172,12 @@ class MoonDspSchedulerProbeProcessor extends AudioWorkletProcessor {
   }
 
   setPatternText(text) {
-    this.wasm.clear_pattern_input();
+    this.wasm.clear_playback_input();
     for (let index = 0; index < text.length; index += 1) {
-      this.wasm.push_pattern_char(text.charCodeAt(index));
+      this.wasm.push_playback_char(text.charCodeAt(index));
     }
-    const status = this.wasm.eval_pattern_input();
+    const token = this.wasm.prepare_pattern_input();
+    const status = token === 0 ? 1 : this.wasm.apply_prepared_playback(token, true);
     this.parseStatus = status;
     this.parseError = status === 0 ? '' : this.patternErrorMessage();
     if (status === 0) {
@@ -367,8 +369,8 @@ class MoonDspSchedulerProbeProcessor extends AudioWorkletProcessor {
 
   patternErrorMessage() {
     return this.stringFromCharExports(
-      'get_pattern_error_length',
-      'get_pattern_error_char',
+      'get_playback_error_length',
+      'get_playback_error_char',
       'pattern parse error',
     );
   }

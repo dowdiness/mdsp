@@ -30,6 +30,7 @@ const DEFAULT_GAIN = 0.6;
 const editorEl = document.getElementById("editor") as HTMLElement;
 const logEl = document.getElementById("log") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
+const applyRestartBtn = document.getElementById("apply-restart") as HTMLButtonElement;
 const restartBtn = document.getElementById("restart") as HTMLButtonElement;
 const startBtn = document.getElementById("start") as HTMLButtonElement;
 const cheatEl = document.getElementById("cheat") as HTMLElement;
@@ -130,6 +131,7 @@ if (schedulerTimingEnabled) {
 // Empty sentinels — nothing has been sent to the worklet yet, so the first
 // evalNow call must go through even if the doc still equals INITIAL.
 let playbackMode: PlaybackMode = "pattern";
+const submittedScores = new Map<number, { mode: PlaybackMode; text: string }>();
 let activeMode: PlaybackMode | null = null;
 let lastGoodByMode: Record<PlaybackMode, string> = { pattern: "", song: "" };
 let globalBpm = DEFAULT_BPM;
@@ -198,6 +200,7 @@ function setPlaybackMode(mode: PlaybackMode, evaluateCurrent = true): void {
 }
 
 function resetPlaybackDedupe(): void {
+  submittedScores.clear();
   activeMode = null;
   lastGoodByMode = { pattern: "", song: "" };
   latestSentText = "";
@@ -205,6 +208,7 @@ function resetPlaybackDedupe(): void {
 
 function applyStatus(s: AudioStatus): void {
   restartBtn.disabled = s.kind !== "running";
+  applyRestartBtn.disabled = s.kind !== "running";
   switch (s.kind) {
     case "idle":
       statusEl.textContent = "idle — click Start";
@@ -276,6 +280,40 @@ function replyPlaybackMode(reply: WorkletReply): PlaybackMode | null {
 }
 
 engine.onReply((reply: WorkletReply) => {
+  if (reply.type === "playback-superseded") {
+    if (typeof reply.revision === "number") submittedScores.delete(reply.revision);
+    return;
+  }
+  // Output belongs to playback, even when the editor has advanced to another
+  // revision. A stale diagnostic must not leave successfully started audio muted.
+  if (fadeInAfterNextUpdate && (reply.type === "pattern-updated" ||
+      reply.type === "song-updated" || reply.type === "pattern-error" ||
+      reply.type === "song-error" || reply.type === "playback-restarted")) {
+    fadeInAfterNextUpdate = false;
+    engine.fadeIn();
+  }
+  // Track applied state independently of whether the editor has moved on.
+  // UI diagnostics below still belong only to the current editor revision.
+  if ("revision" in reply && typeof reply.revision === "number") {
+    const submitted = submittedScores.get(reply.revision);
+    if (submitted && (reply.type === "pattern-updated" || reply.type === "song-updated")) {
+      activeMode = submitted.mode;
+      lastGoodByMode[submitted.mode] = submitted.text;
+      const bpm = submitted.mode === "song" ? embeddedBpm(submitted.text) : null;
+      if (bpm !== null) setGlobalBpm(bpm, false);
+    }
+    if (reply.type === "pattern-updated" || reply.type === "song-updated" ||
+        reply.type === "pattern-error" || reply.type === "song-error") {
+      submittedScores.delete(reply.revision);
+    }
+  }
+
+  if (reply.type === "playback-restarted" || reply.type === "playback-error") {
+    if (reply.revision !== latestSentRev) return;
+    setLog(reply.type === "playback-restarted" ? "✓ current playback restarted" : String(reply.message), reply.type === "playback-restarted" ? "ok" : "error");
+    return;
+  }
+
   const replyMode = replyPlaybackMode(reply);
   if (replyMode !== null) {
     // Drop replies for older submissions — a newer eval is in flight
@@ -291,27 +329,9 @@ engine.onReply((reply: WorkletReply) => {
 
   if (reply.type === "pattern-updated" || reply.type === "song-updated") {
     const mode: PlaybackMode = reply.type === "pattern-updated" ? "pattern" : "song";
-    // Only commit lastGood on a confirmed success. If we updated it
-    // optimistically in evalNow, a parse error would persist as lastGood —
-    // and re-typing the same bad text after clearing could short-circuit
-    // before re-painting the squiggle.
-    activeMode = mode;
-    lastGoodByMode[mode] = latestSentText;
-    if (mode === "song") {
-      const bpm = embeddedBpm(latestSentText);
-      if (bpm !== null) setGlobalBpm(bpm, false);
-    }
-    if (fadeInAfterNextUpdate) {
-      fadeInAfterNextUpdate = false;
-      engine.fadeIn();
-    }
     setLog(`✓ ${modeLabel(mode)} updated`, "ok");
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [] }]);
   } else if (reply.type === "pattern-error" || reply.type === "song-error") {
-    if (fadeInAfterNextUpdate) {
-      fadeInAfterNextUpdate = false;
-      engine.fadeIn();
-    }
     const msg = String(reply.message ?? "parse error");
     setLog(`✗ ${msg} (kept last good)`, "error");
     const diag = diagnosticFromError(msg, view.state.doc.length);
@@ -323,7 +343,7 @@ engine.onReply((reply: WorkletReply) => {
 function evalNow(text: string, restart = false): void {
   if (engine.getStatus().kind !== "running") return;
   const mode = playbackMode;
-  if (!restart && mode === activeMode && text === lastGoodByMode[mode]) return;
+  if (!restart && submittedScores.size === 0 && mode === activeMode && text === lastGoodByMode[mode]) return;
   if (text.trim() === "") {
     // Empty input: skip the wasm round trip entirely. The parser would
     // synthesize an "empty input" error with no position, which the
@@ -347,13 +367,8 @@ function evalNow(text: string, restart = false): void {
   latestSentRev = rev;
   latestSentMode = mode;
   latestSentText = text;
-  if (mode === "pattern") {
-    if (restart || mode !== activeMode) engine.setPatternText(text, rev);
-    else engine.updatePatternText(text, rev);
-  } else {
-    if (restart || mode !== activeMode) engine.setSongText(text, rev);
-    else engine.updateSongText(text, rev);
-  }
+  submittedScores.set(rev, { mode, text });
+  engine.applyScore(mode, text, restart || mode !== activeMode ? "restart" : "continue", rev);
   // lastGood is committed by the *-updated reply handler — not here —
   // so an in-flight parse error doesn't poison the dedupe.
 }
@@ -375,6 +390,13 @@ adapter.onIntent((intent: UserIntent) => {
 // ── Start handler ───────────────────────────────────────────
 
 restartBtn.addEventListener("click", () => {
+  if (pending !== null) window.clearTimeout(pending);
+  pending = null;
+  latestSentRev = ++revCounter;
+  engine.restartPlayback(latestSentRev);
+});
+
+applyRestartBtn.addEventListener("click", () => {
   if (pending !== null) window.clearTimeout(pending);
   pending = null;
   evalNow(view.state.doc.toString(), true);

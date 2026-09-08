@@ -6,39 +6,31 @@ import {
 }
 
 // Values
-pub fn clear_pattern_input() -> Unit
+pub fn apply_prepared_playback(Int, Bool) -> Int
 
-pub fn clear_song_input() -> Unit
+pub fn clear_playback_input() -> Unit
 
-pub fn eval_pattern_input() -> Int
+pub fn discard_prepared_playback(Int) -> Bool
 
-pub fn eval_song_input() -> Int
+pub fn get_playback_error() -> String
 
-pub fn get_pattern_error_char(Int) -> Int
+pub fn get_playback_error_char(Int) -> Int
 
-pub fn get_pattern_error_length() -> Int
-
-pub fn get_scheduler_parse_error() -> String
-
-pub fn get_song_error_char(Int) -> Int
-
-pub fn get_song_error_length() -> Int
-
-pub fn get_song_parse_error() -> String
+pub fn get_playback_error_length() -> Int
 
 pub fn init_scheduler_graph_with_templates(Double, Int, Array[@graph.DspNode], Array[@graph.DspNode], Array[@graph.DspNode], Array[@graph.DspNode], Array[@graph.DspNode], Array[@graph.DspNode]) -> Bool
 
-pub fn parse_and_set_pattern(String) -> Int
+pub fn prepare_pattern_input() -> Int
 
-pub fn parse_and_set_song(String) -> Int
+pub fn prepare_song_input() -> Int
 
 pub fn process_scheduler_block() -> Bool
 
-pub fn push_pattern_char(Int) -> Unit
-
-pub fn push_song_char(Int) -> Unit
+pub fn push_playback_char(Int) -> Unit
 
 pub fn reset_scheduler_graph() -> Unit
+
+pub fn restart_playback() -> Int
 
 pub fn scheduler_left_sample(Int) -> Double
 
@@ -49,10 +41,6 @@ pub fn scheduler_sample_position() -> Double
 pub fn set_scheduler_bpm(Double) -> Unit
 
 pub fn set_scheduler_gain(Double) -> Unit
-
-pub fn update_pattern_input() -> Int
-
-pub fn update_song_input() -> Int
 
 // Errors
 

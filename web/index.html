@@ -1081,7 +1081,7 @@
     function evalPattern() {
       const text = document.getElementById('patternInput').value;
       if (node) {
-        node.port.postMessage({ type: 'set-pattern-text', text: text });
+        node.port.postMessage({ type: 'apply-score', mode: 'pattern', policy: 'restart', text });
       }
     }
 

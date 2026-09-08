@@ -1,3 +1,5 @@
+import { PlaybackController } from "./playback-controller.js";
+
 class MoonBitDspProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
@@ -23,6 +25,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
     this.usesCompiledStereoGraph = false;
     this.usesCompiledGraph = false;
     this.usesScheduler = false;
+    this.playback = null;
     this.reportedRuntimeError = false;
     this.telemetryCountdown = 0;
     this.telemetryWarmupBlocks = 16;
@@ -47,54 +50,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         this.delaySamples = Number(data.value);
       } else if (data.type === "set-cutoff") {
         this.cutoff = Number(data.value);
-      } else if (data.type === "set-pattern-text") {
-        if (this.usesScheduler && this.wasm &&
-            typeof this.wasm.clear_pattern_input === "function" &&
-            typeof this.wasm.push_pattern_char === "function" &&
-            typeof this.wasm.eval_pattern_input === "function") {
-          this.wasm.clear_pattern_input();
-          const text = data.text || "";
-          for (let i = 0; i < text.length; i++) {
-            this.wasm.push_pattern_char(text.charCodeAt(i));
-          }
-          const result = this.wasm.eval_pattern_input();
-          // Echo any revision the sender attached so the host can drop
-          // stale replies. Optional: older senders simply omit it.
-          const revision = typeof data.revision === "number" ? data.revision : undefined;
-          if (result === 0) {
-            this.port.postMessage({ type: "pattern-updated", revision });
-          } else {
-            const message = this.parseErrorMessage(
-              "get_pattern_error_length",
-              "get_pattern_error_char",
-              "parse error",
-            );
-            this.port.postMessage({ type: "pattern-error", message, revision });
-          }
-        }
-      } else if (data.type === "set-song-text") {
-        if (this.usesScheduler && this.wasm &&
-            typeof this.wasm.clear_song_input === "function" &&
-            typeof this.wasm.push_song_char === "function" &&
-            typeof this.wasm.eval_song_input === "function") {
-          this.wasm.clear_song_input();
-          const text = data.text || "";
-          for (let i = 0; i < text.length; i++) {
-            this.wasm.push_song_char(text.charCodeAt(i));
-          }
-          const result = this.wasm.eval_song_input();
-          const revision = typeof data.revision === "number" ? data.revision : undefined;
-          if (result === 0) {
-            this.port.postMessage({ type: "song-updated", revision });
-          } else {
-            const message = this.parseErrorMessage(
-              "get_song_error_length",
-              "get_song_error_char",
-              "song parse error",
-            );
-            this.port.postMessage({ type: "song-error", message, revision });
-          }
-        }
+      } else if (data.type === "apply-score" || data.type === "restart-playback") {
+        if (this.usesScheduler) this.playback.handle(data);
       } else if (data.type === "set-scheduler-bpm") {
         if (this.usesScheduler && this.wasm && typeof this.wasm.set_scheduler_bpm === "function") {
           this.wasm.set_scheduler_bpm(Number(data.bpm));
@@ -324,6 +281,7 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
       ) {
         const initialized = this.wasm.init_scheduler_graph(sampleRate, 128);
         if (initialized) {
+          this.playback = new PlaybackController(this.wasm, reply => this.port.postMessage(reply));
           this.usesScheduler = true;
         }
       }
@@ -590,6 +548,8 @@ class MoonBitDspProcessor extends AudioWorkletProcessor {
         }
         return true;
       }
+
+      this.playback.didRender(left.length);
 
       for (let index = 0; index < left.length; index += 1) {
         left[index] = this.wasm.scheduler_left_sample(index);

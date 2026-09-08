@@ -1,0 +1,125 @@
+{
+  "calibrated": true,
+  "rows": [
+    {
+      "round": 0,
+      "mode": "baseline",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": null,
+      "preparation_max_ms": null,
+      "handler_max_ms": null,
+      "render_max_ms": 1
+    },
+    {
+      "round": 0,
+      "mode": "prepare-only",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": 1,
+      "preparation_max_ms": 1,
+      "handler_max_ms": 1,
+      "render_max_ms": 1
+    },
+    {
+      "round": 0,
+      "mode": "apply-score",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": 1,
+      "preparation_max_ms": 1,
+      "handler_max_ms": 1,
+      "render_max_ms": 1
+    },
+    {
+      "round": 0,
+      "mode": "positive-control",
+      "underrun_ms": 337.125,
+      "underrun_events": 29,
+      "preparation_p95_ms": null,
+      "preparation_max_ms": null,
+      "handler_max_ms": 100,
+      "render_max_ms": 1
+    },
+    {
+      "round": 1,
+      "mode": "prepare-only",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": 1,
+      "preparation_max_ms": 1,
+      "handler_max_ms": 1,
+      "render_max_ms": 1
+    },
+    {
+      "round": 1,
+      "mode": "apply-score",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": 1,
+      "preparation_max_ms": 1,
+      "handler_max_ms": 1,
+      "render_max_ms": 1
+    },
+    {
+      "round": 1,
+      "mode": "positive-control",
+      "underrun_ms": 372,
+      "underrun_events": 32,
+      "preparation_p95_ms": null,
+      "preparation_max_ms": null,
+      "handler_max_ms": 100,
+      "render_max_ms": 1
+    },
+    {
+      "round": 1,
+      "mode": "baseline",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": null,
+      "preparation_max_ms": null,
+      "handler_max_ms": null,
+      "render_max_ms": 1
+    },
+    {
+      "round": 2,
+      "mode": "apply-score",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": 1,
+      "preparation_max_ms": 1,
+      "handler_max_ms": 1,
+      "render_max_ms": 1
+    },
+    {
+      "round": 2,
+      "mode": "positive-control",
+      "underrun_ms": 383.625,
+      "underrun_events": 33,
+      "preparation_p95_ms": null,
+      "preparation_max_ms": null,
+      "handler_max_ms": 100,
+      "render_max_ms": 1
+    },
+    {
+      "round": 2,
+      "mode": "baseline",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": null,
+      "preparation_max_ms": null,
+      "handler_max_ms": null,
+      "render_max_ms": 1
+    },
+    {
+      "round": 2,
+      "mode": "prepare-only",
+      "underrun_ms": 0,
+      "underrun_events": 0,
+      "preparation_p95_ms": 1,
+      "preparation_max_ms": 1,
+      "handler_max_ms": 1,
+      "render_max_ms": 1
+    }
+  ]
+}

@@ -234,3 +234,94 @@ test "browser scheduler song parse error accessors preserve last good pattern" {
   assert_true(message.contains("section 'intro' requires a positive length"))
   assert_song_error_transport_for_test(message)
 }
+
+///|
+test "prepared publication preserves active notes and transport" {
+  assert_true(init_scheduler_graph_for_test())
+  let p = @mini.parse("note(\"60\").slow(8)").unwrap()
+  assert_true(publish_pattern(prepare_pattern(p).unwrap()))
+  assert_true(process_scheduler_block())
+  let synth = sched_routes.val[5].pool
+  let count = synth.scheduler.active_note_count()
+  assert_true(count > 0)
+  let frame = synth.scheduler.current_block()
+  assert_true(
+    publish_pattern(prepare_pattern(@pattern.Pat::silence()).unwrap()),
+  )
+  assert_eq(synth.scheduler.active_note_count(), count)
+  assert_eq(synth.scheduler.current_block().sample_begin, frame.sample_begin)
+  assert_true(process_scheduler_block())
+  assert_eq(synth.scheduler.active_note_count(), count)
+  let mut energy = 0.0
+  for i in 0..<128 {
+    energy += scheduler_left_sample(i).abs()
+  }
+  assert_true(energy > 0.0)
+  reset_scheduler_graph()
+}
+
+///|
+fn gain_test_render(
+  source : String,
+  replacement : String?,
+) -> Array[Double] raise {
+  assert_true(init_scheduler_graph_for_test())
+  assert_eq(parse_and_set_pattern(source), 0)
+  let output = []
+  for block in 0..<4 {
+    if block == 1 {
+      match replacement {
+        Some(text) =>
+          assert_true(
+            publish_pattern(
+              prepare_pattern(@mini.parse(text).unwrap()).unwrap(),
+            ),
+          )
+        None => ()
+      }
+    }
+    assert_true(process_scheduler_block())
+    for i in 0..<128 {
+      output.push(scheduler_left_sample(i))
+    }
+  }
+  output
+}
+
+///|
+test "voice gain defaults to unity, scales each route, and permits silence" {
+  for
+    source in [
+      "note(\"60\")", "s(\"bd\")", "s(\"sd\")", "s(\"hh\")", "s(\"cp\")", "s(\"oh\")",
+    ] {
+    let full = gain_test_render(source, None)
+    let unity = gain_test_render(source + ".gain(1)", None)
+    let half = gain_test_render(source + ".gain(0.5)", None)
+    let zero = gain_test_render(source + ".gain(0)", None)
+    let mut energy = 0.0
+    for i in 0..<full.length() {
+      assert_eq(full[i], unity[i])
+      assert_true((half[i] - full[i] * 0.5).abs() < 0.000000001)
+      assert_eq(zero[i], 0.0)
+      energy += full[i].abs()
+    }
+    assert_true(energy > 0.0)
+  }
+}
+
+///|
+test "simultaneous gains are independent and publication retains old voice gain" {
+  let base = gain_test_render("note(\"60\").slow(8)", None)
+  let mixed = gain_test_render(
+    "stack(note(\"60\").slow(8).gain(0.25),note(\"60\").slow(8).gain(0.75))",
+    None,
+  )
+  let edited = gain_test_render(
+    "note(\"60\").slow(8)",
+    Some("note(\"60\").slow(8).gain(0)"),
+  )
+  for i in 0..<base.length() {
+    assert_true((mixed[i] - base[i]).abs() < 0.000000001)
+    assert_eq(edited[i], base[i])
+  }
+}

@@ -1375,3 +1375,12 @@ Minimum set needed for a useful synthesizer (Phase 1-2):
 | **Hylomorphism** | A recursion scheme combining an unfold (anamorphism) and a fold (catamorphism) |
 | **`incr`** | MoonBit library for incremental computation (Signal/Memo). Salsa-inspired. |
 | **CLAP** | Clever Audio Plugin format — modern alternative to VST3, designed for open-source |
+
+
+### Fixed-template browser experiment
+
+`BoundVoicePool::note_on_prevalidated_pair_id` accepts a required Value0 update,
+an optional second Value0 update (negative node index omits it), and explicit pan
+presence. Both parameters and pan are checked before a prepared voice is reset.
+A stale template slot rejects with a negative id; no lazy compile is performed.
+This narrow prototype preserves the distinction between absent pan and center pan.

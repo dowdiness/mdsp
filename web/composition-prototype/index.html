@@ -1,0 +1,14 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>光の軌道 — 作曲とゲーム切替の試作</title>
+<style>body{font:16px system-ui;max-width:1000px;margin:32px auto;padding:0 20px;background:#111923;color:#e7eff6}button,select,textarea{font:inherit;margin:6px 4px;padding:8px}textarea{box-sizing:border-box;width:100%;background:#1c2936;color:inherit}button{cursor:pointer}pre{white-space:pre-wrap;background:#1c2936;padding:16px}label{display:block}small{color:#bacbda}</style>
+<h1>光の軌道</h1><p>作曲とゲーム切替を同じ音声基盤で試す、開発用プロトタイプ。120 BPM・4/4。</p>
+<button id="start">曲を再生</button><button id="stop">停止</button><button id="resume">保留から再開</button>
+<pre id="state">準備前</pre>
+<h2>共有パターンを編集</h2><p id="preparation" role="status">準備待ちなし</p><label>パターン <select id="pattern"></select></label><p id="uses"></p>
+<label>構文<textarea id="expression" rows="3"></textarea></label><button id="edit">この定義を全参照へ反映</button>
+<p><small>準備が完了してから次の小節で反映します。鳴っている音は保持し、その後に始まる音へ変更を適用します。</small></p>
+<h2>展開とゲームイベント</h2><button id="calm">静穏 → suspension</button><button id="combat">戦闘 → confluence</button><button id="cancel">準備・予約を取り消す</button>
+<label>曲の開始位置 <select id="section"></select></label><label>セクション内の位置（拍） <input id="offset" type="number" min="0" step="0.25" value="0"></label><button id="score">このセクションから曲順へ戻る</button>
+<p><small>ゲームのSceneは先頭から繰り返します。曲順へ戻る操作は選んだセクション内の位置へ移動します。切替は次の小節、共有ディレイの余韻は保持します。</small></p>
+<details><summary>曲順と編集用の定義</summary><pre id="document"></pre></details>
+<p id="error" role="alert"></p><pre id="log"></pre><script type="module" src="./app.mjs"></script></html>

@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "frames": 864000,
+  "events": 169,
+  "pcmMismatches": 0,
+  "resetBusDifference": 0.02404846119802739,
+  "applied": [
+    {
+      "at": 96000,
+      "mode": "score",
+      "revision": 1
+    },
+    {
+      "at": 192000,
+      "mode": "score",
+      "revision": 2
+    },
+    {
+      "at": 288000,
+      "mode": "suspension",
+      "revision": 2
+    },
+    {
+      "at": 576000,
+      "mode": "confluence",
+      "revision": 2
+    },
+    {
+      "at": 672000,
+      "mode": "score",
+      "revision": 2
+    }
+  ],
+  "stats": {
+    "maxOnsets": 11,
+    "maxCallbackMs": 7,
+    "clockGaps": 0,
+    "wetPeak": 0.05763101059275814
+  },
+  "outputStats": {
+    "underrunDuration": 0,
+    "underrunEvents": 0,
+    "totalDuration": 20.285594,
+    "averageLatency": 0.144904,
+    "minimumLatency": 0,
+    "maximumLatency": 0.322028
+  }
+}

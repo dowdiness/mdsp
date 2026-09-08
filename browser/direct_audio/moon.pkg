@@ -1,0 +1,25 @@
+import {
+  "dowdiness/moondsp/browser/internal/playback_host" @host,
+  "dowdiness/moondsp/browser/internal/demo_templates" @templates,
+  "moonbitlang/core/ref",
+}
+
+pkgtype(kind: "executable")
+
+options(
+  link: {
+    "js": {
+      "exports": [
+        "initialize",
+        "begin",
+        "row",
+        "seal",
+        "publish",
+        "process",
+        "left",
+        "right",
+      ],
+      "format": "esm",
+    },
+  },
+)

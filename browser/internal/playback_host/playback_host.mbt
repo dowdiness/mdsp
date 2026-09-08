@@ -12,6 +12,7 @@ let sched_active_playback : @ref.Ref[SchedulerActivePlayback?] = @ref.new(None)
 /// Per-sound pool state: voice pool + scheduler + tmp buffers.
 priv struct SoundPool {
   pool : @moondsp.BoundVoicePool
+  gain_index : Int
   scheduler : @scheduler.PatternScheduler
   tmp_left : @moondsp.AudioBuffer
   tmp_right : @moondsp.AudioBuffer
@@ -42,12 +43,16 @@ let sched_right : @ref.Ref[@moondsp.AudioBuffer?] = @ref.new(None)
 let sched_gain : @ref.Ref[Double] = @ref.new(0.5)
 
 ///|
-/// Create a SoundPool for a drum template (no control bindings needed).
+/// Create a SoundPool with per-voice gain after the template signal path.
 fn make_drum_pool(
   template : Array[@moondsp.DspNode],
   ctx : @moondsp.DspContext,
   block_size : Int,
 ) -> SoundPool? {
+  let (template, gain_index) = match with_voice_gain(template) {
+    Some(result) => result
+    None => return None
+  }
   // 8 voices = defensive headroom for .jux(f) patterns where f causes
   // same-sound overlap (e.g. the demo's hh*16? layer puts left's hh at
   // slot t and right's hh at slot 1-t — frequent coincidence at fine
@@ -57,7 +62,11 @@ fn make_drum_pool(
     @moondsp.BoundVoicePool::new(
       @moondsp.CompiledTemplate::analyze(template),
       ctx,
-      @moondsp.ControlBindingBuilder::new(),
+      @moondsp.ControlBindingBuilder::new().bind(
+        key="gain",
+        node_index=gain_index,
+        slot=@moondsp.GraphParamSlot::Value0,
+      ),
       max_voices=8,
     ) {
     Err(_) => None
@@ -65,6 +74,7 @@ fn make_drum_pool(
       let scheduler = @scheduler.PatternScheduler::new(bpm=120.0, ctx~)
       Some({
         pool,
+        gain_index,
         scheduler,
         tmp_left: @moondsp.AudioBuffer::filled(block_size),
         tmp_right: @moondsp.AudioBuffer::filled(block_size),
@@ -80,14 +90,24 @@ fn make_synth_pool(
   ctx : @moondsp.DspContext,
   block_size : Int,
 ) -> SoundPool? {
+  let (template, gain_index) = match with_voice_gain(template) {
+    Some(result) => result
+    None => return None
+  }
   // See make_drum_pool for the .jux headroom rationale.
   match
     @moondsp.BoundVoicePool::new(
       @moondsp.CompiledTemplate::analyze(template),
       ctx,
-      @moondsp.ControlBindingBuilder::new().bind(
+      @moondsp.ControlBindingBuilder::new()
+      .bind(
         key="note",
-        node_index=0,  // oscillator(Value0) frequency placeholder
+        node_index=0, // oscillator(Value0) frequency placeholder
+        slot=@moondsp.GraphParamSlot::Value0,
+      )
+      .bind(
+        key="gain",
+        node_index=gain_index,
         slot=@moondsp.GraphParamSlot::Value0,
       ),
       // 24 voices for chords: a 5-note chord × 4 layers of jux/stereo
@@ -99,6 +119,7 @@ fn make_synth_pool(
       let scheduler = @scheduler.PatternScheduler::new(bpm=120.0, ctx~)
       Some({
         pool,
+        gain_index,
         scheduler,
         tmp_left: @moondsp.AudioBuffer::filled(block_size),
         tmp_right: @moondsp.AudioBuffer::filled(block_size),
@@ -115,7 +136,7 @@ fn make_drum_route(
   block_size : Int,
 ) -> SchedulerRoute? {
   match make_drum_pool(template, ctx, block_size) {
-    Some(pool) => Some({ selector: RouteSound(sound_code), pool })
+    Some(pool) => Some({ selector: RouteSound(sound_code), pool, })
     None => None
   }
 }
@@ -127,7 +148,7 @@ fn make_synth_route(
   block_size : Int,
 ) -> SchedulerRoute? {
   match make_synth_pool(template, ctx, block_size) {
-    Some(pool) => Some({ selector: RouteSynth, pool })
+    Some(pool) => Some({ selector: RouteSynth, pool, })
     None => None
   }
 }
@@ -595,4 +616,23 @@ pub fn set_scheduler_gain(gain : Double) -> Unit {
   } else {
     gain
   }
+}
+
+///| Add a unity gain without changing existing template indices or headroom.
+
+///| Browser sound templates have one terminal mono output. Analysis still validates
+
+///|
+/// the full copied graph; unsupported output shapes are rejected at initialization.
+fn with_voice_gain(
+  template : Array[@moondsp.DspNode],
+) -> (Array[@moondsp.DspNode], Int)? {
+  let last = template.length() - 1
+  if last < 0 || template[last].kind() != @moondsp.DspNodeKind::Output {
+    return None
+  }
+  let copy = template.copy()
+  copy[last] = @moondsp.DspNode::gain(template[last].input0(), 1.0)
+  copy.push(@moondsp.DspNode::output(last))
+  Some((copy, last))
 }

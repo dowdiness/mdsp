@@ -1375,3 +1375,13 @@ Minimum set needed for a useful synthesizer (Phase 1-2):
 | **Hylomorphism** | A recursion scheme combining an unfold (anamorphism) and a fold (catamorphism) |
 | **`incr`** | MoonBit library for incremental computation (Signal/Memo). Salsa-inspired. |
 | **CLAP** | Clever Audio Plugin format — modern alternative to VST3, designed for open-source |
+
+### Browser live updates
+
+The existing `eval_pattern_input` / `eval_song_input` and parse-and-set APIs restart transport and kill old voices on successful replacement. `update_pattern_input` / `update_song_input` instead prepare all routed playback snapshots and stage them for the next `process_scheduler_block`. Updates require active playback with the same mode and song layout (occurrence identity, names, placement, length and time scope). An embedded BPM must equal the active tempo. Unsupported layout or tempo changes return a diagnostic requiring explicit restart. Errors leave both active playback and an already accepted pending update unchanged. A later successful preparation supersedes the pending update. Successful restart clears it.
+
+At block start, all routes receive the prepared snapshots before rendering. Clock position and existing voices are retained; past onsets are not backfilled. `scheduler_sample_position` exposes the next block position for commit acknowledgements. Parsing, routing and snapshot construction still happen in the audio owner; this change does not claim allocation-free preparation or solve output underruns.
+
+The normal live editor uses updates for edits in the active mode. Start, mode changes, example selection, and **Restart from beginning** use restart semantics. The update reply is sent after the first block renders the replacement. Changes apply at audio-block boundaries, not bar boundaries. The separate global BPM control retains its existing behavior; phase-continuous tempo changes are outside this contract.
+
+The internal browser playback host imports the dependency-free identity package to assign pattern, section and layer IDs during snapshot preparation. IDs stay inside the prepared document boundary; the browser protocol continues to accept text and numeric revisions. This dependency does not add browser concerns to the pattern or scheduler packages.

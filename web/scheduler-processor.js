@@ -8,6 +8,7 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
     this.gain = this.sanitizeGain(options?.processorOptions?.initialGain ?? 0.3);
     this.bpm = null;
     this.pendingPlayback = null;
+    this.pendingAppliedReply = null;
     this.graphInitialized = false;
     this.graphBlockSize = 0;
 
@@ -24,6 +25,8 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
         this.setPatternText(data.text || "", typeof data.revision === "number" ? data.revision : undefined);
       } else if (data.type === "set-song-text") {
         this.setSongText(data.text || "", typeof data.revision === "number" ? data.revision : undefined);
+      } else if (data.type === "update-pattern-text" || data.type === "update-song-text") {
+        this.submitPlayback(data.type === "update-pattern-text" ? "pattern" : "song", data.text || "", data.revision, true);
       } else if (data.type === "set-scheduler-bpm") {
         this.bpm = Number(data.bpm);
         this.applyBpm();
@@ -66,6 +69,9 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
         "clear_song_input",
         "push_song_char",
         "eval_song_input",
+        "update_pattern_input",
+        "update_song_input",
+        "scheduler_sample_position",
         "get_pattern_error_length",
         "get_pattern_error_char",
         "get_song_error_length",
@@ -109,9 +115,9 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
       return;
     }
     if (this.pendingPlayback.kind === "pattern") {
-      this.setPatternText(this.pendingPlayback.text, this.pendingPlayback.revision, false);
+      this.setPatternText(this.pendingPlayback.text, this.pendingPlayback.revision);
     } else {
-      this.setSongText(this.pendingPlayback.text, this.pendingPlayback.revision, false);
+      this.setSongText(this.pendingPlayback.text, this.pendingPlayback.revision);
     }
   }
 
@@ -132,61 +138,42 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
     return Number.isFinite(gain) ? Math.max(0, Math.min(1, gain)) : 0.3;
   }
 
-  setPatternText(text, revision, remember = true) {
-    if (remember) {
-      this.pendingPlayback = { kind: "pattern", text, revision };
-    }
-    if (!this.graphInitialized) {
-      return;
-    }
-    if (!this.ready || !this.wasm ||
-        typeof this.wasm.clear_pattern_input !== "function" ||
-        typeof this.wasm.push_pattern_char !== "function" ||
-        typeof this.wasm.eval_pattern_input !== "function") {
-      return;
-    }
-    this.wasm.clear_pattern_input();
-    for (let i = 0; i < text.length; i += 1) {
-      this.wasm.push_pattern_char(text.charCodeAt(i));
-    }
-    const result = this.wasm.eval_pattern_input();
-    if (result === 0) {
-      this.port.postMessage({ type: "pattern-updated", revision });
-    } else {
-      this.port.postMessage({
-        type: "pattern-error",
-        message: this.parseErrorMessage("get_pattern_error_length", "get_pattern_error_char", "parse error"),
-        revision,
-      });
-    }
+  setPatternText(text, revision) {
+    this.submitPlayback("pattern", text, revision, false);
   }
 
-  setSongText(text, revision, remember = true) {
-    if (remember) {
-      this.pendingPlayback = { kind: "song", text, revision };
-    }
+  setSongText(text, revision) {
+    this.submitPlayback("song", text, revision, false);
+  }
+
+  submitPlayback(kind, text, revision, update) {
     if (!this.graphInitialized) {
+      if (update) {
+        this.port.postMessage({ type: `${kind}-error`, revision, message: "start playback before updating" });
+        return;
+      }
+      this.pendingPlayback = { kind, text, revision };
       return;
     }
-    if (!this.ready || !this.wasm ||
-        typeof this.wasm.clear_song_input !== "function" ||
-        typeof this.wasm.push_song_char !== "function" ||
-        typeof this.wasm.eval_song_input !== "function") {
-      return;
-    }
-    this.wasm.clear_song_input();
+    this.wasm[`clear_${kind}_input`]();
     for (let i = 0; i < text.length; i += 1) {
-      this.wasm.push_song_char(text.charCodeAt(i));
+      this.wasm[`push_${kind}_char`](text.charCodeAt(i));
     }
-    const result = this.wasm.eval_song_input();
-    if (result === 0) {
-      this.port.postMessage({ type: "song-updated", revision });
-    } else {
+    const result = this.wasm[`${update ? "update" : "eval"}_${kind}_input`]();
+    if (result !== 0) {
       this.port.postMessage({
-        type: "song-error",
-        message: this.parseErrorMessage("get_song_error_length", "get_song_error_char", "song parse error"),
-        revision,
+        type: `${kind}-error`, revision,
+        message: this.parseErrorMessage(`get_${kind}_error_length`, `get_${kind}_error_char`, "parse error"),
       });
+      return;
+    }
+    this.pendingPlayback = { kind, text, revision };
+    const reply = { type: `${kind}-updated`, revision, operation: update ? "update" : "restart" };
+    if (update) {
+      this.pendingAppliedReply = reply;
+    } else {
+      this.pendingAppliedReply = null;
+      this.port.postMessage({ ...reply, samplePosition: this.wasm.scheduler_sample_position() });
     }
   }
 
@@ -211,6 +198,11 @@ class MoonDspSchedulerProcessor extends AudioWorkletProcessor {
         this.postError(this.browserErrorMessage("Scheduler block processing failed"));
       }
       return true;
+    }
+
+    if (this.pendingAppliedReply) {
+      this.port.postMessage({ ...this.pendingAppliedReply, samplePosition: this.wasm.scheduler_sample_position() });
+      this.pendingAppliedReply = null;
     }
 
     for (let index = 0; index < left.length; index += 1) {

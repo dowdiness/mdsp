@@ -135,7 +135,8 @@ check_manifest "scheduler/internal/voice_runtime/moon.pkg" '^(dowdiness/moondsp/
 check_manifest "scheduler/internal/edit_policy/moon.pkg" '^(dowdiness/moondsp/identity)$'
 check_manifest "browser/internal/slot/moon.pkg" '^(dowdiness/moondsp)$'
 check_manifest "browser/internal/demo_templates/moon.pkg" '^(dowdiness/moondsp)$'
-check_manifest "browser/internal/playback_host/moon.pkg" '^(dowdiness/moondsp|dowdiness/moondsp/(mini|scheduler|pattern|song))$'
+# Playback preparation assigns IDs to routed snapshots (technical reference: Browser live updates).
+check_manifest "browser/internal/playback_host/moon.pkg" '^(dowdiness/moondsp|dowdiness/moondsp/(mini|scheduler|pattern|song|identity))$'
 
 # Graph is not a secondary DSP facade. It may expose graph APIs whose signatures
 # mention @dsp types, but it must not publicly re-export DSP package types,

@@ -30,6 +30,7 @@ const DEFAULT_GAIN = 0.6;
 const editorEl = document.getElementById("editor") as HTMLElement;
 const logEl = document.getElementById("log") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
+const restartBtn = document.getElementById("restart") as HTMLButtonElement;
 const startBtn = document.getElementById("start") as HTMLButtonElement;
 const cheatEl = document.getElementById("cheat") as HTMLElement;
 const cheatToggle = document.getElementById("cheat-toggle") as HTMLButtonElement;
@@ -203,6 +204,7 @@ function resetPlaybackDedupe(): void {
 }
 
 function applyStatus(s: AudioStatus): void {
+  restartBtn.disabled = s.kind !== "running";
   switch (s.kind) {
     case "idle":
       statusEl.textContent = "idle — click Start";
@@ -318,10 +320,10 @@ engine.onReply((reply: WorkletReply) => {
   // Ignore other worklet messages (telemetry, hot-swap acks, etc.) for now.
 });
 
-function evalNow(text: string): void {
+function evalNow(text: string, restart = false): void {
   if (engine.getStatus().kind !== "running") return;
   const mode = playbackMode;
-  if (mode === activeMode && text === lastGoodByMode[mode]) return;
+  if (!restart && mode === activeMode && text === lastGoodByMode[mode]) return;
   if (text.trim() === "") {
     // Empty input: skip the wasm round trip entirely. The parser would
     // synthesize an "empty input" error with no position, which the
@@ -346,9 +348,11 @@ function evalNow(text: string): void {
   latestSentMode = mode;
   latestSentText = text;
   if (mode === "pattern") {
-    engine.setPatternText(text, rev);
+    if (restart || mode !== activeMode) engine.setPatternText(text, rev);
+    else engine.updatePatternText(text, rev);
   } else {
-    engine.setSongText(text, rev);
+    if (restart || mode !== activeMode) engine.setSongText(text, rev);
+    else engine.updateSongText(text, rev);
   }
   // lastGood is committed by the *-updated reply handler — not here —
   // so an in-flight parse error doesn't poison the dedupe.
@@ -369,6 +373,12 @@ adapter.onIntent((intent: UserIntent) => {
 });
 
 // ── Start handler ───────────────────────────────────────────
+
+restartBtn.addEventListener("click", () => {
+  if (pending !== null) window.clearTimeout(pending);
+  pending = null;
+  evalNow(view.state.doc.toString(), true);
+});
 
 startBtn.addEventListener("click", async () => {
   if (startBtn.dataset.action === "stop") {
@@ -433,7 +443,9 @@ cheatEl.addEventListener("click", (ev) => {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
   });
-  scheduleEval(text);
+  if (pending !== null) window.clearTimeout(pending);
+  pending = null;
+  evalNow(text, true);
   view.focus();
 });
 

@@ -117,3 +117,18 @@ pub fn set_scheduler_bpm(bpm : Double) -> Unit {
 pub fn set_scheduler_gain(gain : Double) -> Unit {
   @playback_host.set_scheduler_gain(gain)
 }
+
+///|
+pub fn update_pattern_input() -> Int {
+  @playback_host.update_pattern_input()
+}
+
+///|
+pub fn update_song_input() -> Int {
+  @playback_host.update_song_input()
+}
+
+///|
+pub fn scheduler_sample_position() -> Double {
+  @playback_host.scheduler_sample_position()
+}

@@ -111,6 +111,8 @@ pub fn scheduler_left_sample(Int) -> Double
 
 pub fn scheduler_right_sample(Int) -> Double
 
+pub fn scheduler_sample_position() -> Double
+
 pub fn set_compiled_stereo_topology_edit_level(Double) -> Bool
 
 pub fn set_compiled_topology_edit_gain(Double) -> Bool
@@ -129,6 +131,10 @@ pub fn tick(freq_hz~ : Double, sample_rate~ : Double) -> Double
 
 pub fn tick_source(source_id~ : Int, freq_hz~ : Double, sample_rate~ : Double) -> Double
 
+pub fn update_pattern_input() -> Int
+
+pub fn update_song_input() -> Int
+
 // Errors
 
 // Types and methods
@@ -136,7 +142,6 @@ pub fn tick_source(source_id~ : Int, freq_hz~ : Double, sample_rate~ : Double) -
 // Type aliases
 
 // Traits
-
 
 ## browser/moon.pkg js exports
 tick
@@ -188,6 +193,9 @@ parse_and_set_song
 clear_song_input
 push_song_char
 eval_song_input
+update_pattern_input
+update_song_input
+scheduler_sample_position
 get_scheduler_parse_error
 get_song_parse_error
 get_pattern_error_length
@@ -251,6 +259,9 @@ parse_and_set_song
 clear_song_input
 push_song_char
 eval_song_input
+update_pattern_input
+update_song_input
+scheduler_sample_position
 get_scheduler_parse_error
 get_song_parse_error
 get_pattern_error_length

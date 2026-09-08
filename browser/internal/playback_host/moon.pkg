@@ -1,6 +1,7 @@
 import {
   "dowdiness/moondsp",
   "dowdiness/moondsp/mini",
+  "dowdiness/moondsp/identity",
   "dowdiness/moondsp/scheduler",
   "dowdiness/moondsp/pattern",
   "dowdiness/moondsp/song",

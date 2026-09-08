@@ -1,6 +1,7 @@
 ///|
 /// Active playback source parsed from the explicit browser protocol.
 priv enum SchedulerActivePlayback {
+  ActiveSnapshots(PlaybackLayout)
   ActivePattern(Array[@pattern.Pat[@pattern.ControlMap]])
   ActiveSong(Array[@song.Song[@pattern.ControlMap]])
 }
@@ -87,7 +88,7 @@ fn make_synth_pool(
       ctx,
       @moondsp.ControlBindingBuilder::new().bind(
         key="note",
-        node_index=0,  // oscillator(Value0) frequency placeholder
+        node_index=0, // oscillator(Value0) frequency placeholder
         slot=@moondsp.GraphParamSlot::Value0,
       ),
       // 24 voices for chords: a 5-note chord × 4 layers of jux/stereo
@@ -115,7 +116,7 @@ fn make_drum_route(
   block_size : Int,
 ) -> SchedulerRoute? {
   match make_drum_pool(template, ctx, block_size) {
-    Some(pool) => Some({ selector: RouteSound(sound_code), pool })
+    Some(pool) => Some({ selector: RouteSound(sound_code), pool, })
     None => None
   }
 }
@@ -127,7 +128,7 @@ fn make_synth_route(
   block_size : Int,
 ) -> SchedulerRoute? {
   match make_synth_pool(template, ctx, block_size) {
-    Some(pool) => Some({ selector: RouteSynth, pool })
+    Some(pool) => Some({ selector: RouteSynth, pool, })
     None => None
   }
 }
@@ -171,6 +172,7 @@ pub fn init_scheduler_graph_with_templates(
   sched_right.val = Some(@moondsp.AudioBuffer::filled(block_size))
   sched_gain.val = 0.5
   sched_active_playback.val = None
+  sched_pending_update.val = None
   true
 }
 
@@ -181,6 +183,7 @@ pub fn reset_scheduler_graph() -> Unit {
   sched_right.val = None
   sched_gain.val = 0.5
   sched_active_playback.val = None
+  sched_pending_update.val = None
 }
 
 ///|
@@ -359,6 +362,7 @@ fn route_songs_for_current_routes(
 
 ///|
 fn reset_route_transports_for_playback_start() -> Unit {
+  sched_pending_update.val = None
   for route in sched_routes.val {
     route.pool.scheduler.reset_transport_and_kill_notes(route.pool.pool)
   }
@@ -403,11 +407,13 @@ pub fn process_scheduler_block() -> Bool {
     Some(b) => b
     None => return false
   }
+  commit_playback_update()
   // Clear main output buffers
   left.fill(0.0)
   right.fill(0.0)
   // Get active playback; if none set, output silence.
   match sched_active_playback.val {
+    Some(ActiveSnapshots(_)) => process_snapshot_routes(left, right)
     Some(ActivePattern(pat)) => process_pattern_routes(pat, left, right)
     Some(ActiveSong(route_songs)) =>
       process_song_routes(route_songs, left, right)

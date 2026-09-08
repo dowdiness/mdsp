@@ -7,7 +7,6 @@ cc=${WINDOWS_CC:-x86_64-w64-mingw32-gcc}
 out_dir="$repo_root/_build/windows/release/clap"
 payload_c="$repo_root/_build/native/release/build/clap_plugin/clap_plugin.c"
 clap_include="$repo_root/third_party/clap/include"
-runtime_obj="$out_dir/moonbit_runtime_windows.o"
 output="$out_dir/moondsp-synth.clap"
 
 if ! command -v "$cc" >/dev/null 2>&1; then
@@ -22,26 +21,43 @@ Examples:
 EOF
   exit 1
 fi
-if [[ ! -f "$moon_home/lib/runtime.c" ]]; then
-  echo "MoonBit runtime.c not found under MOON_HOME=$moon_home" >&2
-  exit 1
+# Current toolchains split the runtime; older releases shipped one source.
+if [[ -f "$moon_home/lib/runtime/runtime.c" ]]; then
+  runtime_sources=(
+    "$moon_home/lib/runtime/runtime.c"
+    "$moon_home/lib/runtime/backtrace.c"
+    "$moon_home/lib/runtime/env.c"
+    "$moon_home/lib/runtime/sync_io.c"
+    "$moon_home/lib/runtime/utf.c"
+  )
+else
+  runtime_sources=("$moon_home/lib/runtime.c")
 fi
+for source in "${runtime_sources[@]}"; do
+  if [[ ! -f "$source" ]]; then
+    echo "MoonBit runtime source not found: $source" >&2
+    exit 1
+  fi
+done
 if [[ ! -f "$clap_include/clap/entry.h" ]]; then
   echo "Vendored CLAP headers not found under $clap_include" >&2
   exit 1
 fi
 
-moon -C "$repo_root" build --target native --release clap_plugin
+NEW_MOON_MOD=0 MOONBIT_NEW_NATIVE=0 moon -C "$repo_root" build --target native --release clap_plugin
 "$repo_root/scripts/generate-clap-moonbit-header.sh" \
   --check \
   "$payload_c" \
   "$repo_root/clap_plugin/moondsp_clap_moonbit.h"
 mkdir -p "$out_dir"
 
-"$cc" -std=gnu11 -O2 \
-  -I"$moon_home/include" \
-  -c "$moon_home/lib/runtime.c" \
-  -o "$runtime_obj"
+runtime_objects=()
+for source in "${runtime_sources[@]}"; do
+  object="$out_dir/moonbit_$(basename "${source%.c}").o"
+  "$cc" -std=gnu11 -O2 -D_CRT_RAND_S -fwrapv -fno-strict-aliasing \
+    -I"$moon_home/include" -c "$source" -o "$object"
+  runtime_objects+=("$object")
+done
 
 "$cc" -std=gnu11 -O2 -shared \
   -I"$clap_include" \
@@ -49,7 +65,7 @@ mkdir -p "$out_dir"
   -o "$output" \
   "$repo_root/clap_plugin/moondsp_clap.c" \
   "$payload_c" \
-  "$runtime_obj" \
+  "${runtime_objects[@]}" \
   -static-libgcc \
   -Wl,--no-undefined \
   -lm

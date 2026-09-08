@@ -58,6 +58,9 @@ pub fn parse_song(
 pub fn parse_song_with_bpm(input : String) -> Result[ParsedSong, String] {
   guard !input.is_empty() else { return Err("empty input") }
   let p = Parser::new(input)
+  p.parse_bindings() catch {
+    ParseError(msg) => return Err(msg)
+  }
   let result = p.parse_song_expr() catch { ParseError(msg) => return Err(msg) }
   p.skip_whitespace()
   guard p.at_end() else {
@@ -112,7 +115,7 @@ fn Parser::parse_song_expr(self : Parser) -> ParsedSong raise ParseError {
     Some(value) => Some(value)
     None => None
   }
-  { song, bpm }
+  { song, bpm, }
 }
 
 ///|
@@ -207,7 +210,7 @@ fn Parser::parse_song_part(
   self.expect_comma()
   let section_name = self.read_quoted_string()
   let start = self.read_optional_song_start()
-  { id: None, name, section_name, start }
+  { id: None, name, section_name, start, }
 }
 
 ///|
@@ -223,7 +226,7 @@ fn Parser::parse_song_part_with_id(
   self.expect_comma()
   let section_name = self.read_quoted_string()
   let start = self.read_optional_song_start()
-  { id: Some(id), name, section_name, start }
+  { id: Some(id), name, section_name, start, }
 }
 
 ///|
@@ -234,7 +237,7 @@ fn Parser::parse_song_fill(self : Parser) -> SongFillSpec raise ParseError {
   let section_name = self.read_quoted_string()
   self.skip_whitespace()
   self.expect_char(')')
-  { prefix, section_name }
+  { prefix, section_name, }
 }
 
 ///|

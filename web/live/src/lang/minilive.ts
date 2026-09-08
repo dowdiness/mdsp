@@ -13,6 +13,10 @@ import { miniliveCompletion } from "./minilive-completion";
 const parserWithMetadata = parser.configure({
   props: [
     styleTags({
+      BindingName: t.definition(t.variableName),
+      let: t.definitionKeyword,
+      "=": t.definitionOperator,
+      ";": t.separator,
       CallName: t.function(t.variableName),
       MethodName: t.propertyName,
       String: t.string,

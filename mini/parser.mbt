@@ -2,7 +2,8 @@
 /// Recursive descent parser for mini-notation.
 ///
 /// Grammar:
-///   program  = expr | dollar_stack
+///   program  = binding* (expr | dollar_stack)
+///   binding  = "let" identifier "=" expr ";"
 ///   dollar_stack = ( "$:" expr newline? )+
 ///   expr     = primary ( "." method )*
 ///   primary  = "s(" string ")" | "note(" string ")"
@@ -30,12 +31,14 @@ priv suberror ParseError {
 priv struct Parser {
   input : String
   mut pos : Int
+  bindings : Map[String, @pattern.Pat[@pattern.ControlMap]]
+  doc_bindings : Map[String, @pattern.PatternDoc[@pattern.ControlMap]]
 }
 
 ///|
 #alias(new)
 fn Parser::Parser(input : String) -> Parser {
-  { input, pos: 0 }
+  { input, pos: 0, bindings: {}, doc_bindings: {}, }
 }
 
 ///|
@@ -47,10 +50,11 @@ priv struct MiniDollarStackLine {
 ///|
 fn mini_collect_dollar_stack_lines(
   input : String,
+  start? : Int = 0,
 ) -> Result[Array[MiniDollarStackLine]?, String] {
   let lines : Array[MiniDollarStackLine] = []
   let mut saw_program = false
-  let mut pos = 0
+  let mut pos = start
   while pos < input.length() {
     let line_start = pos
     let mut line_end = pos
@@ -78,7 +82,7 @@ fn mini_collect_dollar_stack_lines(
         if expr_first == content_end {
           return Err("position \{first}: $: requires an expression")
         }
-        lines.push({ start: expr_start, end: content_end })
+        lines.push({ start: expr_start, end: content_end, })
       } else if saw_program {
         return Err("position \{first}: expected '$:' stack line")
       } else {
@@ -98,8 +102,8 @@ fn mini_collect_dollar_stack_lines(
 fn mini_parse_dollar_stack_program(
   input : String,
   lines : Array[MiniDollarStackLine],
+  parser? : Parser = Parser::new(input),
 ) -> Result[@pattern.Pat[@pattern.ControlMap], String] {
-  let parser = Parser::new(input)
   let args : Array[@pattern.Pat[@pattern.ControlMap]] = []
   for line in lines {
     parser.pos = line.start
@@ -340,6 +344,16 @@ fn Parser::parse_primary(
     self.expect_char(')')
     return parse_chord_notation(content)
   }
+  let name = self.read_ident()
+  if !name.is_empty() {
+    match self.bindings.get(name) {
+      Some(pat) => return pat
+      None =>
+        raise ParseError(
+          "position \{stack_start}: undefined pattern '\{name}'; define it before use",
+        )
+    }
+  }
   raise ParseError(
     "position \{self.pos}: expected 's(', 'note(', 'chord(', or 'stack('",
   )
@@ -531,5 +545,46 @@ fn Parser::parse_callback(
       raise ParseError(
         "position \{method_start}: \{calling_method}() callback must be fast(N), slow(N), or rev; got '\{name}'",
       )
+  }
+}
+
+///|
+/// Consume a declaration header. Bindings are immutable and ordered, so no
+/// unresolved or cyclic dependency can enter the lowered pattern.
+fn Parser::read_binding_name(self : Parser) -> String? raise ParseError {
+  self.skip_whitespace()
+  let start = self.pos
+  if self.read_ident() != "let" {
+    self.pos = start
+    return None
+  }
+  self.skip_whitespace()
+  let name_start = self.pos
+  let name = self.read_ident()
+  guard !name.is_empty() else {
+    raise ParseError("position \{name_start}: expected pattern name")
+  }
+  match name {
+    "let" | "s" | "note" | "chord" | "stack" | "song" =>
+      raise ParseError(
+        "position \{name_start}: reserved pattern name '\{name}'",
+      )
+    _ => ()
+  }
+  if self.bindings.contains(name) || self.doc_bindings.contains(name) {
+    raise ParseError("position \{name_start}: duplicate pattern '\{name}'")
+  }
+  self.skip_whitespace()
+  self.expect_char('=')
+  Some(name)
+}
+
+///|
+fn Parser::parse_bindings(self : Parser) -> Unit raise ParseError {
+  while self.read_binding_name() is Some(name) {
+    let value = self.parse_expr()
+    self.skip_whitespace()
+    self.expect_char(';')
+    self.bindings[name] = value
   }
 }

@@ -6,7 +6,10 @@
 // syntax tree and the source between cursor and the surrounding
 // String node.
 
-@top Program { DollarStack | Expression? }
+@top Program { Binding* (DollarStack | Expression?) }
+
+Binding { @specialize<identifier, "let"> BindingName "=" Expression ";" }
+BindingName { identifier }
 
 DollarStack { DollarLine+ }
 DollarLine { "$:" Expression }

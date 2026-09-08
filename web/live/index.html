@@ -497,6 +497,14 @@
           <em>f</em> = <code>fast(k)</code> | <code>slow(k)</code> | <code>rev</code>
         </p>
 
+        <h2>Named patterns</h2>
+        <p class="cheat-note"><code>let motif = note("E4 G4 A4").slow(3);</code><br>
+          Define patterns before use, ending each definition with a semicolon.
+          Use <code>stack(motif, s("bd"))</code> to group them.
+          Definitions work in both modes and before <code>$:</code> lines.
+          Changing a definition updates every use; duplicate names and recursive references are errors.
+        </p>
+
         <h2>Song mode</h2>
         <dl>
           <dt>song(…)</dt><dd>long-form sections; paste multiline blocks</dd>
@@ -509,6 +517,7 @@
         </p>
 
         <h2>Try it</h2>
+        <button type="button" class="example" data-example='let motif = note("E4 G4 A4").slow(3);&#10;let groove = stack(motif, s("bd").gain(0.3));&#10;groove'>Named motif + groove</button>
         <button type="button" class="example" data-mode="song" data-song-example="ode" data-bpm="72" data-example='song(&#10;  section(&#10;    "ode",&#10;    256,&#10;    stack(&#10;      s("bd").slow(4),&#10;      note("64 64 65 67&#10;67 65 64 62&#10;60 60 62 64&#10;64 62 62 62").slow(16)&#10;    )&#10;  ),&#10;  part("ode1", "ode")&#10;)'>song("ode" — multiline melody + kick, sets BPM 72)</button>
         <button type="button" class="example" data-example='chord("C")'>chord("C") — C major triad</button>
         <button type="button" class="example" data-example='chord("C Dm G7 C").slow(2)'>chord("C Dm G7 C").slow(2) — chord progression</button>

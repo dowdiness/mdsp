@@ -723,14 +723,25 @@ fn parse_doc_internal(
   tokens? : Array[MiniToken]? = None,
 ) -> Result[@pattern.PatternDoc[@pattern.ControlMap], String] {
   guard !input.is_empty() else { return Err("empty input") }
-  match mini_collect_dollar_stack_lines(input) {
-    Err(msg) => return Err(msg)
-    Ok(Some(lines)) =>
-      return parse_doc_dollar_stack_program(input, previous, lines, tokens~)
-    Ok(None) => ()
-  }
   let p = Parser::new(input)
   let builder = MiniDocBuilder::new(previous~, tokens~)
+  while (p.read_binding_name() catch { ParseError(msg) => return Err(msg) })
+        is Some(name) {
+    let value = p.parse_doc_expr(builder) catch {
+      ParseError(msg) => return Err(msg)
+    }
+    p.skip_whitespace()
+    p.expect_char(';') catch {
+      ParseError(msg) => return Err(msg)
+    }
+    p.doc_bindings[name] = value
+  }
+  match mini_collect_dollar_stack_lines(input, start=p.pos) {
+    Err(msg) => return Err(msg)
+    Ok(Some(lines)) =>
+      return parse_doc_dollar_stack_program(input, p, builder, lines)
+    Ok(None) => ()
+  }
   let result = p.parse_doc_expr(builder) catch {
     ParseError(msg) => return Err(msg)
   }
@@ -746,12 +757,10 @@ fn parse_doc_internal(
 ///|
 fn parse_doc_dollar_stack_program(
   input : String,
-  previous : @pattern.PatternDoc[@pattern.ControlMap]?,
+  parser : Parser,
+  builder : MiniDocBuilder,
   lines : Array[MiniDollarStackLine],
-  tokens? : Array[MiniToken]? = None,
 ) -> Result[@pattern.PatternDoc[@pattern.ControlMap], String] {
-  let parser = Parser::new(input)
-  let builder = MiniDocBuilder::new(previous~, tokens~)
   let args : Array[@pattern.PatternDoc[@pattern.ControlMap]] = []
   for line in lines {
     parser.pos = line.start
@@ -883,6 +892,24 @@ fn Parser::parse_doc_primary(
       builder,
       source_offset=content_start,
     )
+  }
+  let name = self.read_ident()
+  if !name.is_empty() {
+    match self.doc_bindings.get(name) {
+      Some(doc) => {
+        // PatternDoc is a tree with unique node IDs. Each use owns a leaf;
+        // the definition's immutable pattern is shared, not its document IDs.
+        let snapshot = doc.lower() catch {
+          _ => raise ParseError("internal named pattern lowering failed")
+        }
+        let id = builder.atom_id("binding", "\{name}:\{doc.root().value()}")
+        return @pattern.PatternDoc::from_pattern(id~, pat=snapshot.pat())
+      }
+      None =>
+        raise ParseError(
+          "position \{stack_start}: undefined pattern '\{name}'; define it before use",
+        )
+    }
   }
   raise ParseError(
     "position \{self.pos}: expected 's(', 'note(', 'chord(', or 'stack('",

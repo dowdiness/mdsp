@@ -10,7 +10,8 @@
     "verify:composition-authoring": "NEW_MOON_MOD=0 moon build cmd/composition_prepare --target js --release && node scripts/composition-definition-check.mjs",
     "prototype:composition": "NEW_MOON_MOD=0 moon build cmd/composition_prepare --target js --release && NEW_MOON_MOD=0 moon build browser/direct_audio --target js --release && python3 scripts/audio-profile-server.py",
     "prototype:composition-cli": "NEW_MOON_MOD=0 moon build cmd/composition_prepare --target js --release && node scripts/composition-prototype.mjs",
-    "verify:composition": "NEW_MOON_MOD=0 moon build cmd/composition_prepare --target js --release && node scripts/composition-check.mjs"
+    "verify:composition": "NEW_MOON_MOD=0 moon build cmd/composition_prepare --target js --release && node scripts/composition-check.mjs",
+    "verify:composition-filter": "node scripts/composition-filter-check.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

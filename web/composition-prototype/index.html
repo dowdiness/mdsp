@@ -7,6 +7,12 @@
 <h2>共有パターンを編集</h2><p id="preparation" role="status">準備待ちなし</p><label>パターン <select id="pattern"></select></label><p id="uses"></p>
 <label>構文<textarea id="expression" rows="3"></textarea></label><button id="edit">この定義を全参照へ反映</button>
 <p><small>準備が完了してから次の小節で反映します。鳴っている音は保持し、その後に始まる音へ変更を適用します。</small></p>
+<h2>共有ローパス</h2>
+<p>全パート → ローパス → 共有ディレイ。静穏／戦闘は4拍で移行します。</p>
+<button id="filter-auto">曲のフィルター展開に戻す</button>
+<label>目標周波数 Hz <input id="cutoff" type="number" min="80" max="12000" value="600"></label>
+<label>変化の長さ（拍） <input id="filter-beats" type="number" min="0.25" max="16" step="0.25" value="4"></label>
+<button id="filter-set">現在値から滑らかに変更</button><p id="filter-state">フィルター無効</p>
 <h2>展開とゲームイベント</h2><button id="calm">静穏 → suspension</button><button id="combat">戦闘 → confluence</button><button id="cancel">準備・予約を取り消す</button>
 <label>曲の開始位置 <select id="section"></select></label><label>セクション内の位置（拍） <input id="offset" type="number" min="0" step="0.25" value="0"></label><button id="score">このセクションから曲順へ戻る</button>
 <p><small>ゲームのSceneは先頭から繰り返します。曲順へ戻る操作は選んだセクション内の位置へ移動します。切替は次の小節、共有ディレイの余韻は保持します。</small></p>

@@ -1,3 +1,4 @@
+import {SharedLowpass,cutoffAt} from './filter.mjs';
 import * as engine from '../../_build/js/release/build/browser/direct_audio/direct_audio.js';
 import {initial, reduce, position, ownBundle, Q} from './model.mjs';
 import {SharedDelay} from './delay.mjs';
@@ -5,7 +6,7 @@ class Composition extends AudioWorkletProcessor {
   constructor(options) {
     super();
     if (sampleRate !== 48000 || !engine.initialize()) throw Error('48kHz required');
-    this.state = initial(); this.delay = new SharedDelay(); this.left = new Float64Array(Q); this.right = new Float64Array(Q);
+    this.state = initial(); this.delay = new SharedDelay(); this.filter = new SharedLowpass(); this.left = new Float64Array(Q); this.right = new Float64Array(Q);
     this.inbox = []; this.frame = null; this.paused = false; this.stopped = false; this.trace = []; this.events = [];
     this.frames = options.processorOptions?.captureFrames ?? 0; this.pcm = new Float32Array(this.frames);
     this.stats = {maxOnsets:0, maxCallbackMs:0, clockGaps:0, wetPeak:0};
@@ -51,6 +52,7 @@ class Composition extends AudioWorkletProcessor {
       for(const e of result.events) if(!engine.row(e.at,e.end,e.route,e.hz,e.gain,e.pan)) throw Error('row rejected');
       if(!engine.seal() || !engine.publish() || !engine.process()) throw Error('DSP stopped');
       for(let i=0;i<Q;i++){this.left[i]=engine.left(i);this.right[i]=engine.right(i);}
+      if(this.state.filter.enabled)this.filter.process(this.left,this.right,this.state.filter,this.state.active,at);
       l.set(this.left);this.delay.process(this.left,this.right);
       for(let i=0;i<Q;i++)this.stats.wetPeak=Math.max(this.stats.wetPeak,Math.abs(this.left[i]-l[i]));
       l.set(this.left);r.set(this.right);
@@ -58,7 +60,7 @@ class Composition extends AudioWorkletProcessor {
       this.stats.maxOnsets=Math.max(this.stats.maxOnsets,result.events.length);
       this.stats.maxCallbackMs=Math.max(this.stats.maxCallbackMs,Date.now()-start);
       if(result.decision === 'applied' || this.state.now % 4096 === 0) this.port.postMessage({kind:'status',sample:this.state.now,...position(this.state),revision:this.state.active.bundle.revision,
-        pending:this.state.pending && {at:this.state.pending.at,mode:this.state.pending.next.mode,revision:this.state.pending.next.bundle.revision},stats:this.stats,decision:result.decision,appliedAt:at,appliedMs:Date.now()});
+        pending:this.state.pending && {at:this.state.pending.at,mode:this.state.pending.next.mode,revision:this.state.pending.next.bundle.revision},filterHz:cutoffAt(this.state.filter,this.state.active,this.state.now),filterMode:this.state.filter.enabled?this.state.filter.mode:"off",stats:this.stats,decision:result.decision,appliedAt:at,appliedMs:Date.now()});
       if(this.frames && this.state.now >= this.frames)this.finish();
       return !this.stopped;
     }catch(error){this.port.postMessage({kind:'fatal',error:String(error)});this.stopped=true;return false;}

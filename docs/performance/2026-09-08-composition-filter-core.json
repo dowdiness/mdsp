@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "retargetStartsAtCurrentValue": true,
+  "midSectionTargetHz": 600,
+  "impulseAnalyticMatch": true,
+  "partitionInvariant": true,
+  "boundedOutput": true
+}

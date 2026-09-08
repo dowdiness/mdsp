@@ -51,7 +51,7 @@ async function start(captureFrames=0){
     const node=s.node=new AudioWorkletNode(ctx,'composition-prototype',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{captureFrames}});
     node.onprocessorerror=()=>fail(Error('audio processor error'));
     node.port.onmessage=async({data})=>{
-      if(data.kind==='status'){if(data.decision==='applied')record({kind:'applied',revision:data.revision,at:data.appliedAt,wallMs:data.appliedMs});s.latest=data;$('state').textContent=`${(data.sample/48000).toFixed(2)}秒 / ${data.mode} / ${data.scene}\n適用済み revision ${data.revision}\n予約 ${JSON.stringify(data.pending)}\n最大同時発音開始 ${data.stats.maxOnsets}`;}
+      if(data.kind==='status'){if(data.decision==='applied')record({kind:'applied',revision:data.revision,at:data.appliedAt,wallMs:data.appliedMs});s.latest=data;$('filter-state').textContent=`${data.filterMode}: ${Math.round(data.filterHz)} Hz`; $('state').textContent=`${(data.sample/48000).toFixed(2)}秒 / ${data.mode} / ${data.scene}\n適用済み revision ${data.revision}\n予約 ${JSON.stringify(data.pending)}\n最大同時発音開始 ${data.stats.maxOnsets}`;}
       else if(data.kind==='receipt'){record(data);s.requests.get(data.id)?.(data);s.requests.delete(data.id);}
       else if(data.kind==='interrupted'){$('error').textContent='音声時計が不連続になりました。保留から再開してください。';}
       else if(data.kind==='fatal')fail(Error(data.error));
@@ -62,7 +62,7 @@ async function start(captureFrames=0){
         const outputStats=ctx.playbackStats?.toJSON()??null;await ctx.close();s.closed=true;s.resolve({...data,outputStats,log:s.log});$('state').textContent='停止しました';
       }
     };
-    node.connect(ctx.destination);await ctx.resume();await prepare(structuredClone(doc));
+    node.connect(ctx.destination);await ctx.resume();await command({kind:'filter-score'});await prepare(structuredClone(doc));
   }catch(e){fail(e);throw e;}
 }
 const run=fn=>()=>Promise.resolve().then(fn).catch(e=>{$('error').textContent=String(e);});
@@ -70,5 +70,7 @@ $('start').onclick=run(()=>start());$('stop').onclick=run(()=>session?.node?.por
 $('resume').onclick=run(()=>command({kind:'resume'}));$('cancel').onclick=run(cancel);
 $('calm').onclick=run(()=>command({kind:'game',event:'calm'}));$('combat').onclick=run(()=>command({kind:'game',event:'combat'}));
 $('score').onclick=run(()=>command({kind:'score',section:$('section').value,offsetBeats:Number($('offset').value)}));
+$('filter-auto').onclick=run(()=>command({kind:'filter-score'}));
+$('filter-set').onclick=run(()=>command({kind:'filter',hz:Number($('cutoff').value),beats:Number($('filter-beats').value)}));
 $('edit').onclick=run(()=>{const next=structuredClone(doc);next.patterns[$('pattern').value]=$('expression').value;return prepare(next);});
 window.composition={start,command,cancel,edit:async(name,source)=>{if(!Object.hasOwn(doc.patterns,name))throw Error('unknown pattern');const next=structuredClone(doc);next.patterns[name]=source;return prepare(next);},get doc(){return structuredClone(doc);},get latest(){return session?.latest;},get result(){return session?.result;}};

@@ -1,9 +1,10 @@
+import {SharedLowpass,cutoffAt} from '../web/composition-prototype/filter.mjs';
 import assert from 'node:assert/strict';
 import {readFile,writeFile} from 'node:fs/promises';
 import * as engine from '../_build/js/release/build/browser/direct_audio/direct_audio.js';
 import {initial,reduce,ownBundle,Q} from '../web/composition-prototype/model.mjs';
 import {SharedDelay} from '../web/composition-prototype/delay.mjs';
-const stem=process.argv.includes('--definition')?'composition-definition-browser':'composition-browser';
+const stem=process.argv.includes('--filter')?'composition-filter-browser':process.argv.includes('--definition')?'composition-definition-browser':'composition-browser';
 const raw=JSON.parse(await readFile(`artifacts/audio-profile/${stem}.json`,'utf8'));
 const bytes=await readFile(`artifacts/audio-profile/${stem}.pcm`);
 if(process.argv.includes('--incremental')||process.argv.includes('--definition')) {
@@ -24,16 +25,17 @@ if(process.argv.includes('--incremental')||process.argv.includes('--definition')
 const pcm=new Float32Array(bytes.buffer,bytes.byteOffset,bytes.byteLength/4);
 assert.equal(raw.frames,864000);assert.equal(pcm.length,raw.frames);assert.equal(raw.error,'');assert.equal(raw.stats.clockGaps,0);
 let s=initial(),cursor=0,mismatches=0,resetBusDifference=0;
-const events=[],applied=[],delay=new SharedDelay();let resetDelay=new SharedDelay();
+const events=[],applied=[],delay=new SharedDelay();let resetDelay=new SharedDelay();const lowpass=new SharedLowpass();
 const l=new Float64Array(Q),r=new Float64Array(Q),nl=new Float64Array(Q),nr=new Float64Array(Q);
 assert.ok(engine.initialize());
 for(let at=0;at<raw.frames;at+=Q){
-  while(cursor<raw.trace.length&&raw.trace[cursor].at===at){const entry=raw.trace[cursor++];if(entry.action.kind==='install')entry.action.bundle=ownBundle(entry.action.bundle);const next=reduce(s,entry.action);assert.equal(next.decision,entry.decision);s=next.state;}
-  const result=reduce(s,{kind:'tick'});s=result.state;events.push(...result.events);
+  while(cursor<raw.trace.length&&raw.trace[cursor].at===at){const entry=raw.trace[cursor++];if(entry.action.kind==='install')entry.action.bundle=ownBundle(entry.action.bundle);const next=reduce(s,entry.action);assert.equal(next.decision,entry.decision);if(entry.action.kind==='install'&&s.active)assert.equal(next.state.filter,s.filter,'edit must preserve automation');s=next.state;}
+  const before=s.filter?.enabled?cutoffAt(s.filter,s.active,at):null;const result=reduce(s,{kind:'tick'});s=result.state;if(result.decision==='applied'&&before!==null)assert.ok(Math.abs(cutoffAt(s.filter,s.active,at)-before)<1e-8,'transition must start at current cutoff');events.push(...result.events);
   if(result.decision==='applied'){applied.push({at,mode:s.active.mode,revision:s.active.bundle.revision});resetDelay=new SharedDelay();}
   engine.begin();for(const e of result.events)assert.ok(engine.row(e.at,e.end,e.route,e.hz,e.gain,e.pan));
   assert.ok(engine.seal());assert.ok(engine.publish());assert.ok(engine.process());
   for(let i=0;i<Q;i++){l[i]=nl[i]=engine.left(i);r[i]=nr[i]=engine.right(i);}
+  if(s.filter?.enabled){lowpass.process(l,r,s.filter,s.active,at);nl.set(l);nr.set(r);}
   delay.process(l,r);resetDelay.process(nl,nr);
   for(let i=0;i<Q;i++){assert.ok(Number.isFinite(pcm[at+i]));if(pcm[at+i]!==Math.fround(l[i]))mismatches++;resetBusDifference=Math.max(resetBusDifference,Math.abs(l[i]-nl[i]));}
 }

@@ -15,15 +15,11 @@ priv enum PlaybackLayout {
 } derive(Eq)
 
 ///|
-priv struct PreparedPlaybackUpdate {
+priv struct PreparedPlayback {
   snapshots : Array[@scheduler.PlaybackSnapshot]
   layout : PlaybackLayout
   bpm : Double?
 }
-
-///|
-/// Audio-owner state. Preparation completes before this slot is replaced.
-let sched_pending_update : @ref.Ref[PreparedPlaybackUpdate?] = @ref.new(None)
 
 ///|
 fn song_layout(song : @song.Song[@pattern.ControlMap]) -> PlaybackLayout {
@@ -39,30 +35,6 @@ fn song_layout(song : @song.Song[@pattern.ControlMap]) -> PlaybackLayout {
       rate: o.section().scope().rate(),
     }),
   )
-}
-
-///|
-fn active_layout() -> PlaybackLayout? {
-  match sched_active_playback.val {
-    Some(ActivePattern(_)) => Some(PatternLayout)
-    Some(ActiveSong(songs)) => songs.get(0).map(song_layout)
-    Some(ActiveSnapshots(layout)) => Some(layout)
-    None => None
-  }
-}
-
-///|
-/// Deterministic admission policy. Restart remains an explicit operation.
-fn update_layout_error(
-  active : PlaybackLayout?,
-  next : PlaybackLayout,
-) -> String? {
-  match active {
-    None => Some("start playback before updating")
-    Some(previous) if previous != next =>
-      Some("playback mode or song layout changed; restart required")
-    Some(_) => None
-  }
 }
 
 ///|
@@ -91,13 +63,14 @@ fn song_update_snapshot(
 }
 
 ///|
-fn prepare_pattern_update(
+fn prepare_pattern(
   text : String,
-) -> Result[PreparedPlaybackUpdate, String] {
+  selectors : Array[SchedulerRouteSelector],
+) -> Result[PreparedPlayback, String] {
   match @mini.parse(text) {
     Err(msg) => Err(msg)
     Ok(pat) => {
-      let snapshots = route_patterns_for_current_routes(pat).map(pat => {
+      let snapshots = route_patterns(pat, selectors).map(pat => {
         @scheduler.PlaybackSnapshot::pattern(
           @pattern.PatternDoc::from_pattern(
             id=@identity.PatternNodeId::from_string("live:pattern"),
@@ -113,11 +86,14 @@ fn prepare_pattern_update(
 }
 
 ///|
-fn prepare_song_update(text : String) -> Result[PreparedPlaybackUpdate, String] {
+fn prepare_song(
+  text : String,
+  selectors : Array[SchedulerRouteSelector],
+) -> Result[PreparedPlayback, String] {
   match @mini.parse_song_with_bpm(text) {
     Err(msg) => Err(msg)
     Ok(parsed) =>
-      match route_songs_for_current_routes(parsed.song()) {
+      match route_songs(parsed.song(), selectors) {
         Err(msg) => Err(msg)
         Ok(songs) => {
           let snapshots = songs.map(song => {
@@ -136,46 +112,213 @@ fn prepare_song_update(text : String) -> Result[PreparedPlaybackUpdate, String] 
 }
 
 ///|
-fn stage_playback_update(
-  prepared : Result[PreparedPlaybackUpdate, String],
-) -> Int {
-  match prepared {
-    Err(msg) => set_scheduler_parse_error(msg)
-    Ok(next) =>
-      match update_layout_error(active_layout(), next.layout) {
-        Some(msg) => set_scheduler_parse_error(msg)
-        None => {
-          match next.bpm {
-            Some(bpm) =>
-              for route in sched_routes.val {
-                if route.pool.scheduler.bpm() != bpm {
-                  return set_scheduler_parse_error(
-                    "song tempo changed; restart required",
-                  )
-                }
-              }
-            None => ()
-          }
-          sched_pending_update.val = Some(next)
-          set_scheduler_parse_success()
-        }
+priv enum ApplyPolicy {
+  Continue
+  Restart
+}
+
+///|
+priv struct PendingPlayback {
+  playback : PreparedPlayback
+  policy : ApplyPolicy
+  tempo : Double?
+}
+
+///|
+priv struct PlaybackState {
+  active : PreparedPlayback?
+  pending : PendingPlayback?
+}
+
+///|
+/// Pure admission and transition; transport/voices are changed only by commit.
+fn queue_playback(
+  state : PlaybackState,
+  next : PreparedPlayback,
+  policy : ApplyPolicy,
+  bpm : Double,
+) -> Result[PlaybackState, String] {
+  match policy {
+    Continue => {
+      match state.active {
+        None => return Err("start playback before updating")
+        Some(active) if active.layout != next.layout =>
+          return Err("playback mode or song layout changed; restart required")
+        Some(_) => ()
       }
+      match next.bpm {
+        Some(tempo) if tempo != bpm =>
+          return Err("song tempo changed; restart required")
+        _ => ()
+      }
+    }
+    Restart => ()
+  }
+  Ok({
+    active: state.active,
+    pending: Some({
+      playback: next,
+      policy,
+      tempo: match policy {
+        Continue => None
+        Restart => next.bpm
+      },
+    }),
+  })
+}
+
+///|
+/// Restart uses the applied score, cancelling any pending replacement.
+fn restart_current(state : PlaybackState) -> Result[PlaybackState, String] {
+  match state.active {
+    None => Err("no applied playback to restart")
+    Some(active) =>
+      Ok({
+        active: state.active,
+        pending: Some({ playback: active, policy: Restart, tempo: None, }),
+      })
   }
 }
 
 ///|
-/// All routes are queued together before any route renders the next block.
-fn commit_playback_update() -> Unit {
-  match sched_pending_update.val {
+/// Audio-owner shell. Prepared tokens never cross the audio owner as objects.
+let playback_state : @ref.Ref[PlaybackState] = @ref.new({
+  active: None,
+  pending: None,
+})
+
+///|
+let prepared_slot : @ref.Ref[(Int, PreparedPlayback)?] = @ref.new(None)
+
+///|
+let prepared_sequence : @ref.Ref[Int] = @ref.new(0)
+
+///|
+fn reset_playback_state() -> Unit {
+  playback_state.val = { active: None, pending: None, }
+  prepared_slot.val = None
+  playback_input_chars.clear()
+}
+
+///|
+/// Retain at most one prepared result. Tokens prevent stale/failed preparation
+/// from applying an unrelated score. Zero signals preparation failure.
+fn retain_prepared(result : Result[PreparedPlayback, String]) -> Int {
+  prepared_slot.val = None
+  match result {
+    Err(message) => {
+      ignore(set_scheduler_parse_error(message))
+      0
+    }
+    Ok(prepared) => {
+      if prepared_sequence.val == 2147483647 {
+        ignore(set_scheduler_parse_error("prepared token space exhausted"))
+        return 0
+      }
+      prepared_sequence.val = prepared_sequence.val + 1
+      prepared_slot.val = Some((prepared_sequence.val, prepared))
+      ignore(set_scheduler_parse_success())
+      prepared_sequence.val
+    }
+  }
+}
+
+///|
+pub fn prepare_pattern_input() -> Int {
+  let text = input_chars_to_string(playback_input_chars)
+  playback_input_chars.clear()
+  if sched_routes.val.is_empty() {
+    return retain_prepared(Err("initialize playback before preparing"))
+  }
+  retain_prepared(
+    prepare_pattern(text, sched_routes.val.map(route => route.selector)),
+  )
+}
+
+///|
+pub fn prepare_song_input() -> Int {
+  let text = input_chars_to_string(playback_input_chars)
+  playback_input_chars.clear()
+  if sched_routes.val.is_empty() {
+    return retain_prepared(Err("initialize playback before preparing"))
+  }
+  retain_prepared(
+    prepare_song(text, sched_routes.val.map(route => route.selector)),
+  )
+}
+
+///|
+/// Successful application consumes the token and queues an atomic operation.
+pub fn apply_prepared_playback(token : Int, restart : Bool) -> Int {
+  match prepared_slot.val {
+    Some((id, prepared)) if id == token => {
+      let policy = if restart { Restart } else { Continue }
+      match
+        queue_playback(
+          playback_state.val,
+          prepared,
+          policy,
+          sched_routes.val[0].pool.scheduler.bpm(),
+        ) {
+        Err(message) => set_scheduler_parse_error(message)
+        Ok(next) => {
+          playback_state.val = next
+          prepared_slot.val = None
+          set_scheduler_parse_success()
+        }
+      }
+    }
+    _ =>
+      set_scheduler_parse_error("invalid or consumed prepared playback token")
+  }
+}
+
+///|
+pub fn discard_prepared_playback(token : Int) -> Bool {
+  match prepared_slot.val {
+    Some((id, _)) if id == token => {
+      prepared_slot.val = None
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+pub fn restart_playback() -> Int {
+  match restart_current(playback_state.val) {
+    Err(message) => set_scheduler_parse_error(message)
+    Ok(next) => {
+      playback_state.val = next
+      set_scheduler_parse_success()
+    }
+  }
+}
+
+///|
+/// The only playback commit/render entry. Reset and replacement precede
+/// every route's query, so no block can observe a partly reset score.
+fn commit_playback_request() -> Unit {
+  match playback_state.val.pending {
     None => ()
-    Some(next) => {
+    Some(request) => {
+      match request.policy {
+        Restart =>
+          for route in sched_routes.val {
+            route.pool.scheduler.reset_transport_and_kill_notes(route.pool.pool)
+          }
+        Continue => ()
+      }
+      match request.tempo {
+        Some(bpm) => set_scheduler_bpm(bpm)
+        None => ()
+      }
       for i in 0..<sched_routes.val.length() {
         sched_routes.val[i].pool.scheduler.queue_playback_snapshot(
-          next.snapshots[i],
+          request.playback.snapshots[i],
         )
       }
-      sched_active_playback.val = Some(ActiveSnapshots(next.layout))
-      sched_pending_update.val = None
+      playback_state.val = { active: Some(request.playback), pending: None, }
     }
   }
 }
@@ -196,21 +339,6 @@ fn process_snapshot_routes(
     )
     accumulate_sub_pool(sp, left, right)
   }
-}
-
-///|
-/// Successful return means prepared; application occurs on the next block.
-pub fn update_pattern_input() -> Int {
-  let text = input_chars_to_string(sched_pattern_input_chars)
-  sched_pattern_input_chars.clear()
-  stage_playback_update(prepare_pattern_update(text))
-}
-
-///|
-pub fn update_song_input() -> Int {
-  let text = input_chars_to_string(sched_song_input_chars)
-  sched_song_input_chars.clear()
-  stage_playback_update(prepare_song_update(text))
 }
 
 ///|

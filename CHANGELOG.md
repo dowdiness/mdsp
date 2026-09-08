@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking changes
 
+- Replaced browser eval/parse-and-set/update playback entry points and separate
+  pattern/song input/error buffers with a shared input buffer, token-returning
+  `prepare_pattern_input` / `prepare_song_input`, `apply_prepared_playback`,
+  `discard_prepared_playback`, and `restart_playback`. Worklet hosts must use
+  `apply-score` with an explicit continue/restart policy or `restart-playback`.
+  Success is acknowledged after rendering the committed block. Both shipped
+  browser hosts and the audio comparison fixture use the new contract; no
+  compatibility aliases remain. Treat this as a breaking browser source API
+  and worklet ABI change when choosing the next release version.
 - Removed legacy browser facade route shell types `SoundPool`,
   `SchedulerRouteSelector`, and `SchedulerRoute`. They existed only to keep an
   older leaked browser interface shape alive; runtime routing remains behind the

@@ -1,10 +1,15 @@
 ///|
 fn scheduler_probe_eval_pattern_for_test(text : String) -> Int {
-  clear_pattern_input()
+  clear_playback_input()
   for i in 0..<text.length() {
-    push_pattern_char(text[i].to_int())
+    push_playback_char(text[i].to_int())
   }
-  eval_pattern_input()
+  let token = prepare_pattern_input()
+  if token == 0 {
+    1
+  } else {
+    apply_prepared_playback(token, true)
+  }
 }
 
 ///|

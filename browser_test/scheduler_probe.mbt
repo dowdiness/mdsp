@@ -71,6 +71,8 @@ fn scheduler_probe_synth_template(
 
 ///|
 fn reset_scheduler_probe_graph() -> Unit {
+  scheduler_probe_prepared.val = None
+  scheduler_probe_pending.val = None
   scheduler_probe_runtime.val = None
   scheduler_probe_active_notes.val = None
   scheduler_probe_voices_started.val = false
@@ -170,42 +172,60 @@ fn scheduler_probe_pattern_notes(text : String) -> Array[Double]? {
 }
 
 ///|
-fn set_scheduler_probe_pattern_text(text : String) -> Int {
+let scheduler_probe_prepared : @ref.Ref[(Int, Array[Double])?] = @ref.new(None)
+
+///|
+let scheduler_probe_pending : @ref.Ref[Array[Double]?] = @ref.new(None)
+
+///|
+let scheduler_probe_sequence : @ref.Ref[Int] = @ref.new(0)
+
+///|
+pub fn clear_playback_input() -> Unit {
+  scheduler_probe_pattern_input_chars.clear()
+}
+
+///|
+pub fn push_playback_char(code : Int) -> Unit {
+  scheduler_probe_pattern_input_chars.push(code)
+}
+
+///|
+pub fn prepare_pattern_input() -> Int {
+  let text = scheduler_probe_input_chars_to_string(
+    scheduler_probe_pattern_input_chars,
+  )
+  scheduler_probe_pattern_input_chars.clear()
+  scheduler_probe_prepared.val = None
   match scheduler_probe_pattern_notes(text) {
     Some(notes) => {
-      match scheduler_probe_runtime.val {
-        Some(runtime) => runtime.pool.note_off_all()
-        None => ()
-      }
-      scheduler_probe_active_notes.val = Some(notes)
-      scheduler_probe_voices_started.val = false
+      scheduler_probe_sequence.val = scheduler_probe_sequence.val + 1
+      scheduler_probe_prepared.val = Some((scheduler_probe_sequence.val, notes))
       scheduler_probe_last_error.val = ""
-      0
+      scheduler_probe_sequence.val
     }
     None => {
       scheduler_probe_last_error.val = SCHEDULER_PROBE_UNSUPPORTED_PATTERN_ERROR
-      1
+      0
     }
   }
 }
 
 ///|
-pub fn clear_pattern_input() -> Unit {
-  scheduler_probe_pattern_input_chars.clear()
-}
-
-///|
-pub fn push_pattern_char(code : Int) -> Unit {
-  scheduler_probe_pattern_input_chars.push(code)
-}
-
-///|
-pub fn eval_pattern_input() -> Int {
-  let text = scheduler_probe_input_chars_to_string(
-    scheduler_probe_pattern_input_chars,
-  )
-  scheduler_probe_pattern_input_chars.clear()
-  set_scheduler_probe_pattern_text(text)
+/// The independent fixed-voice comparison fixture only accepts resetting apply.
+pub fn apply_prepared_playback(token : Int, restart : Bool) -> Int {
+  match scheduler_probe_prepared.val {
+    Some((id, notes)) if id == token && restart => {
+      scheduler_probe_pending.val = Some(notes)
+      scheduler_probe_prepared.val = None
+      scheduler_probe_last_error.val = ""
+      0
+    }
+    _ => {
+      scheduler_probe_last_error.val = "invalid probe apply"
+      1
+    }
+  }
 }
 
 ///|
@@ -231,6 +251,16 @@ fn scheduler_probe_start_notes(
 pub fn process_scheduler_block() -> Bool {
   match scheduler_probe_runtime.val {
     Some(runtime) => {
+      match scheduler_probe_pending.val {
+        Some(notes) => {
+          runtime.pool.note_off_all()
+          scheduler_probe_active_notes.val = Some(notes)
+          scheduler_probe_voices_started.val = false
+          scheduler_probe_pending.val = None
+        }
+        None => ()
+      }
+
       match scheduler_probe_active_notes.val {
         Some(notes) => {
           if !scheduler_probe_start_notes(runtime, notes) {
@@ -288,12 +318,12 @@ pub fn scheduler_right_sample(index : Int) -> Double {
 }
 
 ///|
-pub fn get_pattern_error_length() -> Int {
+pub fn get_playback_error_length() -> Int {
   scheduler_probe_last_error.val.length()
 }
 
 ///|
-pub fn get_pattern_error_char(index : Int) -> Int {
+pub fn get_playback_error_char(index : Int) -> Int {
   let message = scheduler_probe_last_error.val
   if index < 0 || index >= message.length() {
     0

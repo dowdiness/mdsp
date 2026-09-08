@@ -71,13 +71,11 @@ exit-deliverable graph:
 
 scheduler pattern/song playback:
   init_scheduler_graph, process_scheduler_block, scheduler_left_sample,
-  scheduler_right_sample, parse_and_set_pattern, clear_pattern_input,
-  push_pattern_char, eval_pattern_input, parse_and_set_song, clear_song_input,
-  push_song_char, eval_song_input, set_scheduler_bpm, set_scheduler_gain
-
-parse-error transport:
-  get_scheduler_parse_error, get_song_parse_error, get_pattern_error_length,
-  get_pattern_error_char, get_song_error_length, get_song_error_char
+  scheduler_right_sample, scheduler_sample_position, clear_playback_input,
+  push_playback_char, prepare_pattern_input, prepare_song_input,
+  apply_prepared_playback, discard_prepared_playback, restart_playback,
+  get_playback_error, get_playback_error_length, get_playback_error_char,
+  set_scheduler_bpm, set_scheduler_gain
 
 browser graph-error transport:
   get_browser_last_error, get_browser_error_code, get_browser_error_length,
@@ -131,34 +129,27 @@ browser-error update.
 
 ## Pattern/song parse protocol
 
-The scheduler text protocol returns stable `Int` result codes. The names below
-are documentation names for host code, not additional worklet exports.
+Preparation returns a positive token on success and zero on failure.
+Application and restart return `0` when accepted for the next block and `1`
+when rejected. Acceptance is not an application receipt. Errors update the
+shared playback diagnostic buffer while retaining applied and pending playback.
+`discard_prepared_playback` returns whether the supplied token was released.
 
-| Documentation name | Code | Meaning |
-| --- | --- | --- |
-| `MOONDSP_BROWSER_RESULT_OK` | `0` | Parse and routing succeeded. The parsed pattern or song became the active playback source, and the scheduler error buffer was cleared. |
-| `MOONDSP_BROWSER_RESULT_ERROR` | `1` | Parse or routing failed. The previous active playback source stayed in place, and the scheduler error buffer was updated. |
+Preparation and application are separate. Fill the shared input buffer and call
+`prepare_pattern_input` or `prepare_song_input` to obtain an opaque positive
+token. Zero means failure; the unified playback-error accessors expose the
+message. Preparation never resets or replaces the active score.
 
-No additional scheduler text result codes are reserved or emitted. Defensive
-hosts may treat any unknown nonzero value as failure, but only `0` and `1` have
-stable meanings.
+`apply_prepared_playback(token, restart)` consumes a valid token on success
+and queues one operation at the next audio block. `restart=false` preserves
+transport and voices; `restart=true` replaces and resets atomically.
+`discard_prepared_playback(token)` releases an unused prepared result.
+`restart_playback()` restarts the applied snapshot without parsing text and
+cancels pending replacements. Preparation results are audio-owner objects and
+are not transferable snapshots. Only one prepared token is retained at a time.
 
-`parse_and_set_pattern(text)` and `parse_and_set_song(text)` accept a whole
-string and return the result code directly. The `clear_*_input`, `push_*_char`,
-and `eval_*_input` functions provide the same protocol through a character-buffer
-path for hosts that stream text into the worklet.
-
-For JS and wasm-gc hosts, use the length/char transport:
-
-- Pattern errors: `get_pattern_error_length()` with
-  `get_pattern_error_char(i)`.
-- Song errors: `get_song_error_length()` with `get_song_error_char(i)`.
-
-These accessors return the last scheduler error message as UTF-16 code units.
-Out-of-range indices return `0`. `get_scheduler_parse_error()` and
-`get_song_parse_error()` read the same buffer and remain string-returning
-facade/worklet exports for compatibility. Direct string crossing is not the
-canonical JS/wasm-gc transport.
+See the technical reference's browser playback section for admission rules,
+error preservation, block receipts and the shared worklet protocol.
 
 ## Browser graph-error protocol
 

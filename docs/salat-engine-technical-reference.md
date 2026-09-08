@@ -1376,12 +1376,48 @@ Minimum set needed for a useful synthesizer (Phase 1-2):
 | **`incr`** | MoonBit library for incremental computation (Signal/Memo). Salsa-inspired. |
 | **CLAP** | Clever Audio Plugin format — modern alternative to VST3, designed for open-source |
 
-### Browser live updates
+### Browser playback preparation and application
 
-The existing `eval_pattern_input` / `eval_song_input` and parse-and-set APIs restart transport and kill old voices on successful replacement. `update_pattern_input` / `update_song_input` instead prepare all routed playback snapshots and stage them for the next `process_scheduler_block`. Updates require active playback with the same mode and song layout (occurrence identity, names, placement, length and time scope). An embedded BPM must equal the active tempo. Unsupported layout or tempo changes return a diagnostic requiring explicit restart. Errors leave both active playback and an already accepted pending update unchanged. A later successful preparation supersedes the pending update. Successful restart clears it.
+Playback uses a single routed snapshot render path. Preparation is separate from
+application: `clear_playback_input` / `push_playback_char` fill one UTF-16 input
+buffer, then `prepare_pattern_input` or `prepare_song_input` returns a positive
+opaque token (zero on failure). Preparation never changes active playback,
+transport, sounding voices, or an accepted pending operation. It replaces the
+single prepared-result slot; failures invalidate that slot. Tokens are consumed
+on successful application and can be discarded explicitly. Resetting the graph
+invalidates prepared tokens; token generations are not reused across resets.
 
-At block start, all routes receive the prepared snapshots before rendering. Clock position and existing voices are retained; past onsets are not backfilled. `scheduler_sample_position` exposes the next block position for commit acknowledgements. Parsing, routing and snapshot construction still happen in the audio owner; this change does not claim allocation-free preparation or solve output underruns.
+`apply_prepared_playback(token, restart)` queues the prepared score for the next
+block. Continuing application requires an applied score, identical mode/layout,
+and matching embedded BPM. Resetting application accepts mode/layout/tempo
+changes and atomically replaces all route snapshots, resets their clocks and
+kills old voices before querying any route. Failed application preserves active
+and pending playback and leaves the token available for retry or discard.
 
-The normal live editor uses updates for edits in the active mode. Start, mode changes, example selection, and **Restart from beginning** use restart semantics. The update reply is sent after the first block renders the replacement. Changes apply at audio-block boundaries, not bar boundaries. The separate global BPM control retains its existing behavior; phase-continuous tempo changes are outside this contract.
+`restart_playback` queues the applied snapshot at the beginning, without parsing
+or consulting the input/prepared slots. It cancels a pending replacement, keeps
+the current global BPM and fails without mutation if no score has been applied.
+The last accepted operation wins; preparation alone never supersedes one.
+Playing a finite score beyond its end renders existing release tails and then
+silence, until an explicit restart or another valid application. Continuing
+updates do not backfill past onsets. Suspending browser audio pauses rendering;
+queued operations apply on the next rendered block after resumption.
 
-The internal browser playback host imports the dependency-free identity package to assign pattern, section and layer IDs during snapshot preparation. IDs stay inside the prepared document boundary; the browser protocol continues to accept text and numeric revisions. This dependency does not add browser concerns to the pattern or scheduler packages.
+Both browser worklets accept `apply-score` with mode, text, revision and an
+explicit `continue` or `restart` policy; `restart-playback` carries only a request
+revision. They share one controller. Replaced requests receive
+`playback-superseded`. Success receipts are emitted after the first block renders
+and contain request/score revisions, `appliedAtSample` (the start of that block)
+and `samplePosition` (the next block). Errors preserve the pending receipt and
+identify their `phase`: `prepare`, `apply`, `restart`, or `protocol`.
+The normal UI offers **Restart current** separately from **Apply from beginning**.
+Old eval/parse-and-set/update APIs and their messages are removed, not wrapped.
+
+The playback host imports dependency-free identity types for snapshot IDs.
+Preparation/routing decisions use explicit route selectors; mutable prepared and
+pending slots, transport resets and voice lifecycle belong to the audio-owner
+shell. Snapshots remain inside WASM and are never transferred as JS objects.
+Parsing and lowering still allocate in that owner. Audio-block application is
+not bar quantization, and this contract does not promise freedom from underruns.
+The independent global BPM control retains its current non-phase-continuous
+behavior; continuous tempo changes and arbitrary seeks are outside this API.

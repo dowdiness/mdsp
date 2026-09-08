@@ -969,3 +969,39 @@ test "B7: VoicePool::new with missing Output returns CompileRejected" {
     Ok(_) => fail("expected Err(CompileRejected), got Ok")
   }
 }
+
+///|
+test "prepared pair rejects invalid steal and distinguishes absent pan" {
+  let ctx = DspContext::new(sample_rate=48000.0, block_size=4)
+  let pool = BoundVoicePool::new(
+    CompiledTemplate::analyze([DspNode::constant(1.0), DspNode::output(0)]),
+    ctx,
+    ControlBindingBuilder::new(),
+    max_voices=1,
+  ).unwrap()
+  let id = pool.note_on_prevalidated_pair_id(0, 2.0, -1, 0.0, true, -1.0)
+  assert_true(id >= 0L)
+  let left = AudioBuffer::filled(4)
+  let right = AudioBuffer::filled(4)
+  left.fill(0.0)
+  right.fill(0.0)
+  pool.process(ctx, left, right)
+  assert_eq(left.get(0), 2.0)
+  assert_true(
+    pool.note_on_prevalidated_pair_id(0, 3.0, 99, 1.0, false, 0.0) < 0L,
+  )
+  assert_true(
+    pool.note_on_prevalidated_pair_id(0, 3.0, -1, 0.0, true, 2.0) < 0L,
+  )
+  left.fill(0.0)
+  right.fill(0.0)
+  pool.process(ctx, left, right)
+  assert_eq(left.get(0), 2.0)
+  assert_true(
+    pool.note_on_prevalidated_pair_id(0, 2.0, -1, 0.0, true, 0.0) >= 0L,
+  )
+  left.fill(0.0)
+  right.fill(0.0)
+  pool.process(ctx, left, right)
+  assert_true(left.get(0) < 2.0 && left.get(0) > 1.0)
+}

@@ -3,12 +3,25 @@ package "dowdiness/moondsp/browser/internal/playback_host"
 
 import {
   "dowdiness/moondsp/graph",
+  "dowdiness/moondsp/pattern",
 }
 
 // Values
 pub fn clear_pattern_input() -> Unit
 
 pub fn clear_song_input() -> Unit
+
+pub fn direct_begin() -> Unit
+
+pub fn direct_process() -> Bool
+
+pub fn direct_publish() -> Bool
+
+pub fn direct_reset() -> Unit
+
+pub fn direct_row(Int, Int, Int, Double, Double, Double) -> Bool
+
+pub fn direct_seal() -> Bool
 
 pub fn eval_pattern_input() -> Int
 
@@ -32,7 +45,11 @@ pub fn parse_and_set_pattern(String) -> Int
 
 pub fn parse_and_set_song(String) -> Int
 
+pub fn prepare_pattern(@pattern.Pat[@pattern.ControlMap]) -> PreparedPattern?
+
 pub fn process_scheduler_block() -> Bool
+
+pub fn publish_pattern(PreparedPattern) -> Bool
 
 pub fn push_pattern_char(Int) -> Unit
 
@@ -51,8 +68,10 @@ pub fn set_scheduler_gain(Double) -> Unit
 // Errors
 
 // Types and methods
+pub struct PreparedPattern {
+  // private fields
+}
 
 // Type aliases
 
 // Traits
-

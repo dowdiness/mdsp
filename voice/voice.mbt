@@ -49,7 +49,7 @@ pub impl Show for VoiceHandle with fn output(self, logger) {
 ///|
 /// Construct a handle from primitive parts for host-side fixed storage.
 pub fn VoiceHandle::from_parts(slot~ : Int, generation~ : Int) -> VoiceHandle {
-  { slot, generation }
+  { slot, generation, }
 }
 
 ///|
@@ -356,7 +356,7 @@ pub fn BoundVoicePool::new(
     Err(error) => return Err(BoundVoicePoolError::from_voice_pool(error))
   }
   match bindings.build(compiled_template) {
-    Ok(bindings) => Ok({ pool, bindings })
+    Ok(bindings) => Ok({ pool, bindings, })
     Err(error) => Err(BoundVoicePoolError::Binding(error))
   }
 }
@@ -1075,4 +1075,41 @@ pub fn VoicePool::process(
   }
   self.last_sanitized_count = @dsp.sanitize_buffer(left_output, sample_count) +
     @dsp.sanitize_buffer(right_output, sample_count)
+}
+
+///|
+/// Prototype fixed-template path: one required gain parameter, one optional
+/// oscillator parameter, and explicit pan presence. Reject before touching a voice.
+pub fn BoundVoicePool::note_on_prevalidated_pair_id(
+  self : BoundVoicePool,
+  node0 : Int,
+  value0 : Double,
+  node1 : Int,
+  value1 : Double,
+  has_pan : Bool,
+  pan : Double,
+) -> Int64 {
+  let pool = self.pool
+  let index = pool.find_slot()
+  let slot = pool.slots[index]
+  let compiled = match slot.compiled {
+    Some(c) if slot.template_generation == pool.template_generation => c
+    _ => return -1L
+  }
+  if !compiled.can_set_param_bool(node0, @graph.GraphParamSlot::Value0, value0) ||
+    (
+      node1 >= 0 &&
+      !compiled.can_set_param_bool(node1, @graph.GraphParamSlot::Value0, value1)
+    ) ||
+    (has_pan && !(pan >= -1.0 && pan <= 1.0)) {
+    return -1L
+  }
+  compiled.reset_runtime_state()
+  ignore(compiled.set_param_bool(node0, @graph.GraphParamSlot::Value0, value0))
+  if node1 >= 0 {
+    ignore(
+      compiled.set_param_bool(node1, @graph.GraphParamSlot::Value0, value1),
+    )
+  }
+  pool.activate_slot(slot, index, compiled, has_pan, pan)
 }

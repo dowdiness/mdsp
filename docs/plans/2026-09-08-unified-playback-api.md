@@ -61,7 +61,7 @@
 - `moon check --target all`、release wasm-gc build、通常画面のTypeScript/Vite buildは成功。
 - 通常画面26件、デモ・音声比較・共有controllerの実WASM検証24件は成功。
 - 再生hostの状態テスト12件、比較fixtureのテスト7件は成功。
-- JS全体は1,068件中1,064件成功、4件失敗。mainでも確認された `graph/graph_property_test.mbt` の548・561・987・1125行のmono feedbackプロパティテストであり、全体成功とは扱わない。
+- 全体テストはJS・wasm-gc・nativeの各ターゲットで1,069件すべて成功。seedの整数境界値を含む生成器の回帰テストを含む。
 - public/architecture/incr/parity/browser ABIの境界チェック5種類は成功。
 - CLAP smokeは成功。validatorは21件中13成功、8スキップ、失敗0。実DAWでのロード確認を意味しない。
 - 既存ベンチマーク59件は成功。12セクション曲の準備はp95が3.3msで音声ブロックの2.667msを超え、リアルタイム性の制約が残る。
@@ -71,3 +71,12 @@
 名前付きパターン、小節構文・小節境界の反映、ゲーム向け遷移規則、Worker移行、エフェクト、連続テンポ、任意位置へのseekは別の作業とする。schedulerの低水準pattern/song query APIは独立したライブラリ用途があるため、このbrowser再生統一で機械的に削除しない。
 
 グローバルBPM操作は従来の非連続な位相挙動を持つ。解析・snapshot生成はaudio owner内でメモリ確保を伴う。これらを解消したという主張はしない。
+
+### 全体テスト失敗の修正
+
+4件のmono feedbackプロパティテスト失敗は、32bit整数最小値に対する
+テスト生成器の `abs()` が負数のままになり、最大ディレイ長に負数を渡すことが原因だった。
+製品のcompile validationはこの不正値を正しく拒否していた。
+全生成器と関連するseed由来パラメーターを、符号付き整数全域で安全な正規化へ変更した。
+境界値とトポロジーの各variantを直接検査し、生成失敗をスキップしない回帰テストを追加した。
+JS・wasm-gc・nativeの全体テストをCIに追加し、PRで検出する。

@@ -20,12 +20,23 @@ const PROP_BLOCK_SIZE : Int = 128
 const PROP_NUM_BLOCKS : Int = 3
 
 ///|
+/// Map both signed halves onto 0..Int::max_value without overflowing at
+/// Int::min_value. abs() cannot represent that value's positive magnitude.
+fn prop_seed(seed : Int) -> Int {
+  if seed < 0 {
+    -(seed + 1)
+  } else {
+    seed
+  }
+}
+
+///|
 /// Waveform options for random selection.
 const PROP_WAVEFORM_COUNT : Int = 4
 
 ///|
 fn prop_waveform(seed : Int) -> Waveform {
-  match seed.abs() % PROP_WAVEFORM_COUNT {
+  match prop_seed(seed) % PROP_WAVEFORM_COUNT {
     0 => Waveform::Sine
     1 => Waveform::Saw
     2 => Waveform::Square
@@ -39,7 +50,7 @@ const PROP_BIQUAD_MODE_COUNT : Int = 3
 
 ///|
 fn prop_biquad_mode(seed : Int) -> BiquadMode {
-  match seed.abs() % PROP_BIQUAD_MODE_COUNT {
+  match prop_seed(seed) % PROP_BIQUAD_MODE_COUNT {
     0 => BiquadMode::LowPass
     1 => BiquadMode::HighPass
     _ => BiquadMode::BandPass
@@ -54,7 +65,7 @@ fn prop_biquad_mode(seed : Int) -> BiquadMode {
 /// biquad, delay) to an Output node. Every generated graph compiles
 /// successfully — the test aborts on compilation failure.
 fn gen_mono_graph(seed : Int) -> Array[DspNode] {
-  let s = seed.abs()
+  let s = prop_seed(seed)
   let nodes : Array[DspNode] = []
   // Source node selection
   let source_kind = s % 4
@@ -135,7 +146,7 @@ fn gen_mono_graph(seed : Int) -> Array[DspNode] {
 /// Builds a mono chain, then adds Pan → optional stereo processors →
 /// StereoOutput.
 fn gen_stereo_graph(seed : Int) -> Array[DspNode] {
-  let s = seed.abs()
+  let s = prop_seed(seed)
   let nodes : Array[DspNode] = []
   // Source node: oscillator or noise
   let source_kind = s % 3
@@ -208,7 +219,7 @@ fn gen_stereo_graph(seed : Int) -> Array[DspNode] {
 ///|
 /// Generate a valid graph with two mixed sources from a seed.
 fn gen_binary_graph(seed : Int) -> Array[DspNode] {
-  let s = seed.abs()
+  let s = prop_seed(seed)
   let nodes : Array[DspNode] = []
   // Source A
   let freq_a = 110.0 + (s % 440).to_double()
@@ -246,7 +257,7 @@ fn gen_binary_graph(seed : Int) -> Array[DspNode] {
 ///|
 /// Generate a graph with ADSR envelope (stateful, time-varying).
 fn gen_adsr_graph(seed : Int) -> Array[DspNode] {
-  let s = seed.abs()
+  let s = prop_seed(seed)
   let attack_ms = 0.5 + (s % 10).to_double() * 0.5
   let decay_ms = 0.5 + (s / 3 % 10).to_double() * 0.5
   let sustain = 0.1 + (s / 7 % 9).to_double() * 0.1
@@ -267,7 +278,7 @@ fn gen_adsr_graph(seed : Int) -> Array[DspNode] {
 /// where Gain feeds back to Mix's input1 via a z^-1 back-edge.
 /// The gain is clamped to (0, 1) to keep the feedback stable.
 fn gen_mono_feedback_graph(seed : Int) -> Array[DspNode] {
-  let s = seed.abs()
+  let s = prop_seed(seed)
   let constant_val = 0.1 + (s % 9).to_double() * 0.1
   // Feedback gain in (0, 0.95) — stable range
   let feedback_gain = 0.05 + (s % 18).to_double() * 0.05
@@ -328,7 +339,7 @@ fn gen_mono_feedback_graph(seed : Int) -> Array[DspNode] {
 ///          → StereoMixDown → Output(Gain)
 /// The StereoMixDown feeds back to Mix's input1 crossing the mono/stereo boundary.
 fn gen_stereo_feedback_graph(seed : Int) -> Array[DspNode] {
-  let s = seed.abs()
+  let s = prop_seed(seed)
   let constant_val = 0.1 + (s % 9).to_double() * 0.1
   let feedback_gain = 0.05 + (s % 18).to_double() * 0.05
   let stereo_gain_val = 0.1 + (s / 3 % 9).to_double() * 0.1
@@ -561,7 +572,7 @@ test "prop: mono feedback cycle — compile twice, process identically" {
 test "prop: mono feedback cycle — runtime retune is deterministic" {
   @qc.quick_check_fn(
     fn(seed : Int) {
-      let s = seed.abs()
+      let s = prop_seed(seed)
       let nodes = gen_mono_feedback_graph(s)
       let context = DspContext::new(
         sample_rate=PROP_SAMPLE_RATE,
@@ -629,7 +640,7 @@ test "prop: stereo feedback cycle — compile twice, process identically" {
 test "prop: mono hot-swap — same swap sequence produces identical output" {
   @qc.quick_check_fn(
     fn(seed : Int) {
-      let s = seed.abs()
+      let s = prop_seed(seed)
       let nodes_initial = gen_mono_graph(s)
       let nodes_replacement = gen_mono_graph(s + 1000)
       let context = DspContext::new(
@@ -676,7 +687,7 @@ test "prop: mono hot-swap — same swap sequence produces identical output" {
 test "prop: stereo hot-swap — same swap sequence produces identical output" {
   @qc.quick_check_fn(
     fn(seed : Int) {
-      let s = seed.abs()
+      let s = prop_seed(seed)
       let nodes_initial = gen_stereo_graph(s)
       let nodes_replacement = gen_stereo_graph(s + 1000)
       let context = DspContext::new(
@@ -731,7 +742,7 @@ test "prop: stereo hot-swap — same swap sequence produces identical output" {
 test "prop: runtime param update is deterministic across compilations" {
   @qc.quick_check_fn(
     fn(seed : Int) {
-      let s = seed.abs()
+      let s = prop_seed(seed)
       let freq = 200.0 + (s % 600).to_double()
       let gain_val = 0.1 + (s % 9).to_double() * 0.1
       let new_gain = 0.05 + (s / 7 % 9).to_double() * 0.1
@@ -778,7 +789,7 @@ test "prop: runtime param update is deterministic across compilations" {
 test "prop: runtime control variants are deterministic" {
   @qc.quick_check_fn(
     fn(seed : Int) {
-      let s = seed.abs()
+      let s = prop_seed(seed)
       let variant = s % 3
       let context = DspContext::new(
         sample_rate=PROP_SAMPLE_RATE,
@@ -1187,4 +1198,37 @@ test "prop: debug mode equals production for stereo feedback graphs" {
     },
     max_success=200,
   )
+}
+
+///|
+test "graph generators compile at signed seed boundaries and topology variants" {
+  let context = DspContext::new(
+    sample_rate=PROP_SAMPLE_RATE,
+    block_size=PROP_BLOCK_SIZE,
+  )
+  for seed in [-2147483648, -3, -2, -1, 0, 1, 2, 2147483647] {
+    for
+      generate in [
+        gen_mono_graph, gen_binary_graph, gen_adsr_graph, gen_mono_feedback_graph,
+      ] {
+      match
+        CompiledDsp::compile_result(
+          CompiledTemplate::analyze(generate(seed)),
+          context,
+        ) {
+        Ok(_) => ()
+        Err(error) => fail("mono seed \{seed}: \{error}")
+      }
+    }
+    for generate in [gen_stereo_graph, gen_stereo_feedback_graph] {
+      match
+        CompiledStereoDsp::compile_result(
+          CompiledTemplate::analyze(generate(seed)),
+          context,
+        ) {
+        Ok(_) => ()
+        Err(error) => fail("stereo seed \{seed}: \{error}")
+      }
+    }
+  }
 }

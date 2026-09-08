@@ -91,3 +91,16 @@ fn assert_position(position : Int) -> Unit raise {
     assert_eq(route.pool.scheduler.sample_counter(), position.to_int64())
   }
 }
+
+///|
+fn test_song(length~ : Int, bpm~ : Int) -> String {
+  "song(bpm(\{bpm}),section(\"a\",\{length},note(\"60\")),part(\"a1\",\"a\"))"
+}
+
+///|
+// All routes must observe the same tempo at the commit boundary.
+fn assert_tempo(bpm : Double) -> Unit raise {
+  for route in sched_routes.val {
+    assert_eq(route.pool.scheduler.bpm(), bpm)
+  }
+}

@@ -8,6 +8,7 @@ pub(all) suberror PatternDocError {
 ///|
 priv enum PatternDocNode[A] {
   Runtime(Pat[A])
+  Reference(PatternDoc[A])
   Silence
   Pure(A)
   Fast(@identity.PatternNodeId, Rational)
@@ -47,6 +48,7 @@ fn next_pattern_node_generation() -> Int64 {
 fn[A] PatternDocNode::snapshot(self : PatternDocNode[A]) -> PatternDocNode[A] {
   match self {
     Runtime(pat) => Runtime(pat)
+    Reference(definition) => Reference(definition)
     Silence => Silence
     Pure(value) => Pure(value)
     Fast(child, factor) => Fast(child, factor)
@@ -191,6 +193,15 @@ fn[A] pattern_node_cache_token_memoized(
         Some(entry) => {
           let token : Array[Int64] = [entry.generation]
           match entry.node {
+            Reference(definition) =>
+              append_pattern_cache_token(
+                token,
+                pattern_node_cache_token_memoized(
+                  definition.nodes,
+                  definition.root,
+                  {},
+                ),
+              )
             Runtime(_) | Silence | Pure(_) => ()
             Fast(child, _)
             | Slow(child, _)
@@ -253,6 +264,7 @@ fn[A] copy_reachable_pattern_nodes(
     Some(entry) => {
       target[key] = entry.snapshot()
       match entry.node {
+        Reference(_) => ()
         Runtime(_) | Silence | Pure(_) => ()
         Fast(child, _)
         | Slow(child, _)
@@ -290,6 +302,8 @@ fn[A] pattern_node_revision_memoized(
         Some(entry) => {
           let mut revision = entry.revision
           match entry.node {
+            Reference(definition) =>
+              revision = revision.combine(definition.revision)
             Runtime(_) | Silence | Pure(_) => ()
             Fast(child, _)
             | Slow(child, _)
@@ -335,7 +349,7 @@ fn[A] PatternSnapshotEvent::PatternSnapshotEvent(
   event~ : Event[A],
   pattern_nodes~ : Array[@identity.PatternNodeId],
 ) -> PatternSnapshotEvent[A] {
-  { event, pattern_nodes: pattern_nodes.copy() }
+  { event, pattern_nodes: pattern_nodes.copy(), }
 }
 
 ///|
@@ -412,6 +426,13 @@ fn[A] append_reachable_pattern_source_ids(
       seen[key] = true
       result.push(id)
       match entry.node {
+        Reference(definition) =>
+          append_reachable_pattern_source_ids(
+            definition.nodes,
+            definition.root,
+            result,
+            {},
+          )
         Runtime(_) | Silence | Pure(_) => ()
         Fast(child, _)
         | Slow(child, _)
@@ -477,7 +498,7 @@ fn[A] retime_pattern_snapshot_event(
 ) -> PatternSnapshotEvent[A] {
   let event = source.event()
   PatternSnapshotEvent(
-    event={ whole, part, value: event.value },
+    event={ whole, part, value: event.value, },
     pattern_nodes=source.pattern_nodes(),
   )
 }
@@ -708,16 +729,58 @@ fn[A] query_opaque_pattern_source(
 fn[A] lower_sourced_pattern_node(
   nodes : Map[String, PatternDocEntry[A]],
   id : @identity.PatternNodeId,
+  cache : PatternLoweringCache[A],
+  memo : Map[Int64, Array[(Array[Int64], SourcedPat[A])]],
+) -> SourcedPat[A] raise PatternDocError {
+  let entry = match nodes.get(id.value()) {
+    Some(entry) => entry
+    None => raise MissingNode(id.value())
+  }
+  let token = pattern_node_cache_token_memoized(nodes, id, {})
+  let entries = match memo.get(entry.generation) {
+    Some(entries) => entries
+    None => []
+  }
+  for entry in entries {
+    if pattern_cache_token_equal(entry.0, token) {
+      return entry.1
+    }
+  }
+  let pat = lower_sourced_pattern_node_uncached(nodes, id, cache, memo)
+  entries.push((token, pat))
+  memo[entry.generation] = entries
+  pat
+}
+
+///|
+fn[A] lower_sourced_pattern_node_uncached(
+  nodes : Map[String, PatternDocEntry[A]],
+  id : @identity.PatternNodeId,
+  cache : PatternLoweringCache[A],
+  memo : Map[Int64, Array[(Array[Int64], SourcedPat[A])]],
 ) -> SourcedPat[A] raise PatternDocError {
   match nodes.get(id.value()) {
     None => raise MissingNode(id.value())
     Some(entry) =>
       match entry.node {
+        Reference(definition) => {
+          let target = lower_sourced_pattern_node(
+            definition.nodes,
+            definition.root,
+            cache,
+            memo,
+          )
+          {
+            query: fn(arc) {
+              target.query(arc).map(event => prepend_pattern_source(event, id))
+            },
+          }
+        }
         Runtime(pat) => {
           let path = pattern_source_path(id)
-          { query: fn(arc) { query_opaque_pattern_source(pat, path, arc) } }
+          { query: fn(arc) { query_opaque_pattern_source(pat, path, arc) }, }
         }
-        Silence => { query: fn(_arc) { [] } }
+        Silence => { query: fn(_arc) { [] }, }
         Pure(value) =>
           {
             query: fn(arc) {
@@ -727,24 +790,24 @@ fn[A] lower_sourced_pattern_node(
             },
           }
         Fast(child, factor) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
-          { query: fn(arc) { query_sourced_fast(child_pat, id, arc, factor) } }
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
+          { query: fn(arc) { query_sourced_fast(child_pat, id, arc, factor) }, }
         }
         Slow(child, factor) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
           if factor.num <= 0L {
-            { query: fn(_arc) { [] } }
+            { query: fn(_arc) { [] }, }
           } else {
             let inv = Rational::new(1L, 1L) / factor
-            { query: fn(arc) { query_sourced_fast(child_pat, id, arc, inv) } }
+            { query: fn(arc) { query_sourced_fast(child_pat, id, arc, inv) }, }
           }
         }
         Rev(child) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
-          { query: fn(arc) { query_sourced_rev(child_pat, id, arc) } }
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
+          { query: fn(arc) { query_sourced_rev(child_pat, id, arc) }, }
         }
         FilterMap(child, f) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
           {
             query: fn(arc) {
               child_pat
@@ -754,7 +817,7 @@ fn[A] lower_sourced_pattern_node(
                 f(raw.value).map(value => {
                   prepend_pattern_source(
                     PatternSnapshotEvent(
-                      event={ whole: raw.whole, part: raw.part, value },
+                      event={ whole: raw.whole, part: raw.part, value, },
                       pattern_nodes=event.pattern_nodes(),
                     ),
                     id,
@@ -765,7 +828,7 @@ fn[A] lower_sourced_pattern_node(
           }
         }
         Euclid(child, k, n, rotation) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
           {
             query: fn(arc) {
               query_sourced_euclid(child_pat, id, arc, k, n, rotation)
@@ -773,7 +836,7 @@ fn[A] lower_sourced_pattern_node(
           }
         }
         DegradeBy(child, p, seed) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
           let prob = if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p }
           {
             query: fn(arc) {
@@ -795,8 +858,8 @@ fn[A] lower_sourced_pattern_node(
           }
         }
         Every(child, n, f) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child)
-          let raw_child = lower_pattern_node(nodes, child)
+          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
+          let raw_child = lower_pattern_node_cached(nodes, child, cache, {}, {})
           let fallback_path = pattern_source_path_for_opaque_children(
             nodes,
             id,
@@ -835,7 +898,7 @@ fn[A] lower_sourced_pattern_node(
           }
         }
         Jux(child, f) => {
-          let raw_child = lower_pattern_node(nodes, child)
+          let raw_child = lower_pattern_node_cached(nodes, child, cache, {}, {})
           let fallback = f(raw_child)
           let fallback_path = pattern_source_path_for_opaque_children(
             nodes,
@@ -850,8 +913,8 @@ fn[A] lower_sourced_pattern_node(
         }
         MergeControl(left, right, f) => {
           let fallback = f(
-            lower_pattern_node(nodes, left),
-            lower_pattern_node(nodes, right),
+            lower_pattern_node_cached(nodes, left, cache, {}, {}),
+            lower_pattern_node_cached(nodes, right, cache, {}, {}),
           )
           let fallback_path = pattern_source_path_for_opaque_children(
             nodes,
@@ -866,7 +929,9 @@ fn[A] lower_sourced_pattern_node(
         }
         Sequence(children) => {
           let sourced_children = [
-            for child in children => lower_sourced_pattern_node(nodes, child)
+            for child in children => {
+              lower_sourced_pattern_node(nodes, child, cache, memo)
+            }
           ]
           {
             query: fn(arc) { query_sourced_sequence(sourced_children, id, arc) },
@@ -874,7 +939,9 @@ fn[A] lower_sourced_pattern_node(
         }
         Stack(children) => {
           let sourced_children = [
-            for child in children => lower_sourced_pattern_node(nodes, child)
+            for child in children => {
+              lower_sourced_pattern_node(nodes, child, cache, memo)
+            }
           ]
           {
             query: fn(arc) {
@@ -890,42 +957,6 @@ fn[A] lower_sourced_pattern_node(
             },
           }
         }
-      }
-  }
-}
-
-///|
-fn[A] lower_pattern_node(
-  nodes : Map[String, PatternDocEntry[A]],
-  id : @identity.PatternNodeId,
-) -> Pat[A] raise PatternDocError {
-  match nodes.get(id.value()) {
-    None => raise MissingNode(id.value())
-    Some(entry) =>
-      match entry.node {
-        Runtime(pat) => pat
-        Silence => Pat::silence()
-        Pure(value) => Pat::pure(value)
-        Fast(child, factor) => lower_pattern_node(nodes, child).fast(factor)
-        Slow(child, factor) => lower_pattern_node(nodes, child).slow(factor)
-        Rev(child) => lower_pattern_node(nodes, child).rev()
-        FilterMap(child, f) => lower_pattern_node(nodes, child).filter_map(f)
-        Euclid(child, k, n, rotation) =>
-          lower_pattern_node(nodes, child).euclid(k, n, rotation~)
-        DegradeBy(child, p, seed) =>
-          lower_pattern_node(nodes, child).degrade_by(p, seed~)
-        Every(child, n, f) => every(n, f, lower_pattern_node(nodes, child))
-        Jux(child, f) => f(lower_pattern_node(nodes, child))
-        MergeControl(left, right, f) =>
-          f(lower_pattern_node(nodes, left), lower_pattern_node(nodes, right))
-        Sequence(children) =>
-          sequence(
-            [
-              for child in children => lower_pattern_node(nodes, child)
-            ],
-          )
-        Stack(children) =>
-          stack([ for child in children => lower_pattern_node(nodes, child) ])
       }
   }
 }
@@ -952,7 +983,7 @@ pub struct PatternLoweringCache[A] {
 
 ///|
 pub fn[A] PatternLoweringCache::new() -> PatternLoweringCache[A] {
-  { entries: {}, hits: 0, misses: 0 }
+  { entries: {}, hits: 0, misses: 0, }
 }
 
 ///|
@@ -991,16 +1022,16 @@ fn[A] PatternLoweringCache::store(
 ) -> Unit {
   let key = id.value()
   match self.entries.get(key) {
-    None => self.entries[key] = [{ token: token.copy(), revision, pat }]
+    None => self.entries[key] = [{ token: token.copy(), revision, pat, }]
     Some(entries) => {
       for index in 0..<entries.length() {
         if pattern_cache_token_equal(entries[index].token, token) &&
           entries[index].revision == revision {
-          entries[index] = { token: token.copy(), revision, pat }
+          entries[index] = { token: token.copy(), revision, pat, }
           return
         }
       }
-      entries.push({ token: token.copy(), revision, pat })
+      entries.push({ token: token.copy(), revision, pat, })
     }
   }
 }
@@ -1022,6 +1053,14 @@ fn[A] lower_pattern_node_cached(
         None => raise MissingNode(id.value())
         Some(entry) =>
           match entry.node {
+            Reference(definition) =>
+              lower_pattern_node_cached(
+                definition.nodes,
+                definition.root,
+                cache,
+                {},
+                {},
+              )
             Runtime(pat) => pat
             Silence => Pat::silence()
             Pure(value) => Pat::pure(value)
@@ -1247,7 +1286,7 @@ pub fn[A] PatternDoc::revision(self : PatternDoc[A]) -> @identity.Revision {
 /// `fingerprint`); it is NOT load-bearing because `backdate_equal` is
 /// overridden below to drive the acceptance decision directly.
 pub impl[A] @types.HasChangedAt for PatternDoc[A] with fn changed_at(self) -> @types.Revision {
-  @types.Revision::{ value: self.revision.value().to_int() }
+  @types.Revision::{ value: self.revision.value().to_int(), }
 }
 
 ///|
@@ -1283,7 +1322,7 @@ pub fn[A] PatternDoc::subdoc(
 ) -> PatternDoc[A] raise PatternDocError {
   let nodes : Map[String, PatternDocEntry[A]] = {}
   copy_reachable_pattern_nodes(self.nodes, root, nodes)
-  { root, revision: pattern_node_revision(nodes, root), nodes }
+  { root, revision: pattern_node_revision(nodes, root), nodes, }
 }
 
 ///|
@@ -1298,12 +1337,7 @@ pub fn[A] PatternDoc::node_revision(
 pub fn[A] PatternDoc::lower(
   self : PatternDoc[A],
 ) -> PatternSnapshot[A] raise PatternDocError {
-  {
-    root: self.root,
-    revision: self.revision,
-    pat: lower_pattern_node(self.nodes, self.root),
-    sourced: lower_sourced_pattern_node(self.nodes, self.root),
-  }
+  self.lower_with_cache(PatternLoweringCache::new())
 }
 
 ///|
@@ -1323,7 +1357,7 @@ pub fn[A] PatternDoc::lower_with_cache(
       revision_memo,
       token_memo,
     ),
-    sourced: lower_sourced_pattern_node(self.nodes, self.root),
+    sourced: lower_sourced_pattern_node(self.nodes, self.root, cache, {}),
   }
 }
 
@@ -1350,7 +1384,7 @@ pub fn[A] PatternDoc::replace_with_pattern(
 ) -> PatternDoc[A] raise PatternDocError {
   let nodes = copy_pattern_nodes(self.nodes)
   replace_pattern_node(nodes, id, Runtime(pat))
-  { root: self.root, revision: self.revision.next(), nodes }
+  { root: self.root, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1360,7 +1394,7 @@ pub fn[A] PatternDoc::replace_with_silence(
 ) -> PatternDoc[A] raise PatternDocError {
   let nodes = copy_pattern_nodes(self.nodes)
   replace_pattern_node(nodes, id, Silence)
-  { root: self.root, revision: self.revision.next(), nodes }
+  { root: self.root, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1371,7 +1405,7 @@ pub fn[A] PatternDoc::replace_with_pure(
 ) -> PatternDoc[A] raise PatternDocError {
   let nodes = copy_pattern_nodes(self.nodes)
   replace_pattern_node(nodes, id, Pure(value))
-  { root: self.root, revision: self.revision.next(), nodes }
+  { root: self.root, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1387,7 +1421,7 @@ pub fn[A] PatternDoc::fast(
     Fast(self.root, factor),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1403,7 +1437,7 @@ pub fn[A] PatternDoc::slow(
     Slow(self.root, factor),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1413,7 +1447,7 @@ pub fn[A] PatternDoc::rev(
 ) -> PatternDoc[A] raise PatternDocError {
   let nodes = copy_pattern_nodes(self.nodes)
   insert_pattern_node(nodes, id, Rev(self.root), revision=self.revision.next())
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1429,7 +1463,7 @@ pub fn[A] PatternDoc::filter_map(
     FilterMap(self.root, f),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1447,7 +1481,7 @@ pub fn[A] PatternDoc::euclid(
     Euclid(self.root, k, n, rotation),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1464,7 +1498,7 @@ pub fn[A] PatternDoc::degrade_by(
     DegradeBy(self.root, p, seed),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1481,7 +1515,7 @@ pub fn[A] PatternDoc::every(
     Every(self.root, n, f),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1497,7 +1531,7 @@ pub fn PatternDoc::jux(
     Jux(self.root, fn(p) { p.jux(f) }),
     revision=self.revision.next(),
   )
-  { root: id, revision: self.revision.next(), nodes }
+  { root: id, revision: self.revision.next(), nodes, }
 }
 
 ///|
@@ -1517,7 +1551,7 @@ pub fn PatternDoc::merge_control(
     MergeControl(left.root, right.root, merge_control),
     revision~,
   )
-  { root: id, revision, nodes }
+  { root: id, revision, nodes, }
 }
 
 ///|
@@ -1535,7 +1569,7 @@ pub fn[A] PatternDoc::sequence(
   let children = docs.map(doc => doc.root)
   let revision = aggregate_pattern_revision(docs)
   insert_pattern_node(nodes, id, Sequence(children), revision~)
-  { root: id, revision, nodes }
+  { root: id, revision, nodes, }
 }
 
 ///|
@@ -1553,5 +1587,33 @@ pub fn[A] PatternDoc::stack(
   let children = docs.map(doc => doc.root)
   let revision = aggregate_pattern_revision(docs)
   insert_pattern_node(nodes, id, Stack(children), revision~)
-  { root: id, revision, nodes }
+  { root: id, revision, nodes, }
+}
+
+///|
+/// A use-site node referencing an immutable definition document. The definition
+/// keeps its own node identities; combining uses does not duplicate its nodes.
+/// References cannot form cycles because construction only accepts existing
+/// immutable documents. Runtime closures remain an explicit, separate API.
+pub fn[A] PatternDoc::reference(
+  id~ : @identity.PatternNodeId,
+  definition~ : PatternDoc[A],
+) -> PatternDoc[A] {
+  {
+    root: id,
+    revision: definition.revision,
+    nodes: singleton_pattern_nodes(id, Reference(definition)),
+  }
+}
+
+///|
+/// Inspect the definition at a reference use site without losing its structure.
+pub fn[A] PatternDoc::referenced_definition(
+  self : PatternDoc[A],
+  id : @identity.PatternNodeId,
+) -> PatternDoc[A]? {
+  match self.nodes.get(id.value()) {
+    Some({ node: Reference(definition), .. }) => Some(definition)
+    _ => None
+  }
 }

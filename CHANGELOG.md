@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Define reusable patterns with `let name = expression;` and combine them with `stack` in pattern and song inputs.
 - Add editor highlighting, completion, help, and the Light Orbit example. Definitions are immutable and ordered; invalid references preserve current playback.
+- Parse pattern expressions through shared syntax and name resolution. Document references retain definition structure and event provenance, with shared lowering and dependency-aware cache invalidation.
 
 ### Breaking changes
 

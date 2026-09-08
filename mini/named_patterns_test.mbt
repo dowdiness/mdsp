@@ -128,3 +128,42 @@ test "cached authoring sees definition edits through nested named groups" {
   }
   pipeline.dispose()
 }
+
+///|
+test "named document events retain distinct references and their shared definition source" {
+  let doc = unwrap_doc(
+    @mini.parse_doc("let phrase = note(\"60\").slow(3); stack(phrase,phrase)"),
+  )
+  let snapshot = doc.lower()
+  let events = snapshot.query_sourced_events(song_span(0L, 1L, 3L, 1L))
+  @debug.assert_eq(events.length(), 2)
+  let first = events[0].pattern_nodes()
+  let second = events[1].pattern_nodes()
+  assert_true(first[1] != second[1])
+  @debug.assert_eq(first[first.length() - 1], second[second.length() - 1])
+  guard doc.referenced_definition(first[1]) is Some(definition) else {
+    fail("reference became opaque")
+  }
+  assert_true(definition.contains_node(first[first.length() - 1]))
+}
+
+///|
+test "both compilation paths report the original unresolved use position" {
+  let source = "let tone = note(\"60\");\nstack(tone, missing)"
+  let expected = "position 35: undefined pattern 'missing'; define it before use"
+  match @mini.parse(source) {
+    Err(message) => @debug.assert_eq(message, expected)
+    Ok(_) => fail("unresolved use accepted")
+  }
+  match @mini.parse_doc(source) {
+    Err(message) => @debug.assert_eq(message, expected)
+    Ok(_) => fail("unresolved document use accepted")
+  }
+}
+
+///|
+test "unused definitions are validated by both compilation paths" {
+  let source = "let unused = note(\"NotANote\"); note(\"60\")"
+  assert_true(@mini.parse(source) is Err(_))
+  assert_true(@mini.parse_doc(source) is Err(_))
+}

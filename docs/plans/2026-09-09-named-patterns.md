@@ -1,9 +1,9 @@
-# 名前付きパターンとグループ化
+# Named patterns and groups
 
-## 目的と構文
+## Purpose and syntax
 
-同じフレーズを複数セクションにコピーせず、一か所の編集を全使用箇所へ反映する。
-定義は共有し、使用箇所ごとの変形・配置・出典は区別する。
+Define a phrase once and reuse it across sections. Editing the definition updates
+all uses. Each use keeps its own transformations, placement, and source path.
 
 ```js
 let motif = note("E4 G4 A4").slow(3);
@@ -17,76 +17,84 @@ song(
 )
 ```
 
-- `let name = expression;` を最終式の前に置く。セミコロンは必須。
-- 名前は英字または `_` で始まり、以降は英数字と `_`。
-  `let`, `s`, `note`, `chord`, `stack`, `song` は定義名に使えない。
-- 定義は上から順に有効になる不変値。同名の再定義、未定義参照、前方参照を拒否する。
-  自己参照・相互参照も、有効でない名前の参照として拒否する。
-- 名前は式なので、stackの引数、メソッドの対象、sectionの本文で使える。
-  `groove.gain(0.2)` は使用箇所への変形であり、元の定義を変更しない。
-- 定義はパターン・song両モードと、パターンモードの `$:` 行で使用できる。
-  有効範囲は一つの入力だけで、次の解析へ持ち越さない。
-- 定義だけでは演奏しない。最終式から使うパターンだけが鳴るが、未使用の定義も検証する。
+- Put `let name = expression;` before the final expression. The semicolon is required.
+- Names start with an ASCII letter or `_`, followed by ASCII letters, digits, or `_`.
+  The names `let`, `s`, `note`, `chord`, `stack`, and `song` are reserved.
+- Definitions are immutable and take effect in order. Duplicate names, undefined
+  names, and forward references are errors. This also rejects self and mutual references.
+- A name is an expression: use it in `stack`, as a method target, or in a section.
+  `groove.gain(0.2)` changes that use without changing the definition.
+- Definitions work in pattern and song modes, including `$:` lines in pattern mode.
+  Their scope is one input; names do not carry over to the next parse.
+- Only patterns used by the final expression play. Unused definitions are still validated.
 
-## 解析・名前解決・コンパイル
+## Parsing and compilation
 
-式の構文解析は `mini/expression_syntax.mbt` に集約する。関数呼び出し、stack、
-名前の参照、メソッドとcallbackを、ソース区間を持つデータとして表現する。
-構文表現には再生クロージャーやPatternDocを入れない。
+`mini/expression_syntax.mbt` owns the expression grammar. Calls, stacks,
+references, methods, and callbacks are data with source spans. The syntax tree
+contains no playback closures or `PatternDoc` values.
 
-`resolve_mini_expr` は構文と有効な定義環境から、解決済みの式を返す純粋な処理である。
-参照は文字列検索を実行時へ残さず、不変の定義を指す。未定義参照の診断は、
-元の入力における使用箇所のUTF-16位置を返す。
+`resolve_mini_expr` is a pure function from syntax and the active definitions to
+a resolved expression. Each reference points to an immutable definition. There
+is no runtime name lookup. An undefined reference reports its use position in
+the original input, measured in UTF-16 code units.
 
-runtimeと文書のコンパイラーは同じ解決済み表現を受け取る。
-定義のコンパイル結果は入力ごとの環境に保持し、複数の参照で共有する。
-環境を作るための局所的なmutationは準備処理内に限定し、再生状態には触れない。
-文字列内のmini-notationは既存の音・音符・コードの変換処理を使う。
-文書側のID由来の乱数seedとruntime側の既存seed規則は、それぞれの意味を保つ。
+The runtime and document compilers consume the same resolved expressions.
+They cache compiled definitions within each input so references can share them.
+Local mutation builds these caches during preparation and does not touch playback
+state. Strings use the existing sound, note, and chord mini-notation converters.
+The document compiler keeps its ID-based random seeds; the runtime compiler
+keeps its existing seed rules.
 
-通常画面は既存のprepare/apply経路を使う。継続適用の配置・テンポ条件は同じであり、
-解析失敗は適用済み・受理済みの演奏を変更しない。使用箇所は独立した時計を持たず、
-パターンの周期とセクションの時間規則を保つ。
+The UI uses the existing prepare/apply path and its layout and tempo rules for
+updates during playback. A parse error preserves both the applied score and any
+accepted pending update. References add no clocks: pattern periods and section
+time rules still apply.
 
-## 文書の参照と出典
+## References and source paths
 
-`PatternDoc::reference(id~, definition~)` は使用箇所のノードを作り、定義の文書を保持する。
-定義のノード群を使用先へコピーせず、使用先の木構造と共有する定義を分離する。
-既存の不変な文書だけを受け取る構築APIなので、後から参照を結び直して循環を作ることはできない。
+`PatternDoc::reference(id~, definition~)` creates a node for one use and holds
+the definition document. It shares the definition's nodes without copying them
+into the caller's tree. Construction accepts only existing immutable documents,
+so references cannot be rewired to create cycles.
 
-`referenced_definition(id)` で定義内部の文書を取得できる。
-出典付き発音の経路には使用箇所と定義内部のノードIDをともに含める。
-同じ定義から発音する二つの使用箇所を、一つの発音へまとめない。
+`referenced_definition(id)` returns the target document for inspection.
+Event source paths include both the use ID and the nodes inside the definition.
+Two uses of the same definition still produce separate events.
 
-loweringは各ノードから再生用と出典付きの結果を一組として返す。
-二つの結果は同じ子のコンパイル結果を使い、一つのキャッシュで保存・再利用する。
-再生時は再生用の結果だけを問い合わせ、出典の配列を作ってから捨てる処理は行わない。
-キャッシュは呼び出し側が所有し、clearで再生用・出典付きの結果をともに破棄する。
-出典はそのノードからの相対的な経路であり、参照側が使用箇所のIDを前に加える。
-任意のパターン変換callbackは内部の対応関係を取得できないため、到達可能な子を出典とする
-既存の規則を保つ。
+Compilation returns playback and source-tracking views together for each node.
+Both views use the same compiled children and share one cache. Playback queries
+only the playback view; they do not build source arrays. The caller owns the
+cache, and `clear` removes both views from it.
 
-キャッシュの判定には依存先を含むトークンを使う。親のIDやgenerationだけでは、
-同じ親を持つ編集前後の定義を区別できないためである。
-各ノードの置換は新しいgenerationを持つため、依存トークンが一致すれば再利用できる。
-公開APIのrevisionは編集の通知・比較に使い、キャッシュでは重ねて判定しない。
-参照先のノードIDはその文書の中で解決する。文書をまたいで共有するのは依存トークンで
-識別したコンパイル結果であり、IDだけの探索メモは共有しない。
-文書は不変で、編集前に取得したsnapshotの意味は編集後も変わらない。
+Source paths are relative to each node. A reference prepends its use ID.
+Arbitrary transformation callbacks do not expose exact source mappings, so they
+keep the existing rule of reporting reachable children as sources.
 
-入力全体の再解析・再コンパイルは許容する。名前付き定義の内部までを対象とする
-編集間の細粒度な再利用は、この機能の成立条件にはしない。
+Cache keys include dependency tokens. A parent's ID or generation alone cannot
+distinguish definitions whose children differ. Every node replacement gets a
+new generation, so a matching dependency token allows reuse. Public revisions
+serve edit notifications and comparisons; the cache does not check them again.
 
-## 検証
+Node IDs are resolved within each document. Compiled results can be shared across
+documents through dependency tokens, but traversal memos keyed only by node ID
+stay within their document. Documents are immutable, so an old snapshot keeps
+its meaning after an edit.
 
-- 名前付き式とインライン式の発音区間・値が一致する。
-- 使用箇所の変形が定義や別の使用箇所へ漏れない。
-- 共通定義の変更が全セクションへ反映され、配置は変わらない。
-- 重複、未定義、自己参照・相互参照、予約名、区切り欠落を拒否する。
-- 文書から定義内部へ到達でき、発音の出典から二つの使用箇所を区別できる。
-- 定義のコンパイル回数と、同じIDを持つ編集前後の定義のキャッシュ分離を検証する。
-- 実AudioWorkletで定義の継続適用と失敗時の保持を検証する。
-- [光の軌道](../../examples/light-orbit.mini)を、元の12セクション・240 cyclesの曲と
-  半cycle単位で比較する。曲末尾の次の2 cyclesも比較する。
+Reparsing and recompiling the whole input is allowed. Reusing individual nodes
+inside named definitions across edits is not required for this feature.
 
-小節構文、量子化更新、ゲーム向け遷移、エフェクト、Worker移行は範囲外。
+## Validation
+
+- Named and inline expressions produce the same event spans and values.
+- Transforming one use leaves its definition and other uses unchanged.
+- Editing a shared definition updates every section without changing the layout.
+- Invalid names, references, recursion, and missing separators are rejected.
+- Definitions remain inspectable, and source paths distinguish separate uses.
+- Shared definitions compile once; caches keep divergent edits with the same IDs separate.
+- Real AudioWorklet tests cover live updates and playback preservation on failure.
+- [Light Orbit](../../examples/light-orbit.mini) matches the original 12-section,
+  240-cycle score in half-cycle queries, including two cycles after the ending.
+
+Bar syntax, quantized updates, game transitions, effects, and Worker migration
+are outside this feature's scope.

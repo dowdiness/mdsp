@@ -726,255 +726,251 @@ fn[A] query_opaque_pattern_source(
 }
 
 ///|
-fn[A] lower_sourced_pattern_node(
+/// A subtree has one compiled value with two views: playback and provenance.
+/// Source paths are relative to this node; references prepend their use-site ID.
+priv struct CompiledPattern[A] {
+  pat : Pat[A]
+  sourced : SourcedPat[A]
+}
+
+///|
+fn[A] CompiledPattern::new(
+  pat : Pat[A],
+  query : (TimeSpan) -> Array[PatternSnapshotEvent[A]],
+) -> CompiledPattern[A] {
+  { pat, sourced: { query, }, }
+}
+
+///|
+fn[A] lower_pattern_node_cached(
   nodes : Map[String, PatternDocEntry[A]],
   id : @identity.PatternNodeId,
   cache : PatternLoweringCache[A],
-  memo : Map[Int64, Array[(Array[Int64], SourcedPat[A])]],
-) -> SourcedPat[A] raise PatternDocError {
+  token_memo : Map[String, Array[Int64]],
+) -> CompiledPattern[A] raise PatternDocError {
+  let token = pattern_node_cache_token_memoized(nodes, id, token_memo)
+  match cache.lookup(id, token) {
+    Some(compiled) => compiled
+    None => {
+      let compiled = compile_pattern_node(nodes, id, cache, token_memo)
+      cache.store(id, token, compiled)
+      compiled
+    }
+  }
+}
+
+///|
+fn[A] compile_pattern_node(
+  nodes : Map[String, PatternDocEntry[A]],
+  id : @identity.PatternNodeId,
+  cache : PatternLoweringCache[A],
+  token_memo : Map[String, Array[Int64]],
+) -> CompiledPattern[A] raise PatternDocError {
   let entry = match nodes.get(id.value()) {
     Some(entry) => entry
     None => raise MissingNode(id.value())
   }
-  let token = pattern_node_cache_token_memoized(nodes, id, {})
-  let entries = match memo.get(entry.generation) {
-    Some(entries) => entries
-    None => []
-  }
-  for entry in entries {
-    if pattern_cache_token_equal(entry.0, token) {
-      return entry.1
+  match entry.node {
+    Reference(definition) => {
+      // Node IDs are local to a document; only the dependency-keyed cache
+      // crosses this scope, never the ID-keyed traversal memo.
+      let target = lower_pattern_node_cached(
+        definition.nodes,
+        definition.root,
+        cache,
+        {},
+      )
+      CompiledPattern::new(target.pat, fn(arc) {
+        target.sourced
+        .query(arc)
+        .map(event => prepend_pattern_source(event, id))
+      })
     }
-  }
-  let pat = lower_sourced_pattern_node_uncached(nodes, id, cache, memo)
-  entries.push((token, pat))
-  memo[entry.generation] = entries
-  pat
-}
-
-///|
-fn[A] lower_sourced_pattern_node_uncached(
-  nodes : Map[String, PatternDocEntry[A]],
-  id : @identity.PatternNodeId,
-  cache : PatternLoweringCache[A],
-  memo : Map[Int64, Array[(Array[Int64], SourcedPat[A])]],
-) -> SourcedPat[A] raise PatternDocError {
-  match nodes.get(id.value()) {
-    None => raise MissingNode(id.value())
-    Some(entry) =>
-      match entry.node {
-        Reference(definition) => {
-          let target = lower_sourced_pattern_node(
-            definition.nodes,
-            definition.root,
-            cache,
-            memo,
+    Runtime(pat) => {
+      let path = pattern_source_path(id)
+      CompiledPattern::new(pat, fn(arc) {
+        query_opaque_pattern_source(pat, path, arc)
+      })
+    }
+    Silence => CompiledPattern::new(Pat::silence(), fn(_) { [] })
+    Pure(value) => {
+      let pat = Pat::pure(value)
+      CompiledPattern::new(pat, fn(arc) {
+        pat.query(arc).map(event => tag_pattern_event(event, id))
+      })
+    }
+    Fast(child, factor) => {
+      let child = lower_pattern_node_cached(nodes, child, cache, token_memo)
+      CompiledPattern::new(child.pat.fast(factor), fn(arc) {
+        query_sourced_fast(child.sourced, id, arc, factor)
+      })
+    }
+    Slow(child, factor) => {
+      let child = lower_pattern_node_cached(nodes, child, cache, token_memo)
+      CompiledPattern::new(child.pat.slow(factor), fn(arc) {
+        if factor.num <= 0L {
+          []
+        } else {
+          query_sourced_fast(
+            child.sourced,
+            id,
+            arc,
+            Rational::new(1L, 1L) / factor,
           )
-          {
-            query: fn(arc) {
-              target.query(arc).map(event => prepend_pattern_source(event, id))
-            },
+        }
+      })
+    }
+    Rev(child) => {
+      let child = lower_pattern_node_cached(nodes, child, cache, token_memo)
+      CompiledPattern::new(child.pat.rev(), fn(arc) {
+        query_sourced_rev(child.sourced, id, arc)
+      })
+    }
+    FilterMap(child, f) => {
+      let child = lower_pattern_node_cached(nodes, child, cache, token_memo)
+      CompiledPattern::new(child.pat.filter_map(f), fn(arc) {
+        child.sourced
+        .query(arc)
+        .filter_map(event => {
+          let raw = event.event()
+          f(raw.value).map(value => {
+            prepend_pattern_source(
+              PatternSnapshotEvent(
+                event={ whole: raw.whole, part: raw.part, value, },
+                pattern_nodes=event.pattern_nodes(),
+              ),
+              id,
+            )
+          })
+        })
+      })
+    }
+    Euclid(child, k, n, rotation) => {
+      let child = lower_pattern_node_cached(nodes, child, cache, token_memo)
+      CompiledPattern::new(child.pat.euclid(k, n, rotation~), fn(arc) {
+        query_sourced_euclid(child.sourced, id, arc, k, n, rotation)
+      })
+    }
+    DegradeBy(child, p, seed) => {
+      let child = lower_pattern_node_cached(nodes, child, cache, token_memo)
+      let prob = if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p }
+      CompiledPattern::new(child.pat.degrade_by(p, seed~), fn(arc) {
+        if prob >= 1.0 {
+          return []
+        }
+        child.sourced
+        .query(arc)
+        .filter(event => {
+          let raw = event.event()
+          let key = match raw.whole {
+            Some(whole) => whole.begin
+            None => raw.part.begin
           }
+          prob <= 0.0 || hash_unit(key.num, key.den, seed) >= prob
+        })
+        .map(event => prepend_pattern_source(event, id))
+      })
+    }
+    Every(child_id, n, f) => {
+      let child = lower_pattern_node_cached(nodes, child_id, cache, token_memo)
+      let fallback_path = pattern_source_path_for_opaque_children(nodes, id, [
+        child_id,
+      ])
+      CompiledPattern::new(every(n, f, child.pat), fn(arc) {
+        if n <= 0 {
+          return child.sourced
+            .query(arc)
+            .map(event => prepend_pattern_source(event, id))
         }
-        Runtime(pat) => {
-          let path = pattern_source_path(id)
-          { query: fn(arc) { query_opaque_pattern_source(pat, path, arc) }, }
-        }
-        Silence => { query: fn(_arc) { [] }, }
-        Pure(value) =>
-          {
-            query: fn(arc) {
-              Pat::pure(value)
-              .query(arc)
-              .map(event => tag_pattern_event(event, id))
-            },
-          }
-        Fast(child, factor) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          { query: fn(arc) { query_sourced_fast(child_pat, id, arc, factor) }, }
-        }
-        Slow(child, factor) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          if factor.num <= 0L {
-            { query: fn(_arc) { [] }, }
+        let n64 = Int64::from_int(n)
+        arc
+        .whole_cycles()
+        .iter()
+        .flat_map(cycle_arc => {
+          let cycle_num = cycle_arc.begin.floor()
+          let rem = (cycle_num % n64 + n64) % n64
+          if rem == 0L {
+            f(child.pat)
+            .query(cycle_arc)
+            .iter()
+            .map(event => {
+              PatternSnapshotEvent(event~, pattern_nodes=fallback_path)
+            })
           } else {
-            let inv = Rational::new(1L, 1L) / factor
-            { query: fn(arc) { query_sourced_fast(child_pat, id, arc, inv) }, }
+            child.sourced
+            .query(cycle_arc)
+            .iter()
+            .map(event => prepend_pattern_source(event, id))
           }
-        }
-        Rev(child) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          { query: fn(arc) { query_sourced_rev(child_pat, id, arc) }, }
-        }
-        FilterMap(child, f) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          {
-            query: fn(arc) {
-              child_pat
-              .query(arc)
-              .filter_map(event => {
-                let raw = event.event()
-                f(raw.value).map(value => {
-                  prepend_pattern_source(
-                    PatternSnapshotEvent(
-                      event={ whole: raw.whole, part: raw.part, value, },
-                      pattern_nodes=event.pattern_nodes(),
-                    ),
-                    id,
-                  )
-                })
-              })
-            },
-          }
-        }
-        Euclid(child, k, n, rotation) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          {
-            query: fn(arc) {
-              query_sourced_euclid(child_pat, id, arc, k, n, rotation)
-            },
-          }
-        }
-        DegradeBy(child, p, seed) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          let prob = if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p }
-          {
-            query: fn(arc) {
-              if prob >= 1.0 {
-                return []
-              }
-              child_pat
-              .query(arc)
-              .filter(event => {
-                let raw = event.event()
-                let key = match raw.whole {
-                  Some(whole) => whole.begin
-                  None => raw.part.begin
-                }
-                prob <= 0.0 || hash_unit(key.num, key.den, seed) >= prob
-              })
-              .map(event => prepend_pattern_source(event, id))
-            },
-          }
-        }
-        Every(child, n, f) => {
-          let child_pat = lower_sourced_pattern_node(nodes, child, cache, memo)
-          let raw_child = lower_pattern_node_cached(nodes, child, cache, {}, {})
-          let fallback_path = pattern_source_path_for_opaque_children(
-            nodes,
-            id,
-            [child],
-          )
-          {
-            query: fn(arc) {
-              if n <= 0 {
-                return child_pat
-                  .query(arc)
-                  .map(event => prepend_pattern_source(event, id))
-              }
-              let n64 = Int64::from_int(n)
-              arc
-              .whole_cycles()
-              .iter()
-              .flat_map(cycle_arc => {
-                let cycle_num = cycle_arc.begin.floor()
-                let rem = (cycle_num % n64 + n64) % n64
-                if rem == 0L {
-                  f(raw_child)
-                  .query(cycle_arc)
-                  .iter()
-                  .map(event => {
-                    PatternSnapshotEvent(event~, pattern_nodes=fallback_path)
-                  })
-                } else {
-                  child_pat
-                  .query(cycle_arc)
-                  .iter()
-                  .map(event => prepend_pattern_source(event, id))
-                }
-              })
-              .collect()
-            },
-          }
-        }
-        Jux(child, f) => {
-          let raw_child = lower_pattern_node_cached(nodes, child, cache, {}, {})
-          let fallback = f(raw_child)
-          let fallback_path = pattern_source_path_for_opaque_children(
-            nodes,
-            id,
-            [child],
-          )
-          {
-            query: fn(arc) {
-              query_opaque_pattern_source(fallback, fallback_path, arc)
-            },
-          }
-        }
-        MergeControl(left, right, f) => {
-          let fallback = f(
-            lower_pattern_node_cached(nodes, left, cache, {}, {}),
-            lower_pattern_node_cached(nodes, right, cache, {}, {}),
-          )
-          let fallback_path = pattern_source_path_for_opaque_children(
-            nodes,
-            id,
-            [left, right],
-          )
-          {
-            query: fn(arc) {
-              query_opaque_pattern_source(fallback, fallback_path, arc)
-            },
-          }
-        }
-        Sequence(children) => {
-          let sourced_children = [
-            for child in children => {
-              lower_sourced_pattern_node(nodes, child, cache, memo)
-            }
-          ]
-          {
-            query: fn(arc) { query_sourced_sequence(sourced_children, id, arc) },
-          }
-        }
-        Stack(children) => {
-          let sourced_children = [
-            for child in children => {
-              lower_sourced_pattern_node(nodes, child, cache, memo)
-            }
-          ]
-          {
-            query: fn(arc) {
-              sourced_children
-              .iter()
-              .flat_map(child => {
-                child
-                .query(arc)
-                .iter()
-                .map(event => prepend_pattern_source(event, id))
-              })
-              .collect()
-            },
-          }
-        }
-      }
+        })
+        .collect()
+      })
+    }
+    Jux(child_id, f) => {
+      let child = lower_pattern_node_cached(nodes, child_id, cache, token_memo)
+      let pat = f(child.pat)
+      let path = pattern_source_path_for_opaque_children(nodes, id, [child_id])
+      CompiledPattern::new(pat, fn(arc) {
+        query_opaque_pattern_source(pat, path, arc)
+      })
+    }
+    MergeControl(left_id, right_id, f) => {
+      let left = lower_pattern_node_cached(nodes, left_id, cache, token_memo)
+      let right = lower_pattern_node_cached(nodes, right_id, cache, token_memo)
+      let pat = f(left.pat, right.pat)
+      let path = pattern_source_path_for_opaque_children(nodes, id, [
+        left_id, right_id,
+      ])
+      CompiledPattern::new(pat, fn(arc) {
+        query_opaque_pattern_source(pat, path, arc)
+      })
+    }
+    Sequence(children) => {
+      let children = children.map(child => {
+        lower_pattern_node_cached(nodes, child, cache, token_memo)
+      })
+      let pat = sequence(children.map(child => child.pat))
+      let sourced = children.map(child => child.sourced)
+      CompiledPattern::new(pat, fn(arc) {
+        query_sourced_sequence(sourced, id, arc)
+      })
+    }
+    Stack(children) => {
+      let children = children.map(child => {
+        lower_pattern_node_cached(nodes, child, cache, token_memo)
+      })
+      let pat = stack(children.map(child => child.pat))
+      let sourced = children.map(child => child.sourced)
+      CompiledPattern::new(pat, fn(arc) {
+        sourced
+        .iter()
+        .flat_map(child => {
+          child
+          .query(arc)
+          .iter()
+          .map(event => prepend_pattern_source(event, id))
+        })
+        .collect()
+      })
+    }
   }
 }
 
 ///|
 priv struct PatternLoweringCacheEntry[A] {
   token : Array[Int64]
-  revision : @identity.Revision
-  pat : Pat[A]
+  compiled : CompiledPattern[A]
 }
 
 ///|
-/// Cache for lowered pattern subtrees.
+/// Cache for compiled playback and provenance of pattern subtrees.
 ///
 /// Entries are keyed by stable `PatternNodeId`, a recursive private subtree
-/// token, and full `Revision` equality. The subtree token prevents stale hits
+/// token. The subtree token prevents stale hits
 /// when callers rebuild unrelated docs or fork divergent edits from the same
-/// base with identical stable IDs and revision counters.
+/// base with identical stable IDs and revision counters. Every replacement gets
+/// a fresh generation, and the token includes every dependency generation.
+/// Revision is an editing API value; it adds no discrimination to this key.
 pub struct PatternLoweringCache[A] {
   priv entries : Map[String, Array[PatternLoweringCacheEntry[A]]]
   priv mut hits : Int
@@ -991,8 +987,7 @@ fn[A] PatternLoweringCache::lookup(
   self : PatternLoweringCache[A],
   id : @identity.PatternNodeId,
   token : Array[Int64],
-  revision : @identity.Revision,
-) -> Pat[A]? {
+) -> CompiledPattern[A]? {
   match self.entries.get(id.value()) {
     None => {
       self.misses += 1
@@ -1000,10 +995,9 @@ fn[A] PatternLoweringCache::lookup(
     }
     Some(entries) => {
       for entry in entries {
-        if pattern_cache_token_equal(entry.token, token) &&
-          entry.revision == revision {
+        if pattern_cache_token_equal(entry.token, token) {
           self.hits += 1
-          return Some(entry.pat)
+          return Some(entry.compiled)
         }
       }
       self.misses += 1
@@ -1013,129 +1007,17 @@ fn[A] PatternLoweringCache::lookup(
 }
 
 ///|
+/// Called only after a cache miss; the immutable dependency key is absent.
 fn[A] PatternLoweringCache::store(
   self : PatternLoweringCache[A],
   id : @identity.PatternNodeId,
   token : Array[Int64],
-  revision : @identity.Revision,
-  pat : Pat[A],
+  compiled : CompiledPattern[A],
 ) -> Unit {
   let key = id.value()
   match self.entries.get(key) {
-    None => self.entries[key] = [{ token: token.copy(), revision, pat, }]
-    Some(entries) => {
-      for index in 0..<entries.length() {
-        if pattern_cache_token_equal(entries[index].token, token) &&
-          entries[index].revision == revision {
-          entries[index] = { token: token.copy(), revision, pat, }
-          return
-        }
-      }
-      entries.push({ token: token.copy(), revision, pat, })
-    }
-  }
-}
-
-///|
-fn[A] lower_pattern_node_cached(
-  nodes : Map[String, PatternDocEntry[A]],
-  id : @identity.PatternNodeId,
-  cache : PatternLoweringCache[A],
-  revision_memo : Map[String, @identity.Revision],
-  token_memo : Map[String, Array[Int64]],
-) -> Pat[A] raise PatternDocError {
-  let revision = pattern_node_revision_memoized(nodes, id, revision_memo)
-  let token = pattern_node_cache_token_memoized(nodes, id, token_memo)
-  match cache.lookup(id, token, revision) {
-    Some(pat) => pat
-    None => {
-      let pat = match nodes.get(id.value()) {
-        None => raise MissingNode(id.value())
-        Some(entry) =>
-          match entry.node {
-            Reference(definition) =>
-              lower_pattern_node_cached(
-                definition.nodes,
-                definition.root,
-                cache,
-                {},
-                {},
-              )
-            Runtime(pat) => pat
-            Silence => Pat::silence()
-            Pure(value) => Pat::pure(value)
-            Fast(child, factor) =>
-              lower_pattern_node_cached(
-                nodes, child, cache, revision_memo, token_memo,
-              ).fast(factor)
-            Slow(child, factor) =>
-              lower_pattern_node_cached(
-                nodes, child, cache, revision_memo, token_memo,
-              ).slow(factor)
-            Rev(child) =>
-              lower_pattern_node_cached(
-                nodes, child, cache, revision_memo, token_memo,
-              ).rev()
-            FilterMap(child, f) =>
-              lower_pattern_node_cached(
-                nodes, child, cache, revision_memo, token_memo,
-              ).filter_map(f)
-            Euclid(child, k, n, rotation) =>
-              lower_pattern_node_cached(
-                nodes, child, cache, revision_memo, token_memo,
-              ).euclid(k, n, rotation~)
-            DegradeBy(child, p, seed) =>
-              lower_pattern_node_cached(
-                nodes, child, cache, revision_memo, token_memo,
-              ).degrade_by(p, seed~)
-            Every(child, n, f) =>
-              every(
-                n,
-                f,
-                lower_pattern_node_cached(
-                  nodes, child, cache, revision_memo, token_memo,
-                ),
-              )
-            Jux(child, f) =>
-              f(
-                lower_pattern_node_cached(
-                  nodes, child, cache, revision_memo, token_memo,
-                ),
-              )
-            MergeControl(left, right, f) =>
-              f(
-                lower_pattern_node_cached(
-                  nodes, left, cache, revision_memo, token_memo,
-                ),
-                lower_pattern_node_cached(
-                  nodes, right, cache, revision_memo, token_memo,
-                ),
-              )
-            Sequence(children) =>
-              sequence(
-                [
-                  for child in children => {
-                    lower_pattern_node_cached(
-                      nodes, child, cache, revision_memo, token_memo,
-                    )
-                  }
-                ],
-              )
-            Stack(children) =>
-              stack(
-                [
-                  for child in children => {
-                    lower_pattern_node_cached(
-                      nodes, child, cache, revision_memo, token_memo,
-                    )
-                  }
-                ],
-              )
-          }
-      }
-      cache.store(id, token, revision, pat)
-      pat
-    }
+    None => self.entries[key] = [{ token: token.copy(), compiled, }]
+    Some(entries) => entries.push({ token: token.copy(), compiled, })
   }
 }
 
@@ -1345,19 +1227,12 @@ pub fn[A] PatternDoc::lower_with_cache(
   self : PatternDoc[A],
   cache : PatternLoweringCache[A],
 ) -> PatternSnapshot[A] raise PatternDocError {
-  let revision_memo : Map[String, @identity.Revision] = {}
-  let token_memo : Map[String, Array[Int64]] = {}
+  let compiled = lower_pattern_node_cached(self.nodes, self.root, cache, {})
   {
     root: self.root,
     revision: self.revision,
-    pat: lower_pattern_node_cached(
-      self.nodes,
-      self.root,
-      cache,
-      revision_memo,
-      token_memo,
-    ),
-    sourced: lower_sourced_pattern_node(self.nodes, self.root, cache, {}),
+    pat: compiled.pat,
+    sourced: compiled.sourced,
   }
 }
 

@@ -17,11 +17,28 @@ async function edit(page: Page, text: string) {
   return lastReply(page);
 }
 
+async function play(page: Page) {
+  const previous = (await lastReply(page))?.revision ?? 0;
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(async () => (await lastReply(page))?.revision ?? 0).toBeGreaterThan(previous);
+  return lastReply(page);
+}
+
 async function start(page: Page, text: string) {
   await replaceText(page, text);
-  await page.locator("#start").click();
-  await expect.poll(() => lastReply(page)).toMatchObject({ operation: "restart", appliedAtSample: 0 });
-  return lastReply(page);
+  const reply = await play(page);
+  expect(reply).toMatchObject({ operation: "restart", appliedAtSample: 0 });
+  return reply;
+}
+
+async function expectStopped(page: Page) {
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
+}
+
+async function stop(page: Page) {
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expectStopped(page);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -45,7 +62,6 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("editing and recovering from a parse error preserve transport", async ({ page }) => {
-  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await start(page, 'note("60").slow(8)');
   const updated = await edit(page, 'note("72").slow(8)');
   expect(updated).toMatchObject({ type: "pattern-updated", operation: "update" });
@@ -54,7 +70,6 @@ test("editing and recovering from a parse error preserve transport", async ({ pa
   const recovered = await edit(page, 'note("67").slow(8)');
   expect(recovered).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(recovered.appliedAtSample).toBeGreaterThan(updated.appliedAtSample);
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
 });
 
 test("song content edits continue, and Stop then Play applies a new layout", async ({ page }) => {
@@ -67,13 +82,11 @@ test("song content edits continue, and Stop then Play applies a new layout", asy
   expect(rejected).toMatchObject({ type: "song-error" });
   expect(rejected.message).toContain("restart required");
   await expect(page.locator("#log")).toContainText("Press Stop, then Play");
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
-  await page.getByRole("button", { name: "Play", exact: true }).click();
-  await expect.poll(() => lastReply(page)).toMatchObject({
+  await stop(page);
+  expect(await play(page)).toMatchObject({
     type: "song-updated", operation: "restart", appliedAtSample: 0,
   });
 });
-
 
 test("named song definitions update in place and a bad reference preserves the applied score", async ({ page }) => {
   await page.locator("#mode-song").click();
@@ -91,39 +104,36 @@ test("named song definitions update in place and a bad reference preserves the a
   expect(recovered.appliedAtSample).toBeGreaterThan(updated.appliedAtSample);
 });
 
-
-test("an invalid first score explains that nothing is playing", async ({ page }) => {
+test("failed first Play stays stopped and explains how to retry", async ({ page }) => {
   await replaceText(page, "note(");
-  await page.getByRole("button", { name: "Play", exact: true }).click();
-  await expect.poll(() => lastReply(page)).toMatchObject({ type: "pattern-error" });
-  await expect(page.locator("#log")).toContainText("Nothing is playing yet");
-  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
-  expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
+  expect(await play(page)).toMatchObject({ type: "pattern-error" });
+  await expectStopped(page);
+  await expect(page.locator("#log")).toContainText("Fix the code, then press Play");
 });
 
+for (const { mode, valid, invalid } of [
+  { mode: "pattern", valid: 'note("60*16")', invalid: "note(" },
+  { mode: "song", valid: 'song(section("a",8,note("60*16")),part("a1","a"))', invalid: "song(" },
+]) {
+  test.describe(mode, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.locator(`#mode-${mode}`).click();
+      await start(page, valid);
+      await stop(page);
+    });
 
-for (const mode of ["pattern", "song"] as const) {
-  test(`${mode}: failed Play after Stop stays stopped until valid code is played`, async ({ page }) => {
-    await page.locator(`#mode-${mode}`).click();
-    const valid = mode === "pattern"
-      ? 'note("60*16")'
-      : 'song(section("a",8,note("60*16")),part("a1","a"))';
-    await start(page, valid);
-    await page.getByRole("button", { name: "Stop", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
-    await replaceText(page, mode === "pattern" ? "note(" : "song(");
-    await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect.poll(() => lastReply(page)).toMatchObject({ type: `${mode}-error` });
-    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
-    await expect(page.locator("#log")).toContainText("Fix the code, then press Play");
-    expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
-    await start(page, valid);
-    await expect(page.locator("#log")).toContainText(`${mode} updated`);
-    await page.getByRole("button", { name: "Stop", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
-    await replaceText(page, "");
-    await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(page.locator("#log")).toContainText("Enter code, then press Play");
-    expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
+    test("failed Play keeps the previous score stopped; a valid retry starts at zero", async ({ page }) => {
+      await replaceText(page, invalid);
+      expect(await play(page)).toMatchObject({ type: `${mode}-error` });
+      await expectStopped(page);
+      await start(page, valid);
+    });
+
+    test("empty Play keeps the previous score stopped", async ({ page }) => {
+      await replaceText(page, "");
+      await page.getByRole("button", { name: "Play", exact: true }).click();
+      await expect(page.locator("#log")).toContainText("Enter code, then press Play");
+      await expectStopped(page);
+    });
   });
 }

@@ -148,6 +148,7 @@ let latestSentText = "";
 let fadeInAfterNextUpdate = false;
 
 function setLog(message: string, kind: "ok" | "error" | "info" = "info"): void {
+  restartBtn.hidden = true;
   logEl.textContent = message;
   logEl.classList.toggle("error", kind === "error");
   logEl.classList.toggle("ok", kind === "ok");
@@ -208,12 +209,14 @@ function resetPlaybackDedupe(): void {
 
 function applyStatus(s: AudioStatus): void {
   restartBtn.disabled = s.kind !== "running";
+  if (s.kind !== "running") restartBtn.hidden = true;
+  applyRestartBtn.hidden = s.kind !== "running";
   applyRestartBtn.disabled = s.kind !== "running";
   switch (s.kind) {
     case "idle":
-      statusEl.textContent = "idle — click Start";
+      statusEl.textContent = "idle — click Play";
       startBtn.disabled = false;
-      startBtn.textContent = "Start audio";
+      startBtn.textContent = "Play";
       startBtn.dataset.action = "start";
       break;
     case "starting":
@@ -225,7 +228,7 @@ function applyStatus(s: AudioStatus): void {
     case "running":
       statusEl.textContent = "running · 48 kHz · 128 frames";
       startBtn.disabled = false;
-      startBtn.textContent = "Stop audio";
+      startBtn.textContent = "Stop";
       startBtn.dataset.action = "stop";
       break;
     case "error":
@@ -310,7 +313,7 @@ engine.onReply((reply: WorkletReply) => {
 
   if (reply.type === "playback-restarted" || reply.type === "playback-error") {
     if (reply.revision !== latestSentRev) return;
-    setLog(reply.type === "playback-restarted" ? "✓ current playback restarted" : String(reply.message), reply.type === "playback-restarted" ? "ok" : "error");
+    setLog(reply.type === "playback-restarted" ? "✓ Last working version playing from the start; editor unchanged" : String(reply.message), reply.type === "playback-restarted" ? "ok" : "error");
     return;
   }
 
@@ -333,7 +336,11 @@ engine.onReply((reply: WorkletReply) => {
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [] }]);
   } else if (reply.type === "pattern-error" || reply.type === "song-error") {
     const msg = String(reply.message ?? "parse error");
-    setLog(`✗ ${msg} (kept last good)`, "error");
+    const recovery = activeMode === null
+      ? "Nothing is playing yet. Fix the code to start playback."
+      : "Your edit was not applied. The last working version keeps playing.";
+    setLog(`✗ ${msg} — ${recovery}`, "error");
+    restartBtn.hidden = activeMode === null;
     const diag = diagnosticFromError(msg, view.state.doc.length);
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [diag] }]);
   }
@@ -383,6 +390,7 @@ function scheduleEval(text: string): void {
 
 adapter.onIntent((intent: UserIntent) => {
   if (intent.type === "TextEdit") {
+    restartBtn.hidden = true;
     scheduleEval(view.state.doc.toString());
   }
 });

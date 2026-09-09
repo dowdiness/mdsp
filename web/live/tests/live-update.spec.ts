@@ -44,7 +44,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("editing and recovering from a parse error preserve transport", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  await expect(page.locator("#apply-restart")).toBeHidden();
+  await expect(page.locator("#restart")).toBeHidden();
   await start(page, 'note("60").slow(8)');
+  await expect(page.getByRole("button", { name: "Play from start", exact: true })).toBeVisible();
+  await expect(page.locator("#restart")).toBeHidden();
   const updated = await edit(page, 'note("72").slow(8)');
   expect(updated).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(updated.appliedAtSample).toBeGreaterThan(0);
@@ -52,19 +57,23 @@ test("editing and recovering from a parse error preserve transport", async ({ pa
   const recovered = await edit(page, 'note("67").slow(8)');
   expect(recovered).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(recovered.appliedAtSample).toBeGreaterThan(updated.appliedAtSample);
+  await expect(page.locator("#restart")).toBeHidden();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(page.locator("#apply-restart")).toBeHidden();
+  await expect(page.locator("#restart")).toBeHidden();
 });
 
-test("Restart current plays the applied score while leaving invalid editor text intact", async ({ page }) => {
+test("Replay last working version plays the applied score while leaving invalid editor text intact", async ({ page }) => {
   const applied = await start(page, 'note("67").slow(8)');
   expect(await edit(page, 'note(')).toMatchObject({ type: "pattern-error" });
-  await page.locator("#restart").click();
+  await page.getByRole("button", { name: "Replay last working version", exact: true }).click();
   await expect.poll(() => lastReply(page)).toMatchObject({
     type: "playback-restarted", scoreRevision: applied.revision, appliedAtSample: 0,
   });
   await expect(page.locator(".cm-content")).toHaveText("note(");
 });
 
-test("song content edits continue, but a new layout requires Apply from beginning", async ({ page }) => {
+test("song content edits continue, but a new layout requires Play from start", async ({ page }) => {
   await page.locator("#mode-song").click();
   await start(page, 'song(section("a",8,note("60")),part("a1","a"))');
   const updated = await edit(page, 'song(section("a",8,note("72")),part("a1","a"))');
@@ -73,7 +82,7 @@ test("song content edits continue, but a new layout requires Apply from beginnin
   const rejected = await edit(page, 'song(section("a",9,note("72")),part("a1","a"))');
   expect(rejected).toMatchObject({ type: "song-error" });
   expect(rejected.message).toContain("restart required");
-  await page.locator("#apply-restart").click();
+  await page.getByRole("button", { name: "Play from start", exact: true }).click();
   await expect.poll(() => lastReply(page)).toMatchObject({
     type: "song-updated", operation: "restart", appliedAtSample: 0,
   });
@@ -91,6 +100,15 @@ test("named song definitions update in place and a bad reference preserves the a
   const error = await edit(page, 'let groove = missing; ' + song);
   expect(error).toMatchObject({ type: "song-error", phase: "prepare" });
   expect(error.message).toContain("undefined pattern 'missing'");
-  await page.locator("#restart").click();
+  await page.getByRole("button", { name: "Replay last working version", exact: true }).click();
   await expect.poll(() => lastReply(page)).toMatchObject({ type: "playback-restarted", scoreRevision: updated.revision });
+});
+
+
+test("an invalid first score offers no last working version", async ({ page }) => {
+  await replaceText(page, "note(");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect.poll(() => lastReply(page)).toMatchObject({ type: "pattern-error" });
+  await expect(page.locator("#log")).toContainText("Nothing is playing yet");
+  await expect(page.locator("#restart")).toBeHidden();
 });

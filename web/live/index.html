@@ -271,6 +271,7 @@
         background: var(--panel);
         opacity: 1;
       }
+      .transport,
       .mode-toggle,
       .bpm-control {
         display: flex;
@@ -324,13 +325,16 @@
       .cm-diagnostic-hint    { text-decoration-color: var(--ink-muted); }
       footer {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.75rem;
         align-items: center;
         font-size: var(--text-sm);
         color: var(--ink-muted);
       }
       footer .panel {
-        flex: 1;
+        flex: 1 1 24rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
         padding: 0.5rem 0.75rem;
         background: var(--panel);
         border: 1px solid var(--border);
@@ -412,18 +416,19 @@
           <span>BPM</span>
           <input id="global-bpm" type="number" min="1" step="0.1" value="60" inputmode="decimal" aria-label="Global BPM" />
         </label>
-        <span class="status" id="status" aria-live="polite">idle — click Start</span>
+        <span class="status" id="status" aria-live="polite">idle — click Play</span>
         <button id="cheat-toggle" type="button" class="toggle" aria-controls="cheat" aria-expanded="true">Hide help</button>
-        <button id="start" type="button">Start audio</button>
-        <button id="restart" type="button" disabled>Restart current</button>
-        <button id="apply-restart" type="button" disabled>Apply from beginning</button>
+        <div class="transport" role="group" aria-label="Playback">
+          <button id="start" type="button">Play</button>
+          <button id="apply-restart" type="button" class="toggle" hidden disabled title="Play the code in the editor from the start">Play from start</button>
+        </div>
       </div>
     </header>
     <main class="workspace">
       <div id="editor"></div>
       <aside id="cheat" aria-label="mini-notation cheatsheet">
         <h2>Live editing</h2>
-        <p>Edits keep playback moving and let sounding notes finish. Use <strong>Restart current</strong> to replay the applied score. Use <strong>Apply from beginning</strong> to play your edits from the start, including changes to song sections, duration, or embedded BPM. Choosing an example or changing modes starts new playback.</p>
+        <p><strong>Play</strong> starts the code in the editor. While playing, edits apply automatically and sounding notes finish naturally. <strong>Play from start</strong> applies the editor code from the beginning; use it after changing song sections, duration, or embedded BPM. If an edit fails, the last working version keeps playing. Choosing an example or changing modes starts new playback.</p>
         <h2>Layers</h2>
         <dl>
           <dt>s("…")</dt><dd>drum sounds</dd>
@@ -538,6 +543,7 @@
     </main>
     <footer>
       <div class="panel" id="log" aria-live="polite">edit the pattern, or switch to song mode</div>
+      <button id="restart" type="button" hidden disabled>Replay last working version</button>
     </footer>
     <script>
       // Synchronously collapse the cheat panel on narrow viewports before the

@@ -271,7 +271,6 @@
         background: var(--panel);
         opacity: 1;
       }
-      .transport,
       .mode-toggle,
       .bpm-control {
         display: flex;
@@ -418,17 +417,14 @@
         </label>
         <span class="status" id="status" aria-live="polite">idle — click Play</span>
         <button id="cheat-toggle" type="button" class="toggle" aria-controls="cheat" aria-expanded="true">Hide help</button>
-        <div class="transport" role="group" aria-label="Playback">
-          <button id="start" type="button">Play</button>
-          <button id="apply-restart" type="button" class="toggle" hidden disabled title="Play the code in the editor from the start">Play from start</button>
-        </div>
+        <button id="start" type="button">Play</button>
       </div>
     </header>
     <main class="workspace">
       <div id="editor"></div>
       <aside id="cheat" aria-label="mini-notation cheatsheet">
         <h2>Live editing</h2>
-        <p><strong>Play</strong> starts the code in the editor. While playing, edits apply automatically and sounding notes finish naturally. <strong>Play from start</strong> applies the editor code from the beginning; use it after changing song sections, duration, or embedded BPM. If an edit fails, the last working version keeps playing. Choosing an example or changing modes starts new playback.</p>
+        <p><strong>Play</strong> starts the code in the editor from the beginning. <strong>Stop</strong> stops playback. While playing, edits apply automatically and sounding notes finish naturally. To replay from the beginning, press Stop, then Play. Do this after changing song sections, duration, or embedded BPM. If an edit fails, the last working version keeps playing. Choosing an example or changing modes starts new playback.</p>
         <h2>Layers</h2>
         <dl>
           <dt>s("…")</dt><dd>drum sounds</dd>

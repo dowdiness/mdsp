@@ -30,7 +30,6 @@ const DEFAULT_GAIN = 0.6;
 const editorEl = document.getElementById("editor") as HTMLElement;
 const logEl = document.getElementById("log") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
-const applyRestartBtn = document.getElementById("apply-restart") as HTMLButtonElement;
 const startBtn = document.getElementById("start") as HTMLButtonElement;
 const cheatEl = document.getElementById("cheat") as HTMLElement;
 const cheatToggle = document.getElementById("cheat-toggle") as HTMLButtonElement;
@@ -206,8 +205,6 @@ function resetPlaybackDedupe(): void {
 }
 
 function applyStatus(s: AudioStatus): void {
-  applyRestartBtn.hidden = s.kind !== "running";
-  applyRestartBtn.disabled = s.kind !== "running";
   switch (s.kind) {
     case "idle":
       statusEl.textContent = "idle — click Play";
@@ -329,7 +326,10 @@ engine.onReply((reply: WorkletReply) => {
     const recovery = activeMode === null
       ? "Nothing is playing yet. Fix the code to start playback."
       : "Your edit was not applied. The last working version keeps playing.";
-    setLog(`✗ ${msg} — ${recovery}`, "error");
+    const restartHint = msg.includes("restart required")
+      ? " Press Stop, then Play to apply this change from the beginning."
+      : "";
+    setLog(`✗ ${msg} — ${recovery}${restartHint}`, "error");
     const diag = diagnosticFromError(msg, view.state.doc.length);
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [diag] }]);
   }
@@ -384,12 +384,6 @@ adapter.onIntent((intent: UserIntent) => {
 });
 
 // ── Start handler ───────────────────────────────────────────
-
-applyRestartBtn.addEventListener("click", () => {
-  if (pending !== null) window.clearTimeout(pending);
-  pending = null;
-  evalNow(view.state.doc.toString(), true);
-});
 
 startBtn.addEventListener("click", async () => {
   if (startBtn.dataset.action === "stop") {

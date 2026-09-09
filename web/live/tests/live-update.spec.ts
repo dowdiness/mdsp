@@ -45,9 +45,7 @@ test.beforeEach(async ({ page }) => {
 
 test("editing and recovering from a parse error preserve transport", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
-  await expect(page.locator("#apply-restart")).toBeHidden();
   await start(page, 'note("60").slow(8)');
-  await expect(page.getByRole("button", { name: "Play from start", exact: true })).toBeVisible();
   const updated = await edit(page, 'note("72").slow(8)');
   expect(updated).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(updated.appliedAtSample).toBeGreaterThan(0);
@@ -56,10 +54,9 @@ test("editing and recovering from a parse error preserve transport", async ({ pa
   expect(recovered).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(recovered.appliedAtSample).toBeGreaterThan(updated.appliedAtSample);
   await page.getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(page.locator("#apply-restart")).toBeHidden();
 });
 
-test("song content edits continue, but a new layout requires Play from start", async ({ page }) => {
+test("song content edits continue, and Stop then Play applies a new layout", async ({ page }) => {
   await page.locator("#mode-song").click();
   await start(page, 'song(section("a",8,note("60")),part("a1","a"))');
   const updated = await edit(page, 'song(section("a",8,note("72")),part("a1","a"))');
@@ -68,7 +65,9 @@ test("song content edits continue, but a new layout requires Play from start", a
   const rejected = await edit(page, 'song(section("a",9,note("72")),part("a1","a"))');
   expect(rejected).toMatchObject({ type: "song-error" });
   expect(rejected.message).toContain("restart required");
-  await page.getByRole("button", { name: "Play from start", exact: true }).click();
+  await expect(page.locator("#log")).toContainText("Press Stop, then Play");
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(() => lastReply(page)).toMatchObject({
     type: "song-updated", operation: "restart", appliedAtSample: 0,
   });

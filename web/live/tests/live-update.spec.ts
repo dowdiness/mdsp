@@ -31,6 +31,7 @@ test.beforeEach(async ({ page }) => {
     window.AudioWorkletNode = class extends Original {
       constructor(context: BaseAudioContext, name: string, options?: AudioWorkletNodeOptions) {
         super(context, name, options);
+        (window as any).__audioContext = context;
         this.port.addEventListener("message", ({ data }) => {
           if (/^((pattern|song)-(updated|error)|playback-(restarted|error))$/.test(data.type)) {
             (window as any).__liveReplies.push(data);
@@ -96,4 +97,33 @@ test("an invalid first score explains that nothing is playing", async ({ page })
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(() => lastReply(page)).toMatchObject({ type: "pattern-error" });
   await expect(page.locator("#log")).toContainText("Nothing is playing yet");
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
 });
+
+
+for (const mode of ["pattern", "song"] as const) {
+  test(`${mode}: failed Play after Stop stays stopped until valid code is played`, async ({ page }) => {
+    await page.locator(`#mode-${mode}`).click();
+    const valid = mode === "pattern"
+      ? 'note("60*16")'
+      : 'song(section("a",8,note("60*16")),part("a1","a"))';
+    await start(page, valid);
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+    await replaceText(page, mode === "pattern" ? "note(" : "song(");
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await expect.poll(() => lastReply(page)).toMatchObject({ type: `${mode}-error` });
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+    await expect(page.locator("#log")).toContainText("Fix the code, then press Play");
+    expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
+    await start(page, valid);
+    await expect(page.locator("#log")).toContainText(`${mode} updated`);
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+    await replaceText(page, "");
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await expect(page.locator("#log")).toContainText("Enter code, then press Play");
+    expect(await page.evaluate(() => (window as any).__audioContext.state)).toBe("suspended");
+  });
+}

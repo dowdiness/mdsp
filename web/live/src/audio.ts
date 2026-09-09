@@ -12,6 +12,7 @@
 export type AudioStatus =
   | { kind: "idle" }
   | { kind: "starting" }
+  | { kind: "stopping" }
   | { kind: "running" }
   | { kind: "error"; message: string };
 
@@ -362,6 +363,7 @@ export class AudioEngine {
   }
 
   async stop(): Promise<void> {
+    this.setStatus({ kind: "stopping" });
     if (this.ctx && this.ctx.state !== "closed") {
       try {
         await this.fadeOut();

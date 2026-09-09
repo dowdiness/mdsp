@@ -343,11 +343,6 @@ export class AudioEngine {
     this.node.port.postMessage({ type: "apply-score", mode, text, policy, revision });
   }
 
-  restartPlayback(revision: number): void {
-    if (!this.node || !this.usesSchedulerProtocol()) return;
-    this.node.port.postMessage({ type: "restart-playback", revision });
-  }
-
   setBpm(bpm: number): void {
     if (!this.node || !this.usesSchedulerProtocol()) return;
     this.node.port.postMessage({ type: "set-scheduler-bpm", bpm });

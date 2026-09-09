@@ -46,10 +46,8 @@ test.beforeEach(async ({ page }) => {
 test("editing and recovering from a parse error preserve transport", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await expect(page.locator("#apply-restart")).toBeHidden();
-  await expect(page.locator("#restart")).toBeHidden();
   await start(page, 'note("60").slow(8)');
   await expect(page.getByRole("button", { name: "Play from start", exact: true })).toBeVisible();
-  await expect(page.locator("#restart")).toBeHidden();
   const updated = await edit(page, 'note("72").slow(8)');
   expect(updated).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(updated.appliedAtSample).toBeGreaterThan(0);
@@ -57,20 +55,8 @@ test("editing and recovering from a parse error preserve transport", async ({ pa
   const recovered = await edit(page, 'note("67").slow(8)');
   expect(recovered).toMatchObject({ type: "pattern-updated", operation: "update" });
   expect(recovered.appliedAtSample).toBeGreaterThan(updated.appliedAtSample);
-  await expect(page.locator("#restart")).toBeHidden();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(page.locator("#apply-restart")).toBeHidden();
-  await expect(page.locator("#restart")).toBeHidden();
-});
-
-test("Replay last working version plays the applied score while leaving invalid editor text intact", async ({ page }) => {
-  const applied = await start(page, 'note("67").slow(8)');
-  expect(await edit(page, 'note(')).toMatchObject({ type: "pattern-error" });
-  await page.getByRole("button", { name: "Replay last working version", exact: true }).click();
-  await expect.poll(() => lastReply(page)).toMatchObject({
-    type: "playback-restarted", scoreRevision: applied.revision, appliedAtSample: 0,
-  });
-  await expect(page.locator(".cm-content")).toHaveText("note(");
 });
 
 test("song content edits continue, but a new layout requires Play from start", async ({ page }) => {
@@ -100,15 +86,15 @@ test("named song definitions update in place and a bad reference preserves the a
   const error = await edit(page, 'let groove = missing; ' + song);
   expect(error).toMatchObject({ type: "song-error", phase: "prepare" });
   expect(error.message).toContain("undefined pattern 'missing'");
-  await page.getByRole("button", { name: "Replay last working version", exact: true }).click();
-  await expect.poll(() => lastReply(page)).toMatchObject({ type: "playback-restarted", scoreRevision: updated.revision });
+  const recovered = await edit(page, source("67"));
+  expect(recovered).toMatchObject({ type: "song-updated", operation: "update" });
+  expect(recovered.appliedAtSample).toBeGreaterThan(updated.appliedAtSample);
 });
 
 
-test("an invalid first score offers no last working version", async ({ page }) => {
+test("an invalid first score explains that nothing is playing", async ({ page }) => {
   await replaceText(page, "note(");
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(() => lastReply(page)).toMatchObject({ type: "pattern-error" });
   await expect(page.locator("#log")).toContainText("Nothing is playing yet");
-  await expect(page.locator("#restart")).toBeHidden();
 });

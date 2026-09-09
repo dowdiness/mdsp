@@ -31,7 +31,6 @@ const editorEl = document.getElementById("editor") as HTMLElement;
 const logEl = document.getElementById("log") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
 const applyRestartBtn = document.getElementById("apply-restart") as HTMLButtonElement;
-const restartBtn = document.getElementById("restart") as HTMLButtonElement;
 const startBtn = document.getElementById("start") as HTMLButtonElement;
 const cheatEl = document.getElementById("cheat") as HTMLElement;
 const cheatToggle = document.getElementById("cheat-toggle") as HTMLButtonElement;
@@ -148,7 +147,6 @@ let latestSentText = "";
 let fadeInAfterNextUpdate = false;
 
 function setLog(message: string, kind: "ok" | "error" | "info" = "info"): void {
-  restartBtn.hidden = true;
   logEl.textContent = message;
   logEl.classList.toggle("error", kind === "error");
   logEl.classList.toggle("ok", kind === "ok");
@@ -208,8 +206,6 @@ function resetPlaybackDedupe(): void {
 }
 
 function applyStatus(s: AudioStatus): void {
-  restartBtn.disabled = s.kind !== "running";
-  if (s.kind !== "running") restartBtn.hidden = true;
   applyRestartBtn.hidden = s.kind !== "running";
   applyRestartBtn.disabled = s.kind !== "running";
   switch (s.kind) {
@@ -291,7 +287,7 @@ engine.onReply((reply: WorkletReply) => {
   // revision. A stale diagnostic must not leave successfully started audio muted.
   if (fadeInAfterNextUpdate && (reply.type === "pattern-updated" ||
       reply.type === "song-updated" || reply.type === "pattern-error" ||
-      reply.type === "song-error" || reply.type === "playback-restarted")) {
+      reply.type === "song-error")) {
     fadeInAfterNextUpdate = false;
     engine.fadeIn();
   }
@@ -309,12 +305,6 @@ engine.onReply((reply: WorkletReply) => {
         reply.type === "pattern-error" || reply.type === "song-error") {
       submittedScores.delete(reply.revision);
     }
-  }
-
-  if (reply.type === "playback-restarted" || reply.type === "playback-error") {
-    if (reply.revision !== latestSentRev) return;
-    setLog(reply.type === "playback-restarted" ? "✓ Last working version playing from the start; editor unchanged" : String(reply.message), reply.type === "playback-restarted" ? "ok" : "error");
-    return;
   }
 
   const replyMode = replyPlaybackMode(reply);
@@ -340,7 +330,6 @@ engine.onReply((reply: WorkletReply) => {
       ? "Nothing is playing yet. Fix the code to start playback."
       : "Your edit was not applied. The last working version keeps playing.";
     setLog(`✗ ${msg} — ${recovery}`, "error");
-    restartBtn.hidden = activeMode === null;
     const diag = diagnosticFromError(msg, view.state.doc.length);
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [diag] }]);
   }
@@ -390,19 +379,11 @@ function scheduleEval(text: string): void {
 
 adapter.onIntent((intent: UserIntent) => {
   if (intent.type === "TextEdit") {
-    restartBtn.hidden = true;
     scheduleEval(view.state.doc.toString());
   }
 });
 
 // ── Start handler ───────────────────────────────────────────
-
-restartBtn.addEventListener("click", () => {
-  if (pending !== null) window.clearTimeout(pending);
-  pending = null;
-  latestSentRev = ++revCounter;
-  engine.restartPlayback(latestSentRev);
-});
 
 applyRestartBtn.addEventListener("click", () => {
   if (pending !== null) window.clearTimeout(pending);

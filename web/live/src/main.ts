@@ -30,8 +30,6 @@ const DEFAULT_GAIN = 0.6;
 const editorEl = document.getElementById("editor") as HTMLElement;
 const logEl = document.getElementById("log") as HTMLElement;
 const statusEl = document.getElementById("status") as HTMLElement;
-const applyRestartBtn = document.getElementById("apply-restart") as HTMLButtonElement;
-const restartBtn = document.getElementById("restart") as HTMLButtonElement;
 const startBtn = document.getElementById("start") as HTMLButtonElement;
 const cheatEl = document.getElementById("cheat") as HTMLElement;
 const cheatToggle = document.getElementById("cheat-toggle") as HTMLButtonElement;
@@ -207,13 +205,11 @@ function resetPlaybackDedupe(): void {
 }
 
 function applyStatus(s: AudioStatus): void {
-  restartBtn.disabled = s.kind !== "running";
-  applyRestartBtn.disabled = s.kind !== "running";
   switch (s.kind) {
     case "idle":
-      statusEl.textContent = "idle — click Start";
+      statusEl.textContent = "idle — click Play";
       startBtn.disabled = false;
-      startBtn.textContent = "Start audio";
+      startBtn.textContent = "Play";
       startBtn.dataset.action = "start";
       break;
     case "starting":
@@ -222,10 +218,15 @@ function applyStatus(s: AudioStatus): void {
       startBtn.textContent = "Starting…";
       startBtn.dataset.action = "start";
       break;
+    case "stopping":
+      statusEl.textContent = "stopping…";
+      startBtn.disabled = true;
+      startBtn.textContent = "Stopping…";
+      break;
     case "running":
       statusEl.textContent = "running · 48 kHz · 128 frames";
       startBtn.disabled = false;
-      startBtn.textContent = "Stop audio";
+      startBtn.textContent = "Stop";
       startBtn.dataset.action = "stop";
       break;
     case "error":
@@ -287,8 +288,7 @@ engine.onReply((reply: WorkletReply) => {
   // Output belongs to playback, even when the editor has advanced to another
   // revision. A stale diagnostic must not leave successfully started audio muted.
   if (fadeInAfterNextUpdate && (reply.type === "pattern-updated" ||
-      reply.type === "song-updated" || reply.type === "pattern-error" ||
-      reply.type === "song-error" || reply.type === "playback-restarted")) {
+      reply.type === "song-updated")) {
     fadeInAfterNextUpdate = false;
     engine.fadeIn();
   }
@@ -306,12 +306,6 @@ engine.onReply((reply: WorkletReply) => {
         reply.type === "pattern-error" || reply.type === "song-error") {
       submittedScores.delete(reply.revision);
     }
-  }
-
-  if (reply.type === "playback-restarted" || reply.type === "playback-error") {
-    if (reply.revision !== latestSentRev) return;
-    setLog(reply.type === "playback-restarted" ? "✓ current playback restarted" : String(reply.message), reply.type === "playback-restarted" ? "ok" : "error");
-    return;
   }
 
   const replyMode = replyPlaybackMode(reply);
@@ -333,9 +327,16 @@ engine.onReply((reply: WorkletReply) => {
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [] }]);
   } else if (reply.type === "pattern-error" || reply.type === "song-error") {
     const msg = String(reply.message ?? "parse error");
-    setLog(`✗ ${msg} (kept last good)`, "error");
+    const recovery = activeMode === null
+      ? "Nothing is playing yet. Fix the code, then press Play."
+      : "Your edit was not applied. The last working version keeps playing.";
+    const restartHint = msg.includes("restart required")
+      ? " Press Stop, then Play to apply this change from the beginning."
+      : "";
+    setLog(`✗ ${msg} — ${recovery}${restartHint}`, "error");
     const diag = diagnosticFromError(msg, view.state.doc.length);
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [diag] }]);
+    if (fadeInAfterNextUpdate) void stopPlayback();
   }
   // Ignore other worklet messages (telemetry, hot-swap acks, etc.) for now.
 });
@@ -355,12 +356,10 @@ function evalNow(text: string, restart = false): void {
     latestSentRev = rev;
     latestSentMode = mode;
     latestSentText = text;
-    if (fadeInAfterNextUpdate) {
-      fadeInAfterNextUpdate = false;
-      engine.fadeIn();
-    }
+    const waitingForPlayback = fadeInAfterNextUpdate;
+    if (waitingForPlayback) void stopPlayback();
     adapter.applyPatches([{ type: "SetDiagnostics", diagnostics: [] }]);
-    setLog("(empty — keeping previous playback)", "info");
+    setLog(waitingForPlayback ? "Enter code, then press Play." : "(empty — keeping previous playback)", "info");
     return;
   }
   const rev = ++revCounter;
@@ -389,39 +388,22 @@ adapter.onIntent((intent: UserIntent) => {
 
 // ── Start handler ───────────────────────────────────────────
 
-restartBtn.addEventListener("click", () => {
+async function stopPlayback(): Promise<void> {
   if (pending !== null) window.clearTimeout(pending);
   pending = null;
-  latestSentRev = ++revCounter;
-  engine.restartPlayback(latestSentRev);
-});
-
-applyRestartBtn.addEventListener("click", () => {
-  if (pending !== null) window.clearTimeout(pending);
-  pending = null;
-  evalNow(view.state.doc.toString(), true);
-});
+  fadeInAfterNextUpdate = false;
+  resetPlaybackDedupe();
+  await engine.stop();
+}
 
 startBtn.addEventListener("click", async () => {
   if (startBtn.dataset.action === "stop") {
-    try {
-      await engine.stop();
-      // Cancel any pending debounced eval so it doesn't fire post-stop.
-      if (pending !== null) {
-        window.clearTimeout(pending);
-        pending = null;
-      }
-      fadeInAfterNextUpdate = false;
-      // Normal Stop suspends the existing AudioContext/Worklet graph after
-      // a short fade-out. Reset dedupe so the next Start re-sends the current
-      // document and retriggers immediately instead of waiting for the next
-      // musical event in a long `.slow(...)` pattern.
-      resetPlaybackDedupe();
-      setLog("stopped", "info");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setLog(`✗ stop failed: ${msg}`, "error");
-    }
+    await stopPlayback();
+    setLog("stopped", "info");
+    return;
+  }
+  if (audioMode === "scheduler" && view.state.doc.toString().trim() === "") {
+    setLog("Enter code, then press Play.", "info");
     return;
   }
 
@@ -433,6 +415,11 @@ startBtn.addEventListener("click", async () => {
     // output muted until the worklet confirms the pattern swap so transport
     // resets/retriggers cannot click at full amplitude.
     const startText = view.state.doc.toString();
+    if (audioMode === "scheduler" && startText.trim() === "") {
+      await stopPlayback();
+      setLog("Enter code, then press Play.", "info");
+      return;
+    }
     fadeInAfterNextUpdate = audioMode === "scheduler" && startText.trim() !== "";
     evalNow(startText);
     if (!fadeInAfterNextUpdate) {

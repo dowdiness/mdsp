@@ -40,7 +40,7 @@ test.describe("UI smoke (no audio)", () => {
 
   test("page mounts with editor and Start button", async ({ page }) => {
     await expect(page.locator("h1")).toHaveText("moondsp · live");
-    await expect(page.locator("#start")).toHaveText("Start audio");
+    await expect(page.locator("#start")).toHaveText("Play");
     await expect(page.locator("#status")).toContainText("idle");
     await expect(page.locator("#log")).toContainText("edit the pattern");
   });
@@ -241,7 +241,7 @@ test.describe("Audio path", () => {
 
     // Worklet init may take several seconds (wasm compile + scheduler init).
     await expect(status).toContainText("running", { timeout: 10_000 });
-    await expect(btn).toHaveText("Stop audio");
+    await expect(btn).toHaveText("Stop");
     await expect(btn).toHaveAttribute("data-action", "stop");
 
     // Initial pattern should evaluate within a few hundred ms after running.
@@ -250,7 +250,7 @@ test.describe("Audio path", () => {
     // Toggle off.
     await btn.click();
     await expect(status).toContainText("idle");
-    await expect(btn).toHaveText("Start audio");
+    await expect(btn).toHaveText("Play");
     await expect(btn).toHaveAttribute("data-action", "start");
   });
 
@@ -282,7 +282,7 @@ test.describe("Audio path", () => {
     await page.keyboard.type(`s("bogus_drum")`);
 
     const log = page.locator("#log");
-    await expect(log).toContainText("kept last good", { timeout: 3_000 });
+    await expect(log).toContainText("The last working version keeps playing", { timeout: 3_000 });
     // Verify the rich error string crossed the wasm-gc boundary — the
     // worklet's char-by-char readback should preserve the parser's
     // "position N: unknown drum name 'bogus_drum'" message, not the
@@ -338,7 +338,7 @@ test.describe("Audio path", () => {
     await page.keyboard.insertText('song(section("intro",0,s("bd")),part("intro1","intro"))');
 
     const log = page.locator("#log");
-    await expect(log).toContainText("kept last good", { timeout: 3_000 });
+    await expect(log).toContainText("The last working version keeps playing", { timeout: 3_000 });
     await expect(log).toContainText("section 'intro' requires a positive length");
     await expect(page.locator("#status")).toContainText("running");
     await expect(page.locator(".cm-diagnostic-error")).toBeVisible();
@@ -518,7 +518,7 @@ test.describe("Audio path", () => {
     await page.keyboard.type(`stack()`);
 
     const log = page.locator("#log");
-    await expect(log).toContainText("kept last good", { timeout: 3_000 });
+    await expect(log).toContainText("The last working version keeps playing", { timeout: 3_000 });
     await expect(log).toContainText("stack()");
     await expect(log).toContainText("position");
     await expect(page.locator(".cm-diagnostic-error")).toBeVisible();
@@ -556,7 +556,7 @@ test.describe("Audio path", () => {
     blockWasm = false;
     await btn.click();
     await expect(status).toContainText("running", { timeout: 10_000 });
-    await expect(btn).toHaveText("Stop audio");
+    await expect(btn).toHaveText("Stop");
 
     // Crucial: the initial pattern must evaluate after retry — proves
     // lastGood was cleared on the error→Retry transition. If it weren't,
@@ -567,6 +567,6 @@ test.describe("Audio path", () => {
     // Clean stop after retry confirms no leaked context state.
     await btn.click();
     await expect(status).toContainText("idle");
-    await expect(btn).toHaveText("Start audio");
+    await expect(btn).toHaveText("Play");
   });
 });

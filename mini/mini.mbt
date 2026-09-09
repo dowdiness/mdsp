@@ -2,6 +2,8 @@
 /// Parse a mini-notation string into a pattern of control maps.
 ///
 /// Supported forms:
+/// - `let name = expr;` — immutable definitions before the final expression or `$:` lines
+/// - A defined name is a primary expression; groups use `stack(name, ...)`
 /// - `s("bd sd hh sd")` — drum sounds (space = sequence, comma = stack, brackets = sub-group)
 /// - `note("60 64 67")` / `note("C4 E4 G4")` — MIDI note numbers or note names
 /// - `chord("C Dm G7")` — chord names, each lowered to stacked note events
@@ -23,12 +25,16 @@ pub fn parse(
   input : String,
 ) -> Result[@pattern.Pat[@pattern.ControlMap], String] {
   guard !input.is_empty() else { return Err("empty input") }
-  match mini_collect_dollar_stack_lines(input) {
+  let p = Parser::new(input)
+  p.parse_bindings() catch {
+    ParseError(msg) => return Err(msg)
+  }
+  match mini_collect_dollar_stack_lines(input, start=p.pos) {
     Err(msg) => return Err(msg)
-    Ok(Some(lines)) => return mini_parse_dollar_stack_program(input, lines)
+    Ok(Some(lines)) =>
+      return mini_parse_dollar_stack_program(input, lines, parser=p)
     Ok(None) => ()
   }
-  let p = Parser::new(input)
   let result = p.parse_expr() catch { ParseError(msg) => return Err(msg) }
   p.skip_whitespace()
   guard p.at_end() else {

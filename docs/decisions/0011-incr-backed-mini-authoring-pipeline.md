@@ -16,7 +16,9 @@
 `parse_doc_reusing` already gives deterministic stable IDs and can preserve
 unchanged subtrees when an edited string still produces the same
 `PatternNodeId`s. `PatternLoweringCache` can then reuse lowered pattern
-subtrees by stable ID, subtree token, and revision.
+subtrees by stable identity and the complete dependency identity, including
+referenced definitions. Playback and provenance share one compiled result;
+editing revisions remain separate from cache identity.
 
 Phase 6+ needs an incremental authoring pipeline, but replacing the
 hand-written parser or introducing loom too early would mix two separate

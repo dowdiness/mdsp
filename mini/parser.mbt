@@ -2,11 +2,12 @@
 /// Recursive descent parser for mini-notation.
 ///
 /// Grammar:
-///   program  = expr | dollar_stack
+///   program  = binding* (expr | dollar_stack)
+///   binding  = "let" identifier "=" expr ";"
 ///   dollar_stack = ( "$:" expr newline? )+
 ///   expr     = primary ( "." method )*
 ///   primary  = "s(" string ")" | "note(" string ")"
-///            | "stack(" expr ( "," expr )* ")"
+///            | "stack(" expr ( "," expr )* ")" | identifier
 ///   method   = "fast(" number ")" | "slow(" number ")" | "rev()"
 ///            | "degradeBy(" number ")"
 ///            | "every(" int "," callback ")"
@@ -30,12 +31,15 @@ priv suberror ParseError {
 priv struct Parser {
   input : String
   mut pos : Int
+  definitions : Map[String, MiniDefinition]
+  bindings : Map[String, @pattern.Pat[@pattern.ControlMap]]
+  doc_bindings : Map[String, @pattern.PatternDoc[@pattern.ControlMap]]
 }
 
 ///|
 #alias(new)
 fn Parser::Parser(input : String) -> Parser {
-  { input, pos: 0 }
+  { input, pos: 0, definitions: {}, bindings: {}, doc_bindings: {}, }
 }
 
 ///|
@@ -47,10 +51,11 @@ priv struct MiniDollarStackLine {
 ///|
 fn mini_collect_dollar_stack_lines(
   input : String,
+  start? : Int = 0,
 ) -> Result[Array[MiniDollarStackLine]?, String] {
   let lines : Array[MiniDollarStackLine] = []
   let mut saw_program = false
-  let mut pos = 0
+  let mut pos = start
   while pos < input.length() {
     let line_start = pos
     let mut line_end = pos
@@ -78,7 +83,7 @@ fn mini_collect_dollar_stack_lines(
         if expr_first == content_end {
           return Err("position \{first}: $: requires an expression")
         }
-        lines.push({ start: expr_start, end: content_end })
+        lines.push({ start: expr_start, end: content_end, })
       } else if saw_program {
         return Err("position \{first}: expected '$:' stack line")
       } else {
@@ -98,8 +103,8 @@ fn mini_collect_dollar_stack_lines(
 fn mini_parse_dollar_stack_program(
   input : String,
   lines : Array[MiniDollarStackLine],
+  parser? : Parser = Parser::new(input),
 ) -> Result[@pattern.Pat[@pattern.ControlMap], String] {
-  let parser = Parser::new(input)
   let args : Array[@pattern.Pat[@pattern.ControlMap]] = []
   for line in lines {
     parser.pos = line.start
@@ -277,164 +282,9 @@ fn Parser::read_quoted_string(self : Parser) -> String raise ParseError {
 fn Parser::parse_expr(
   self : Parser,
 ) -> @pattern.Pat[@pattern.ControlMap] raise ParseError {
-  let mut pat = self.parse_primary()
-  let mut searching_method = true
-  while searching_method {
-    let before_ws = self.pos
-    self.skip_whitespace()
-    if !self.at_end() && self.input[self.pos] == '.' {
-      self.pos += 1 // consume '.'
-      pat = self.parse_method(pat)
-    } else {
-      self.pos = before_ws
-      searching_method = false
-    }
-  }
-  pat
-}
-
-///|
-/// Parse primary:
-///   "s(" string ")" | "note(" string ")" | "stack(" expr ("," expr)* ")"
-fn Parser::parse_primary(
-  self : Parser,
-) -> @pattern.Pat[@pattern.ControlMap] raise ParseError {
-  self.skip_whitespace()
-  guard !self.at_end() else {
-    raise ParseError("position \{self.pos}: unexpected end of input")
-  }
-  // Each match_keyword check is exact (keyword + '('), so branch order
-  // doesn't disambiguate — `s(` won't accidentally consume `stack(`
-  // because the second char ('t' vs '(') makes match_keyword("s(") fail.
-  let stack_start = self.pos
-  if self.match_keyword("stack(") {
-    self.skip_whitespace()
-    guard !self.at_end() && self.input[self.pos] != ')' else {
-      raise ParseError(
-        "position \{stack_start}: stack() requires at least one argument",
-      )
-    }
-    let args : Array[@pattern.Pat[@pattern.ControlMap]] = [self.parse_expr()]
-    self.skip_whitespace()
-    while !self.at_end() && self.input[self.pos] == ',' {
-      self.pos += 1 // consume ','
-      self.skip_whitespace()
-      args.push(self.parse_expr())
-      self.skip_whitespace()
-    }
-    self.expect_char(')')
-    return if args.length() == 1 { args[0] } else { @pattern.stack(args) }
-  }
-  if self.match_keyword("s(") {
-    let content = self.read_quoted_string()
-    self.expect_char(')')
-    return parse_sound_notation(content)
-  }
-  if self.match_keyword("note(") {
-    let content = self.read_quoted_string()
-    self.expect_char(')')
-    return parse_note_notation(content)
-  }
-  if self.match_keyword("chord(") {
-    let content = self.read_quoted_string()
-    self.expect_char(')')
-    return parse_chord_notation(content)
-  }
-  raise ParseError(
-    "position \{self.pos}: expected 's(', 'note(', 'chord(', or 'stack('",
-  )
-}
-
-///|
-/// Parse method call: "fast(" number ")" | "slow(" number ")" | "rev()"
-fn Parser::parse_method(
-  self : Parser,
-  pat : @pattern.Pat[@pattern.ControlMap],
-) -> @pattern.Pat[@pattern.ControlMap] raise ParseError {
-  let method_start = self.pos
-  let name = self.read_ident()
-  match name {
-    "fast" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let n = self.read_number()
-      self.skip_whitespace()
-      self.expect_char(')')
-      guard n > 0.0 else {
-        raise ParseError(
-          "position \{method_start}: fast() requires a positive number, got \{n}",
-        )
-      }
-      pat.fast(@pattern.Rational::from_int(n.to_int()))
-    }
-    "slow" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let n = self.read_number()
-      self.skip_whitespace()
-      self.expect_char(')')
-      guard n > 0.0 else {
-        raise ParseError(
-          "position \{method_start}: slow() requires a positive number, got \{n}",
-        )
-      }
-      pat.slow(@pattern.Rational::from_int(n.to_int()))
-    }
-    "rev" => {
-      self.expect_char('(')
-      self.expect_char(')')
-      pat.rev()
-    }
-    "degradeBy" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let p = self.read_number()
-      self.skip_whitespace()
-      self.expect_char(')')
-      pat.degrade_by(p)
-    }
-    "cutoff" => {
-      let cutoff = self.read_method_number_argument()
-      @pattern.merge_control(pat, @pattern.s_cutoff(cutoff))
-    }
-    "gain" => {
-      let gain = self.read_method_number_argument()
-      @pattern.merge_control(pat, @pattern.s_gain(gain))
-    }
-    "pan" => {
-      let pan = self.read_method_number_argument()
-      @pattern.merge_control(pat, @pattern.s_pan(pan))
-    }
-    "every" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let n_dbl = self.read_number()
-      self.skip_whitespace()
-      self.expect_char(',')
-      self.skip_whitespace()
-      let f_name = self.read_ident()
-      let f = self.parse_callback(method_start, f_name, calling_method="every")
-      self.skip_whitespace()
-      self.expect_char(')')
-      let n = require_integer(n_dbl, method_start, "every() first argument")
-      guard n > 0 else {
-        raise ParseError(
-          "position \{method_start}: every() requires a positive integer, got \{n}",
-        )
-      }
-      @pattern.every(n, f, pat)
-    }
-    "jux" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let f_name = self.read_ident()
-      let f = self.parse_callback(method_start, f_name, calling_method="jux")
-      self.skip_whitespace()
-      self.expect_char(')')
-      pat.jux(f)
-    }
-    _ => raise ParseError("position \{method_start}: unknown method '\{name}'")
-  }
+  let syntax = self.parse_syntax_expr()
+  let resolved = resolve_mini_expr(syntax, self.definitions)
+  compile_mini_pattern(resolved, self.bindings)
 }
 
 ///|
@@ -455,9 +305,64 @@ fn require_integer(
 }
 
 ///|
-/// Callback grammar shared between `.every(n, f)` and `.jux(f)`.
-/// Type alias avoids parsing ambiguity between the outer fn's
-/// `raise ParseError` effect and the returned function type.
+/// Consume a declaration header. Bindings are immutable and ordered, so no
+/// unresolved or cyclic dependency can enter the lowered pattern.
+fn Parser::read_binding_name(self : Parser) -> String? raise ParseError {
+  self.skip_whitespace()
+  let start = self.pos
+  if self.read_ident() != "let" {
+    self.pos = start
+    return None
+  }
+  self.skip_whitespace()
+  let name_start = self.pos
+  let name = self.read_ident()
+  guard !name.is_empty() else {
+    raise ParseError("position \{name_start}: expected pattern name")
+  }
+  match name {
+    "let" | "s" | "note" | "chord" | "stack" | "song" =>
+      raise ParseError(
+        "position \{name_start}: reserved pattern name '\{name}'",
+      )
+    _ => ()
+  }
+  if self.definitions.contains(name) {
+    raise ParseError("position \{name_start}: duplicate pattern '\{name}'")
+  }
+  self.skip_whitespace()
+  self.expect_char('=')
+  Some(name)
+}
+
+///|
+fn Parser::parse_bindings(
+  self : Parser,
+  builder? : MiniDocBuilder? = None,
+) -> Unit raise ParseError {
+  while true {
+    self.skip_whitespace()
+    guard self.read_binding_name() is Some(name) else { break }
+    let syntax = self.parse_syntax_expr()
+    let body = resolve_mini_expr(syntax, self.definitions)
+    self.skip_whitespace()
+    self.expect_char(';')
+    // Compile every definition, including unused ones, exactly once per input.
+    // Both backends receive the same resolved syntax and lexical scope.
+    match builder {
+      None => self.bindings[name] = compile_mini_pattern(body, self.bindings)
+      Some(builder) =>
+        self.doc_bindings[name] = compile_mini_doc(
+          body,
+          builder,
+          self.doc_bindings,
+        )
+    }
+    self.definitions[name] = { id: name, body, }
+  }
+}
+
+///|
 type Callback = (@pattern.Pat[@pattern.ControlMap]) -> @pattern.Pat[
   @pattern.ControlMap,
 ]
@@ -475,61 +380,4 @@ fn make_slow(factor : @pattern.Rational) -> Callback {
 ///|
 fn make_rev() -> Callback {
   fn(p) { p.rev() }
-}
-
-///|
-/// Parse the callback argument for `.every(n, f)` or `.jux(f)`.
-/// Supported forms: `fast(N)` | `slow(N)` | `rev` | `rev()`.
-///
-/// `calling_method` is the user-visible method name (`"every"` or
-/// `"jux"`) used in error messages — keeps the parse error specific
-/// to whichever method the user actually wrote.
-fn Parser::parse_callback(
-  self : Parser,
-  method_start : Int,
-  name : String,
-  calling_method~ : String,
-) -> Callback raise ParseError {
-  match name {
-    "fast" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let k_dbl = self.read_number()
-      self.skip_whitespace()
-      self.expect_char(')')
-      let k = require_integer(k_dbl, method_start, "\{calling_method}(fast(k))")
-      guard k > 0 else {
-        raise ParseError(
-          "position \{method_start}: \{calling_method}(fast(k)) requires a positive integer, got \{k}",
-        )
-      }
-      make_fast(@pattern.Rational::from_int(k))
-    }
-    "slow" => {
-      self.expect_char('(')
-      self.skip_whitespace()
-      let k_dbl = self.read_number()
-      self.skip_whitespace()
-      self.expect_char(')')
-      let k = require_integer(k_dbl, method_start, "\{calling_method}(slow(k))")
-      guard k > 0 else {
-        raise ParseError(
-          "position \{method_start}: \{calling_method}(slow(k)) requires a positive integer, got \{k}",
-        )
-      }
-      make_slow(@pattern.Rational::from_int(k))
-    }
-    "rev" => {
-      // Accept both `rev` and `rev()` as the callback form.
-      if !self.at_end() && self.input[self.pos] == '(' {
-        self.expect_char('(')
-        self.expect_char(')')
-      }
-      make_rev()
-    }
-    _ =>
-      raise ParseError(
-        "position \{method_start}: \{calling_method}() callback must be fast(N), slow(N), or rev; got '\{name}'",
-      )
-  }
 }

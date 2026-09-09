@@ -120,6 +120,17 @@ test.describe("UI smoke (no audio)", () => {
     await expect(editor).toContainText(`${INITIAL_PATTERN_RENDERED}.fast(`);
   });
 
+  test("autocomplete offers a previously defined pattern and inserts its name", async ({ page }) => {
+    const editor = page.locator(".cm-content");
+    await editor.fill('let motif2 = note("60");\n');
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type("mot");
+    const tooltip = page.locator(".cm-tooltip-autocomplete");
+    await expect(tooltip).toBeVisible();
+    await tooltip.getByText("motif2", { exact: true }).click();
+    await expect(editor).toContainText('let motif2 = note("60");motif2');
+  });
+
   test("Tab accepts the highlighted autocomplete option", async ({ page }) => {
     // Tab is bound to acceptCompletion in main.ts at Prec.highest so it
     // wins over the snippet-field navigation Tab binding registered by

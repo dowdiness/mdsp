@@ -14,6 +14,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 
 const TOP_LEVEL: Completion[] = [
+  snippetCompletion('let ${name} = ${pattern};', { label: "let", type: "keyword", detail: "define a reusable pattern" }),
   snippetCompletion('$: ${}', { label: "$:", type: "keyword", detail: "stack line" }),
   snippetCompletion('s("${}")', { label: "s", type: "function", detail: "drum sounds" }),
   snippetCompletion('note("${}")', { label: "note", type: "function", detail: "MIDI numbers or note names" }),
@@ -143,7 +144,7 @@ export function miniliveCompletion(context: CompletionContext): CompletionResult
     return {
       from: dot.from + 1,
       options: METHODS,
-      validFor: /^[A-Za-z_]*$/,
+      validFor: /^[A-Za-z_0-9]*$/,
     };
   }
 
@@ -162,27 +163,39 @@ export function miniliveCompletion(context: CompletionContext): CompletionResult
         return {
           from: word ? word.from : pos,
           options: CALLBACKS,
-          validFor: /^[A-Za-z_]*$/,
+          validFor: /^[A-Za-z_0-9]*$/,
         };
       }
     }
   }
 
   // ── 4. Top-level prefix ────────────────────────────────────
+  const bindings: Completion[] = [];
+  const seen = new Set<string>();
+  tree.iterate({ enter(node) {
+    if (node.name !== "Binding" || node.to >= pos) return;
+    const name = node.node.getChild("BindingName");
+    if (!name) return;
+    const label = state.doc.sliceString(name.from, name.to);
+    if (!seen.has(label)) {
+      seen.add(label);
+      bindings.push({ label, type: "variable", detail: "named pattern" });
+    }
+  } });
   const dollarLine = context.matchBefore(/\$?$/);
   if (dollarLine && (dollarLine.from < dollarLine.to || context.explicit)) {
     return {
       from: dollarLine.from,
-      options: TOP_LEVEL,
+      options: [...bindings, ...TOP_LEVEL],
       validFor: /^\$?$/,
     };
   }
-  const ident = context.matchBefore(/[A-Za-z_]*$/);
+  const ident = context.matchBefore(/[A-Za-z_][A-Za-z_0-9]*$|$/);
   if (ident && (ident.from < ident.to || context.explicit)) {
     return {
       from: ident.from,
-      options: TOP_LEVEL,
-      validFor: /^[A-Za-z_]*$/,
+      options: [...bindings, ...TOP_LEVEL],
+      validFor: /^[A-Za-z_0-9]*$/,
     };
   }
 

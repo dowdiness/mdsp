@@ -78,3 +78,19 @@ test("song content edits continue, but a new layout requires Apply from beginnin
     type: "song-updated", operation: "restart", appliedAtSample: 0,
   });
 });
+
+
+test("named song definitions update in place and a bad reference preserves the applied score", async ({ page }) => {
+  await page.locator("#mode-song").click();
+  const song = 'song(section("a",8,groove),section("b",8,groove),part("a1","a"),part("b1","b"))';
+  const source = (note: string) => `let melody = note("${note}"); let groove = stack(melody,s("bd")); ${song}`;
+  await start(page, source("60"));
+  const updated = await edit(page, source("72"));
+  expect(updated).toMatchObject({ type: "song-updated", operation: "update" });
+  expect(updated.appliedAtSample).toBeGreaterThan(0);
+  const error = await edit(page, 'let groove = missing; ' + song);
+  expect(error).toMatchObject({ type: "song-error", phase: "prepare" });
+  expect(error.message).toContain("undefined pattern 'missing'");
+  await page.locator("#restart").click();
+  await expect.poll(() => lastReply(page)).toMatchObject({ type: "playback-restarted", scoreRevision: updated.revision });
+});

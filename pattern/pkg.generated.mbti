@@ -93,6 +93,8 @@ pub fn PatternDoc::merge_control(id~ : @identity.PatternNodeId, left~ : Self[Con
 pub fn[A] PatternDoc::node_count(Self[A]) -> Int
 pub fn[A] PatternDoc::node_revision(Self[A], @identity.PatternNodeId) -> @identity.Revision raise PatternDocError
 pub fn[A] PatternDoc::pure(id~ : @identity.PatternNodeId, value~ : A) -> Self[A]
+pub fn[A] PatternDoc::reference(id~ : @identity.PatternNodeId, definition~ : Self[A]) -> Self[A]
+pub fn[A] PatternDoc::referenced_definition(Self[A], @identity.PatternNodeId) -> Self[A]?
 pub fn[A] PatternDoc::replace_with_pattern(Self[A], id~ : @identity.PatternNodeId, pat~ : Pat[A]) -> Self[A] raise PatternDocError
 pub fn[A] PatternDoc::replace_with_pure(Self[A], id~ : @identity.PatternNodeId, value~ : A) -> Self[A] raise PatternDocError
 pub fn[A] PatternDoc::replace_with_silence(Self[A], id~ : @identity.PatternNodeId) -> Self[A] raise PatternDocError
@@ -166,4 +168,3 @@ pub impl Show for TimeSpan
 // Type aliases
 
 // Traits
-
